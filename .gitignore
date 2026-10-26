@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+# local settings and generated reports
+chesscoach.toml
+*_annotated.md
+!examples/*_annotated.md

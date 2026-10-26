@@ -1,0 +1,55 @@
+# Answer key: the test game from early development
+# (1.e4 e6 2.d4 d5 3.Nc3 Nf6 4.Be3 c5 5.Nf3 Nc6 6.Be2 Be7 7.O-O O-O 8.e5 cxd4).
+# White recaptures on d4 instead of taking the knight on f6.
+
+[[key]]
+id = "test-9-nxd4"
+title = "9.Nxd4 — removes the threat to c3 and e3, but leaves the knight on f6"
+fen = "r1bq1rk1/pp2bppp/2n1pn2/3pP3/3p4/2N1BN2/PPP1BPPP/R2Q1RK1 w - - 0 9"
+move = "Nxd4"
+engine_best = "exf6"
+labels = ["Mistake", "Blunder"]
+
+  [[key.must]]
+  id = "removes-threat"
+  say = "Capturing on d4 removes the pawn that attacked c3 and e3"
+  facts = ["removes the threat to the White (bishop on e3|knight on c3)"]
+  text = ["(threat|attack)[^.]{0,60}(c3|e3)", "(c3|e3)[^.]{0,60}(threat|attack)"]
+
+  [[key.must]]
+  id = "d4-pawn-threat"
+  say = "Black's pawn on d4 threatens to take on c3 or e3"
+  text = ["(threat|threaten|attack)[^.]{0,80}(c3|e3)", "(c3|e3)[^.]{0,80}(threat|attack)"]
+  modes = ["explain"]
+
+  [[key.must]]
+  id = "missed-exf6"
+  say = "Taking the knight on f6 with the pawn was much stronger"
+  facts = ["captures Black's knight on f6 with the pawn from e5"]
+  text = ["f6"]
+  modes = ["pipeline", "raw", "explain"]
+
+  [[key.must]]
+  id = "e5-loose"
+  say = "The e5 pawn loses its defender"
+  facts = ["no longer defends the White pawn on e5"]
+  text = ["e5[^.]{0,60}(defend|undefended|unprotected|loose)",
+          "(defend|undefended|unprotected|loose)[^.]{0,60}e5"]
+
+  [[key.must_not]]
+  id = "removes-defender"
+  say = "The capture removes the defender of c3 and e3 (it removes the attacker)"
+  text = ["(remov|eliminat)\\w* (the |their |a |its )?defender"]
+
+  [[key.ask]]
+  id = "d4-or-f6"
+  question = "Should White take the pawn on d4 or the knight on f6?"
+    [[key.ask.must]]
+    id = "f6-better"
+    say = "Taking the knight on f6 is much better"
+    text = ["f6[^.]{0,100}(better|stronger|best|much)", "(better|stronger|best)[^.]{0,100}f6"]
+    [[key.ask.must]]
+    id = "e5-loose"
+    say = "Taking on d4 with the knight leaves e5 undefended"
+    text = ["e5[^.]{0,80}(defend|undefended|unprotected|loose|hanging)",
+            "(defend|undefended|unprotected|loose|hanging)[^.]{0,80}e5"]

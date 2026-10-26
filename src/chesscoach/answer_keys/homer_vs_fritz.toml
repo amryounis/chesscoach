@@ -1,0 +1,115 @@
+# Answer key: Homer (Black) vs Fritz 21 "Club player", 2 October 2026.
+# The three inaccuracies the review flagged. Facts come from the line
+# comparison, so they need Stockfish and the engine's preferred move;
+# `engine_best` and `labels` skip a key when the engine sees it differently:
+# another preferred move, or a label across a threshold (12...Kxf7 sits
+# right at the Good/Inaccuracy line and flips with depth and hash state).
+
+[[key]]
+id = "homer-8-bg4"
+title = "8...Bg4 — the bishop move gives up king shelter"
+fen = "rnbqk2r/pp2pp2/2p2bpp/3p3P/2PP4/2N2N2/PP2PPP1/R2QKB1R b KQkq - 0 8"
+move = "Bg4"
+engine_best = "g5"
+labels = ["Inaccuracy", "Mistake", "Blunder"]
+
+  [[key.must]]
+  id = "king-shelter"
+  say = "Compared with ...g5, the king loses a shield pawn"
+  facts = ["Black's king shelter: after the player's move → 1 shield pawns; after the engine's choice → 2"]
+  text = ["shelter", "shield", "expos\\w* (the |its |black's )?king",
+          "king[^.]{0,30}(exposed|weaken|vulnerab)"]
+
+  [[key.must]]
+  id = "h-pawn-threat"
+  say = "The bishop move leaves White's threat to take on g6 standing (...g5 avoids it)"
+  facts = ["did not deal with a threat[^\\n]*pawn on g6 with the pawn from h5"]
+  text = ["threat[^.]{0,80}g6", "g6[^.]{0,80}threat", "h-file",
+          "(captur|tak)\\w*[^.]{0,30}(pawn on )?g6"]
+  modes = ["pipeline", "raw", "explain"]
+
+  [[key.must]]
+  id = "f-file"
+  say = "A file next to the king (the f-file) opens"
+  facts = ["files with no Black pawn next to Black's king: after the player's move → f"]
+  text = ["f-file", "file next to the king",
+          "file (with|without) (a |no |any )?pawn next to (the |its |black's )?king"]
+
+  [[key.ask]]
+  id = "why-g5"
+  question = "Why is ...g5 better than ...Bg4 here?"
+    [[key.ask.must]]
+    id = "h-threat"
+    say = "...g5 deals with White's threat to take on g6; ...Bg4 does not"
+    text = ["threat[^.]{0,80}g6", "g6[^.]{0,80}threat", "(captur|tak)\\w*[^.]{0,30}g6", "h5"]
+    [[key.ask.must]]
+    id = "shelter"
+    say = "...g5 keeps the king's pawn shelter"
+    text = ["shelter", "shield", "king safety", "king[^.]{0,30}(safe|exposed)"]
+
+  [[key.must_not]]
+  id = "pin"
+  say = "The bishop pins the knight on f3 (the e2 pawn blocks the line)"
+  text = ["\\bpin"]
+
+  [[key.must_not]]
+  id = "wins-material"
+  say = "The move wins material"
+  text = ["wins? (a |the )?(pawn|piece|knight|material)"]
+
+[[key]]
+id = "homer-9-dxc4"
+title = "9...dxc4 — the capture opens files next to the king"
+fen = "rn1qk2r/pp2pp2/2p2bpp/3p3P/2PP2b1/2N1PN2/PP3PP1/R2QKB1R b KQkq - 0 9"
+move = "dxc4"
+engine_best = "Bxh5"
+labels = ["Inaccuracy", "Mistake", "Blunder"]
+
+  [[key.must]]
+  id = "king-shelter"
+  say = "Compared with ...Bxh5, the king loses a shield pawn"
+  facts = ["Black's king shelter: after the player's move → 1 shield pawns; after the engine's choice → 2"]
+  text = ["shelter", "shield", "expos\\w* (the |its |black's )?king",
+          "king[^.]{0,30}(exposed|weaken|vulnerab)"]
+
+  [[key.must]]
+  id = "c4-loose"
+  say = "The pawn on c4 is left without a defender, and White's line takes it"
+  facts = ["pawn on c4 has no defender"]
+  text = ["c4[^.]{0,60}(undefended|unprotected|loose|no defender|hanging|without (a )?defen)",
+          "(undefended|unprotected|loose|hanging)[^.]{0,60}c4"]
+
+  [[key.must]]
+  id = "engine-takes-h5"
+  say = "The engine preferred capturing the pawn on h5 with the bishop"
+  facts = ["captures White's pawn on h5 with the bishop"]
+  text = ["h5"]
+
+  [[key.must_not]]
+  id = "wins-pawn"
+  say = "The capture wins a pawn (White simply takes back)"
+  text = ["wins? (a |the )?pawn", "pawn up"]
+
+[[key]]
+id = "homer-12-kxf7"
+title = "12...Kxf7 — taking with the king costs the bishop pair"
+fen = "rn1qk2r/p3pP2/2p2b1p/8/2pP2b1/2N1PN2/PP3PP1/R2QK2R b KQkq - 0 12"
+move = "Kxf7"
+engine_best = "Kf8"
+labels = ["Inaccuracy", "Mistake", "Blunder"]
+
+  [[key.must]]
+  id = "bishop-pair"
+  say = "After the engine's ...Kf8 Black keeps the bishop pair"
+  facts = ["Black has the bishop pair: after the player's move → no; after the engine's choice → yes"]
+  text = ["bishop pair", "two bishops"]
+
+  [[key.must_not]]
+  id = "passed-pawn"
+  say = "Kxf7 gains a passed pawn (the inversion the line comparison fixed)"
+  text = ["(gain|creat|get|win)\\w* (a )?passed pawn"]
+
+  [[key.must_not]]
+  id = "castle-after"
+  say = "Black can castle later (the king has moved)"
+  text = ["(can|could|will) (still )?castle"]

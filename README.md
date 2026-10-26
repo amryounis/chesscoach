@@ -1,0 +1,191 @@
+# chesscoach
+
+An offline chess coach that explains your games the way an annotated games
+book does: few comments, on the moments that matter, in plain language.
+
+Everything runs on your own machine. No internet, no accounts.
+
+![Reviewing a game: the coach's comment on 8...Bg4, with the better move shown on the board](docs/review.png)
+
+```
+### 8...Bg4 — Inaccuracy
+What happened: Black moves the bishop from c8 to g4. The move exposes the
+Black king by reducing the number of shield pawns and opens the f-file,
+which weakens the king's position.
+Better was: Moving the pawn from g6 to g5 would have preserved two shield
+pawns around the king and kept the f-file closed.
+```
+
+## The idea: the language model only narrates
+
+Small local language models cannot calculate chess, and they cannot read
+FEN. Asked to analyse a position, they invent pieces, pins and variations.
+So chesscoach never asks them to. Each part does only what it is good at:
+
+| Part | Job |
+|---|---|
+| **Stockfish** | Evaluates positions and finds the best moves |
+| **Maia 3** | Predicts what a human would play, to tell hard moves from natural ones |
+| **python-chess** | Turns positions into verified facts: what a move captured, which pieces it stopped defending, how the position two moves later differs from the engine's line |
+| **Stockfish, again** | Verifies the concepts behind a moment: what each side really threatens, what a piece was holding together, which facts matter most |
+| **Local LLM** (Ollama) | Rewrites those facts as a coach's comment, and nothing else |
+
+The move labels (Excellent … Blunder), who played the move, the size of the
+advantage and the first sentence of each comment are all computed in code.
+Everything the model writes is then checked against the board: every
+piece it places on a square, every attack, defence, pin or fork it
+claims, and anything it says about material or legal moves. A false claim
+goes back to the model with the correction for one rewrite; if it is
+still false, the sentence is removed. The coach says less rather than
+something untrue.
+
+## Requirements
+
+- Python 3.10+
+- [Stockfish](https://stockfishchess.org/download/)
+- [Ollama](https://ollama.com) with a model pulled, e.g. `ollama pull qwen3:14b`
+  (fits a 12 GB GPU; smaller 7–8B models invent noticeably more)
+- Optional: [Maia 3](https://github.com/CSSLab/maia3) for human-move prediction
+- Optional: a Polyglot opening book (`.bin`), so opening theory is skipped
+
+## Install
+
+```
+git clone https://github.com/OWNER/chesscoach
+cd chesscoach
+pip install -e ".[gui]"      # or just  pip install -e .  for the command line only
+```
+
+## Configure
+
+```
+chesscoach config --init     # writes a commented config file
+chesscoach config            # shows the settings in effect
+```
+
+Set at least `stockfish_path`. Settings can also come from environment
+variables (`CHESSCOACH_STOCKFISH_PATH`, `CHESSCOACH_MODEL`, …) or flags
+(`--stockfish`, `--book`, `--model`, `--depth`).
+
+## Use the desktop app
+
+```
+chesscoach gui
+```
+
+(or the `chesscoach-app` shortcut, which opens without a console window)
+
+- **Review**: open a PGN, choose whose moves to comment on, and review.
+  Stockfish analyses every position, then the coach writes about the critical
+  moments. Moves carry the usual marks (?! inaccuracy, ? mistake,
+  ?? blunder, ! a strong find); on a mistake, *Show the better move* puts the
+  position before it on the board with your move in red and the engine's in
+  green. Arrow keys step through the game.
+- **Play**: a training game against Maia at the rating you choose. Maia plays
+  like a human of that strength, mistakes included. When the game ends,
+  *Review this game* sends it straight to the coach.
+- **Explain this position / Ask the coach**: under the comment, for any move
+  of the open game. The coach explains the position, or answers a question
+  such as "Why not Nd2?", "Is my bishop safe?" or "After Re1+ Kd8 Ne5,
+  does the knight fork anything?". It cannot see the board: code works out
+  what the question needs, gathers verified facts and writes the verdict
+  (which move is better, whether a piece is attacked); the model explains,
+  and its answer is checked against the board before you see it.
+- **Game summary**: at the top of a finished review, written by code from
+  the stored facts of each move: your errors, the biggest swing, the themes
+  that recur ("three of your errors weakened your king's pawn shelter"),
+  and below it the patterns across your reviewed games
+  (`chesscoach patterns` on the command line). Every line can show the
+  facts it rests on.
+- **Settings**: engine paths, model, your name and rating, saved to the user
+  config file.
+
+The board is [chessground](https://github.com/lichess-org/chessground)
+(Lichess's board), bundled so the app works offline.
+
+## Use from the command line
+
+```
+chesscoach review mygame.pgn --side black
+```
+
+This writes `mygame_annotated.md`: every move with its label, then comments
+on the critical moments only:
+
+- the first move out of the opening book
+- inaccuracies, mistakes and blunders, with what the better move kept
+- the only good move, when you found it and it wasn't obvious
+- punishing your opponent's mistake
+- checkmate
+
+Any position, without a game file:
+
+```
+chesscoach explain --moves "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4"
+chesscoach ask "Can White take the pawn on e5?" --moves "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4" --show-tools
+```
+
+Other options: `--every-move` to comment on every non-book move,
+`--model A --model B` to compare models on the same prompts,
+`--verbose` to print every prompt. `chesscoach demo` runs two fixed test
+positions, which is a quick way to try a new model.
+
+## Measure it: answer keys
+
+```
+chesscoach eval                                  # facts layer only, no model
+chesscoach eval -m qwen3:14b --mode pipeline --mode raw --report eval.md
+chesscoach eval --key rook-check --text reply.txt  # score any pasted reply
+```
+
+Each answer key is a position whose correct explanation is known: the
+facts it must mention, and the false claims models have actually made
+("material is equal", "the knight forks the rook on b7"). `eval` reports
+how many required facts the facts layer supplies, how many the model's
+text states, and every false claim or invented piece. `pipeline` scores
+our annotation; `raw` scores the model given only the FEN and Stockfish's
+lines, which is the comparison that shows what the facts layer is worth.
+Keys live in `src/chesscoach/answer_keys/`; add your own with `--keys`.
+
+## Development
+
+```
+pip install -e ".[dev]"
+pytest              # engine tests are skipped if Stockfish isn't found
+ruff check src tests
+```
+
+Package layout (`src/chesscoach/`):
+
+| Module | Responsibility |
+|---|---|
+| `config` | settings from defaults, config file, environment, flags |
+| `engine` | Stockfish analysis, Maia prediction |
+| `assessment` | win probability, move labels, verdict wording |
+| `describe` | moves, effects and boards in plain English |
+| `facts` | Tier 1 facts: named material, castling, undefended pieces, legal moves, following a line |
+| `features` / `tactics` | positional and tactical facts; comparing two lines |
+| `prompts` / `narrator` | prompt building, LLM calls, output check and retry |
+| `grounding` | verifies every claim in the model's text on the board |
+| `concepts` | engine-verified threats, piece roles, equal moves, ranked key facts |
+| `coach` | "Explain this position", and the "Ask the coach" agent with its fact tools |
+| `opening` / `moments` | book detection, choosing what to comment on |
+| `review` / `report` | whole-game review (structured data) and the markdown report |
+| `play` | training games against Maia (or limited Stockfish) |
+| `gui` | desktop app: `api.py` (Python side), `static/` (page), `app.py` (window) |
+| `evaluate` | answer-key harness (`chesscoach eval`) |
+| `cli` | the `chesscoach` command |
+
+## Roadmap
+
+Done: game review with critical moments, opening-book skipping, labels
+from win probability, a facts layer with engine-verified threats and piece
+roles, a grounding check on everything the model writes, an answer-key
+harness, "Explain this position" and "Ask the coach", and the desktop app
+with review and play against Maia.
+
+Next: game summaries and recurring themes across your games.
+
+## License
+
+GPL-3.0-or-later. chesscoach uses python-chess and chessground, both GPL-3.0.

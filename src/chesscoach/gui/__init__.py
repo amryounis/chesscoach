@@ -1,0 +1,1 @@
+"""Desktop app (pywebview + chessground)."""

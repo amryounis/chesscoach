@@ -1,0 +1,130 @@
+# Answer key: the position from the October 2026 model comparison.
+# Six model setups explained it; every "must_not" below is a claim one of
+# them actually made. Patterns are case-insensitive regular expressions.
+#
+#   facts   = patterns the FACTS given to the model must contain (recall of
+#             the facts layer). Empty = the facts layer does not cover this
+#             yet, which is itself worth knowing.
+#   text    = patterns a correct explanation matches (any one is enough).
+#   modes   = which runs the item applies to. "raw" = a model given only the
+#             FEN and engine lines; "pipeline" = our move annotation, which
+#             is two to four sentences and can't cover everything.
+
+[[key]]
+id = "rook-check"
+title = "18.Rhe1+ — White two pieces up, Black's king still in the centre"
+fen = "2b1k2r/1r4pp/1pp5/p7/2P2B2/3B1N2/1P1K1PPP/R6R w k - 1 18"
+move = "Rhe1+"
+
+  [[key.must]]
+  id = "material"
+  say = "White is up a bishop and a knight"
+  facts = ["White is up a bishop and a knight"]
+  text = ["(up|extra|ahead by|advantage of)[^.]{0,20}(bishop and (a )?knight|knight and (a )?bishop|two (minor )?pieces)",
+          "two minor pieces"]
+  modes = ["raw", "explain"]
+
+  [[key.must]]
+  id = "castling"
+  say = "Black can still castle kingside; the rook check stops it"
+  facts = ["Black can still castle kingside"]
+  text = ["castl"]
+  modes = ["pipeline", "raw", "explain"]
+
+  [[key.must]]
+  id = "loose-c8"
+  say = "The bishop on c8 is undefended"
+  facts = ["Undefended Black pieces:[^\\n]*bishop on c8"]
+  text = ["(undefended|unprotected|loose|hanging)[^.]{0,40}c8",
+          "c8[^.]{0,40}(undefended|unprotected|loose|hanging)"]
+  modes = ["raw", "explain"]
+
+  [[key.must]]
+  id = "knight-takes-c6"
+  say = "In the main line the knight takes on c6 with check, winning a pawn"
+  facts = []
+  text = ["c6[^.]{0,80}check", "check[^.]{0,80}c6", "Nxc6",
+          "wins? (the |a )?pawn on c6"]
+  modes = ["raw"]
+
+  [[key.must]]
+  id = "both-rook-checks"
+  say = "Both rook checks win; the difference is which rook stays home"
+  facts = ["practically equal"]
+  text = ["both[^.]{0,60}(win|winning|good|strong|lead|equal)", "either rook",
+          "which rook", "(practically|about|roughly) equal", "practically as good",
+          "(h1|a1)[^.]{0,30}\\bor\\b[^.]{0,30}(a1|h1)"]
+  modes = ["raw", "pipeline", "explain"]
+
+  [[key.must]]
+  id = "six-replies"
+  say = "Black has six legal replies to the check"
+  facts = ["Black[^\\n]{0,15}\\b6 legal moves"]
+  text = ["\\b(six|6) (legal )?(moves|replies|options|ways)"]
+  modes = ["raw"]
+
+  [[key.must_not]]
+  id = "material-equal"
+  say = "Material is equal"
+  text = ["material (is |remains |stays )?(equal|level|even|balanced)",
+          "equal material", "material equality"]
+
+  [[key.must_not]]
+  id = "re1-attacks-c8"
+  say = "The rook on e1 attacks the bishop on c8"
+  text = ["e1[^.]{0,40}(attack|hit|target|threaten)s?[^.]{0,30}(c8|bishop)",
+          "(attack|hit|target|threaten)s?[^.]{0,20}bishop on c8"]
+
+  [[key.must_not]]
+  id = "fork-b7"
+  say = "The knight on c6 forks the rook on b7"
+  text = ["fork\\w*[^.]{0,80}b7", "b7[^.]{0,80}fork"]
+
+  [[key.must_not]]
+  id = "king-safe"
+  say = "Black's king is safe / has no escape squares"
+  text = ["(no|without) escape squares?", "king is (safe|secure)"]
+
+  [[key.must_not]]
+  id = "half-pawn-reason"
+  say = "The second rook check is worse by half a pawn for a real reason"
+  text = ["half a pawn"]
+
+  [[key.must_not]]
+  id = "one-reply"
+  say = "Black has only one legal reply / a legal move called illegal"
+  text = ["(only|just) one (legal )?(move|reply|option)",
+          "axb6[^.]{0,30}illegal", "illegal[^.]{0,30}axb6"]
+
+  # Questions for "Ask the coach" about this position (White to move).
+  [[key.ask]]
+  id = "c8-safe"
+  question = "Is Black's bishop on c8 safe?"
+    [[key.ask.must]]
+    id = "undefended"
+    say = "It has no defender"
+    text = ["(undefended|unprotected|no defender|not defended|nothing defends|loose|hanging)"]
+    [[key.ask.must_not]]
+    id = "re1-attacks-c8"
+    say = "A rook on e1 attacks it"
+    text = ["e1[^.]{0,40}(attack|hit|target|threaten)s?[^.]{0,30}(c8|bishop)"]
+
+  [[key.ask]]
+  id = "which-rook"
+  question = "Which rook should White give check with on e1?"
+    [[key.ask.must]]
+    id = "equal"
+    say = "Both are practically equal"
+    text = ["(practically|about|roughly|nearly) (equal|the same|as good)", "either", "both"]
+
+  [[key.ask]]
+  id = "knight-fork"
+  question = "After Rae1+ Kd8 Ne5 Rf8 Nxc6+, does White's knight fork Black's rook on b7?"
+    [[key.ask.must]]
+    id = "no-fork"
+    say = "No: a knight on c6 does not attack b7"
+    text = ["\\b(no|not|doesn't|does not|isn't|cannot|can't)\\b[^.]{0,80}(fork|attack|b7)"]
+    [[key.ask.must_not]]
+    id = "yes-fork"
+    say = "Yes, it forks the rook"
+    text = ["\\byes\\b[^.]{0,60}fork", "^\\s*it (does|forks)"]
