@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.0 — unreleased
+
+- **Never an empty or broken comment.** When the model call fails (Ollama
+  not running, model not pulled) or every sentence it wrote fails the
+  check against the board, the comment is written from the engine's facts:
+  the code-written first sentence, up to three verified key facts, the
+  engine's move for an error, and the reply the engine expects. It is
+  marked "Engine facts only" with the reason. The same for Explain and
+  Ask: the code-written lead sentence (or the key facts) is the answer.
+  The evaluation still measures the model alone (no fallback there)
+- **A time limit on model calls**: `llm_timeout` (seconds, default 180,
+  0 = none). The request is dropped, so Ollama stops generating; the
+  comment falls back as above
+
 ## 0.11.0 — unreleased
 
 Plans (after DecodeChess) and the new move notes in the coach's prompts.

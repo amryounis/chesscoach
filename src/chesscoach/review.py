@@ -227,7 +227,9 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 on_prompt(prep["prompt"])
             for model in models:
                 r = narrate(model, prep)
-                mv.annotations[model] = r["err"] or r["text"]
+                mv.annotations[model] = r["text"] or r["err"]
+                if r.get("fallback"):
+                    print(f"  {mv.move_label}: engine facts only ({r['fallback']})")
                 mv.issues[model] = r["issues"]
                 mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
                                    "removed": len(r.get("removed", []))}

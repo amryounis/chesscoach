@@ -103,3 +103,73 @@ def test_tidy_uses_the_code_label_and_keeps_good_moves_short():
     assert out.startswith("**Assessment**: Excellent")
     assert "Better was" not in out
     assert "**What happened**: White moves the pawn from e2 to e4. Fine." in out
+
+
+def _kxf7_prep():
+    b = chess.Board("rn1qk2r/p3pP2/2p2b1p/8/2pP2b1/2N1PN2/PP3PP1/R2QK2R b KQkq - 0 12")
+    mv = b.parse_san("Kxf7")
+    a = b.copy()
+    a.push(mv)
+    after = a.copy()
+    after.push_san("Ne5+")
+    return {"prompt": "p", "banned": [], "boards": [b, a], "san": "Kxf7",
+            "label": "Inaccuracy", "move": mv,
+            "fixed": "Black captures White's pawn on f7 with the king from e8.",
+            "better_fixed": "The engine preferred this: Black moves the king from e8 to f8.",
+            "key_facts": ["Compared with the engine's choice: Black's king shelter: after "
+                          "the player's move → 0 shield pawns; after the engine's choice → "
+                          "1 shield pawns",
+                          "Another move (Black moves the king from e8 to f8) is practically "
+                          "as good as this one; do not invent a reason why one is better",
+                          "It IGNORES a threat: the pawn on c4 is attacked"],
+            "played_boards": [a, after], "better_boards": []}
+
+
+def test_a_failed_model_call_gives_the_engine_facts(monkeypatch):
+    def down(**kw):
+        raise ConnectionError("connection refused")
+    monkeypatch.setattr(narrator.ollama, "chat", down)
+    r = narrator.narrate("m", _kxf7_prep())
+    assert r["err"] and "connection refused" in r["fallback"]
+    t = r["text"]
+    assert t.startswith("**Assessment**: Inaccuracy\n\n**What happened**: Black captures "
+                        "White's pawn on f7 with the king from e8. Compared with")
+    assert "do not invent" not in t and "It ignores a threat" in t
+    assert "**Better was**: The engine preferred this: Black moves the king" in t
+    assert "**What now**: The engine expects this reply: White moves the knight from f3 " \
+           "to e5, giving check." in t
+    assert t.endswith("_(Engine facts only: the model did not answer: connection refused "
+                      "(is 'm' pulled? run: ollama list).)_")
+    # The evaluation measures the model alone: no fallback there.
+    assert narrator.narrate("m", _kxf7_prep(), fallback=False)["text"] is None
+
+
+def test_a_comment_with_nothing_left_after_the_check_gives_the_engine_facts(monkeypatch):
+    from chesscoach import config
+    config.settings.grounding = True
+    bad = ("**Assessment**: Inaccuracy\n**What happened**: The move removes its "
+           "protection from the pawn on e7.")
+    monkeypatch.setattr(narrator.ollama, "chat",
+                        lambda **kw: {"message": {"content": bad}})
+    r = narrator.narrate("m", _kxf7_prep())
+    assert r["err"] is None and "failed the check" in r["fallback"]
+    assert "Engine facts only" in r["text"] and "pawn on e7" not in r["text"]
+
+
+def test_time_limit_uses_a_client_with_that_timeout(monkeypatch):
+    from chesscoach import config
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, timeout=None, **kw):
+            seen["timeout"] = timeout
+
+        def chat(self, **kw):
+            return {"message": {"content": "ok"}}
+
+    monkeypatch.setattr(narrator.ollama, "Client", FakeClient)
+    monkeypatch.setattr(narrator, "_clients", {})
+    monkeypatch.setattr(config.settings, "llm_timeout", 42)
+    assert narrator.call_llm("m", [{"role": "user", "content": "x"}]) == ("ok", None)
+    assert seen["timeout"] == 42
+    assert "longer than 42 seconds" in narrator.llm_error(TimeoutError("timed out"), "m")

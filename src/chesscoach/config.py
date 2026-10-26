@@ -47,6 +47,7 @@ class Settings:
     num_predict: int = 800            # max tokens per annotation
     keep_alive: str = "30m"           # keep the model loaded between calls
     num_ctx: int = 4096               # model context window (tokens)
+    llm_timeout: int = 180            # seconds one model call may take (0 = no limit)
     comment_language: str = "en"      # annotated PGNs: "en", "de" or "both"
     prompt_notes: str = "events"      # what the coach is told a move does: "events" (7g) or "effects" (old)
     plans: bool = True                # explain quiet engine moves: idea, problem, solution
@@ -162,6 +163,10 @@ keep_alive = "30m"
 # GPU memory and can push part of the model onto the CPU. Use the same
 # value everywhere so the model is not reloaded between calls.
 num_ctx = 4096
+# Seconds one model call may take before it is abandoned (0 = no limit).
+# A comment that times out, or fails, is written from the engine's facts
+# instead and marked "engine facts only".
+llm_timeout = 180
 
 # Ask the coach: "router" = code works out which facts the question needs
 # and the model only writes the answer (reliable); "agent" = the model

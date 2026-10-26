@@ -37,6 +37,7 @@ from .engine import EngineAnalysis, run_stockfish
 from .facts import (castling_lines, join_words, legal_move_line, loose_piece_lines,
                     material_lines, play_line, position_facts, resolve_move)
 from .grounding import correction_text, ground, remove_failed
+from .narrator import _readable, llm_chat, llm_error
 
 MAX_TOOL_CALLS = 6
 
@@ -294,6 +295,7 @@ class Answer:
     tool_calls: list = field(default_factory=list)   # [(name, args)]
     secs: float = 0.0
     error: str = ""
+    fallback: str = ""          # why the answer is engine facts only, if it is
     facts: list = field(default_factory=list)        # what the coach was given
     calls: list = field(default_factory=list)        # model calls: (secs, in, out)
     fixed: str = ""                                  # the code-written sentence(s)
@@ -306,7 +308,6 @@ CALL_LOG: list = []      # (seconds, prompt tokens, output tokens) per model cal
 
 
 def _chat(model: str, messages: list, tools: Optional[list] = None):
-    import ollama
     options = {"temperature": config.settings.temperature, "top_p": 0.9,
                "num_predict": config.settings.num_predict,
                "num_ctx": config.settings.num_ctx}
@@ -316,9 +317,9 @@ def _chat(model: str, messages: list, tools: Optional[list] = None):
         kw["tools"] = tools
     t0 = time.time()
     try:
-        resp = ollama.chat(think=False, **kw)
+        resp = llm_chat(think=False, **kw)
     except TypeError:
-        resp = ollama.chat(**kw)
+        resp = llm_chat(**kw)
     get = (resp.get if isinstance(resp, dict) else lambda k, d=None: getattr(resp, k, d))
     CALL_LOG.append((round(time.time() - t0, 1), get("prompt_eval_count", None),
                      get("eval_count", None)))
@@ -524,7 +525,11 @@ def explain(board: chess.Board, model: str, engine, history: str = "") -> Answer
         text = _content(_chat(model, messages))
         text = _grounded(model, messages, text, boards, fixed, ans)
     except Exception as e:
-        ans.error = f"{e} (is '{model}' pulled? run: ollama list)"
+        ans.fallback = llm_error(e, model)
+        ans.text = (f"**The position**: {fixed}"
+                    + "".join(f"\n- {_readable(k)}" for k in key[:4])
+                    + f"\n\n_(Engine facts only: the model did not answer: {ans.fallback}.)_")
+        ans.secs = time.time() - t0
         return ans
     m = re.search(r"(\*\*The position\*\*:?\s*)", text)
     if fixed.strip(" .") not in text:
@@ -978,7 +983,14 @@ def ask_routed(board: chess.Board, question: str, model: str, engine,
         if fixed:                            # the re-answer can restate it too
             text = text.replace(fixed, "").strip()
     except Exception as e:
-        ans.error = f"{e} (is '{model}' pulled? run: ollama list)"
+        if not fixed:
+            ans.error = llm_error(e, model)
+            return ans
+        # The code-written lead sentence answers the question on its own.
+        ans.fallback = llm_error(e, model)
+        ans.text = (f"{fixed}\n\n_(Engine facts only: the model did not answer: "
+                    f"{ans.fallback}.)_")
+        ans.secs = time.time() - t0
         return ans
     text = (fixed + " " + text).strip() if fixed else text
     if not text.strip():

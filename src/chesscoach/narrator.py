@@ -215,6 +215,29 @@ def tidy_annotation(text: str, prep: dict) -> str:
 
 
 _DEFAULT = object()
+_LIBRARY_CHAT = ollama.chat          # replaced in tests; then that is called instead
+_clients: dict = {}
+
+
+def llm_chat(**kw):
+    """ollama.chat with the configured time limit (llm_timeout seconds).
+    The limit is the HTTP timeout, so Ollama sees the request dropped and
+    stops generating, rather than a thread left waiting in the background."""
+    limit = config.settings.llm_timeout
+    if limit and ollama.chat is _LIBRARY_CHAT:
+        client = _clients.get(limit)
+        if client is None:
+            client = _clients[limit] = ollama.Client(timeout=limit)
+        return client.chat(**kw)
+    return ollama.chat(**kw)
+
+
+def llm_error(e: Exception, model: str) -> str:
+    """The error of a failed model call, in words."""
+    if "timed out" in str(e).lower() or type(e).__name__.endswith("Timeout"):
+        return (f"the model took longer than {config.settings.llm_timeout} seconds "
+                f"(llm_timeout)")
+    return f"{e} (is '{model}' pulled? run: ollama list)"
 
 
 def call_llm(model: str, messages: list, system=_DEFAULT) -> tuple:
@@ -231,19 +254,19 @@ def call_llm(model: str, messages: list, system=_DEFAULT) -> tuple:
     first_user = 1 if system else 0
     try:
         try:
-            resp = ollama.chat(model=model, messages=full, options=options,
-                               think=False, keep_alive=config.settings.keep_alive)
+            resp = llm_chat(model=model, messages=full, options=options,
+                            think=False, keep_alive=config.settings.keep_alive)
         except Exception as e:
             # Model without a thinking mode, or an older ollama package.
             if "think" not in str(e).lower() and not isinstance(e, TypeError):
                 raise
             full = [dict(m) for m in full]
             full[first_user]["content"] = "/no_think\n" + full[first_user]["content"]
-            resp = ollama.chat(model=model, messages=full, options=options)
+            resp = llm_chat(model=model, messages=full, options=options)
         text = resp["message"]["content"]
         return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S).strip(), None
     except Exception as e:
-        return None, f"{e} (is '{model}' pulled? run: ollama list)"
+        return None, llm_error(e, model)
 
 
 def review_text(text: str, prep: dict) -> tuple:
@@ -258,7 +281,53 @@ def review_text(text: str, prep: dict) -> tuple:
     return issues, fails
 
 
-def narrate(model: str, prep: dict) -> dict:
+ERRORS = ("Inaccuracy", "Mistake", "Blunder")
+
+
+def _readable(fact: str) -> str:
+    """A key fact as a sentence for the reader: the coach's instructions
+    taken out ("; do not invent a reason ..."), capitals for emphasis
+    lowered."""
+    fact = re.sub(r"^PLAN:\s*", "", fact.strip())
+    fact = re.split(r";\s*do not |\.\s*Do not ", fact)[0]
+    fact = re.sub(r"\b([A-Z]{3,})\b", lambda m: m.group(1).lower(), fact)
+    fact = fact[0].upper() + fact[1:] if fact else fact
+    return fact.rstrip(" .") + "."
+
+
+def fallback_text(prep: dict, reason: str) -> str:
+    """The comment written from the engine's facts alone, for when the model
+    gives nothing usable: the code-written first sentence, the verified key
+    facts, the engine's move for an error, and the reply the engine expects.
+    Marked, so nobody takes it for the coach's own words."""
+    body = " ".join([prep["fixed"].strip()]
+                    + [_readable(k) for k in (prep.get("key_facts") or [])[:3]])
+    out = [f"**Assessment**: {prep.get('label', '')}", f"**What happened**: {body}"]
+    if prep.get("label") in ERRORS and prep.get("better_fixed"):
+        out.append(f"**Better was**: {prep['better_fixed']}")
+    played = prep.get("played_boards") or []
+    if played and played[0].is_game_over():
+        out.append("**What now**: The game is over.")
+    else:
+        from .grounding import line_moves
+        nxt = line_moves(played)
+        if nxt:
+            from .describe import describe_move
+            b, mv = nxt[0]
+            out.append(f"**What now**: The engine expects this reply: {describe_move(b, mv)}.")
+    out.append(f"_(Engine facts only: {reason}.)_")
+    return "\n\n".join(out)
+
+
+def _thin(text: str, prep: dict) -> bool:
+    """Nothing of the model's left: 'What happened' holds only the
+    code-written sentence and there is no 'What now'."""
+    body = re.search(r"\*\*What happened\*\*:\s*(.*?)(?:\n\n\*\*|$)", text, re.S)
+    rest = (body.group(1) if body else "").replace(prep["fixed"].strip(), "").strip()
+    return not rest and "**What now**" not in text
+
+
+def narrate(model: str, prep: dict, fallback: bool = True) -> dict:
     """
     Annotate one move. Rule breaks and false claims about the board get one
     rewrite request that names exactly what was wrong. A false claim that
@@ -269,7 +338,11 @@ def narrate(model: str, prep: dict) -> dict:
     msgs = [{"role": "user", "content": prep["prompt"]}]
     text, err = call_llm(model, msgs)
     if err:
-        return {"text": None, "err": err, "issues": [], "first_issues": 0,
+        # `err` stays set (the evaluation counts it as a failed call); the
+        # reader gets the engine's facts instead of an error message.
+        return {"text": fallback_text(prep, "the model did not answer: " + err)
+                if fallback else None,
+                "err": err, "issues": [], "first_issues": 0, "fallback": err,
                 "removed": [], "first_fails": [], "secs": time.time() - t0}
     issues, fails = review_text(text, prep)
     first = len(issues) + len(fails)
@@ -299,7 +372,12 @@ def narrate(model: str, prep: dict) -> dict:
             seen.setdefault(f.sentence, f.correction)
         removed = [f"{s} [{c}]" for s, c in seen.items()]
         issues = issues + [f"sentence removed, {c}: \"{s}\"" for s, c in seen.items()]
-    return {"text": tidy_annotation(text, prep), "err": None,
+    text = tidy_annotation(text, prep)
+    why = ""
+    if fallback and _thin(text, prep):
+        why = "every sentence the model wrote failed the check against the board"
+        text = fallback_text(prep, why)
+    return {"text": text, "err": None, "fallback": why,
             "issues": issues, "first_issues": first, "removed": removed,
             "first_fails": first_fails, "secs": time.time() - t0}
 

@@ -218,3 +218,17 @@ def test_router_compares_captures_on_named_squares(sf, fake):
     assert "Nxd4" in a.fixed and "Bxd4" in a.fixed
     assert any("KEY FACTS" in s and "Nxd4: The knight no longer defends the White pawn "
                "on e5" in s for s in a.facts)
+
+
+def test_ask_and_explain_fall_back_to_the_engine_facts(sf, monkeypatch):
+    import ollama
+
+    def down(**kw):
+        raise ConnectionError("connection refused")
+    monkeypatch.setattr(ollama, "chat", down)
+    a = coach.ask(chess.Board(ROOK), "Is Rhe1+ or Rae1+ better?", "m", sf)
+    assert not a.error and "connection refused" in a.fallback
+    assert "practically equal" in a.text and "Engine facts only" in a.text
+    e = coach.explain(chess.Board(ROOK), "m", sf)
+    assert not e.error and e.text.startswith("**The position**: ")
+    assert "Engine facts only" in e.text

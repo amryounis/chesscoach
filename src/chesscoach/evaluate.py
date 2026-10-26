@@ -418,7 +418,7 @@ def run_model(key: Key, model: str, mode: str, engines: Engines) -> Result:
             return Result(key=key.id, mode=mode, model=model,
                           skipped="no move to annotate (position keys need "
                                   "'Explain this position', phase 4)")
-        out = narrate(model, prep)
+        out = narrate(model, prep, fallback=False)   # measure the model alone
         if out["err"]:
             return Result(key=key.id, mode=mode, model=model, error=out["err"])
         label = mode if config.settings.grounding else "pipeline (no check)"

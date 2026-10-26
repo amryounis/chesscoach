@@ -333,7 +333,8 @@ function renderAnnotation(text) {
     if (!line) continue;
     const m = line.match(/^\*\*(.+?)\*\*:?\s*(.*)$/);
     if (m && /assessment/i.test(m[1])) continue;
-    const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/^_\((.+)\)_$/, '<i class="facts-only">($1)</i>');
     if (m && /what happened/i.test(m[1])) out.push(`<p>${inline(m[2])}</p>`);
     else if (m) out.push(`<p><b>${esc(m[1])}.</b> ${inline(m[2])}</p>`);
     else out.push(`<p>${inline(line)}</p>`);

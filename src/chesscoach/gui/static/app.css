@@ -468,3 +468,6 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .coach .plan .k.solution { color: var(--j-excellent); }
 .coach .plan .k.outcome { color: var(--muted); }
 .coach .plan .ln { font-family: var(--fig); color: var(--muted); }
+
+/* A comment written from the engine's facts because the model failed */
+.facts-only { color: var(--muted, #888); font-size: .9em; }
