@@ -56,6 +56,7 @@ class Settings:
     grounding: bool = True            # verify the model's claims on the board
     concepts: bool = True             # engine-verified threats, piece roles, key facts
     concept_depth: int = 14           # depth of those extra searches
+    engine_cache: bool = True         # keep Stockfish's answers in engine_cache.sqlite
     source: str = "defaults"          # where the settings came from (info only)
 
     def require_stockfish(self) -> None:
@@ -189,6 +190,11 @@ grounding = true
 # extra searches per moment at concept_depth.
 concepts = true
 concept_depth = 14
+
+# Keep Stockfish's answers in engine_cache.sqlite next to this file, so a
+# game reviewed again does not wait for the same searches. Delete the file
+# to clear it.
+engine_cache = true
 '''
 
 

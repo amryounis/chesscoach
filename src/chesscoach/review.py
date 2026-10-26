@@ -20,6 +20,7 @@ import chess.pgn
 from . import config
 from .assessment import compute_assessment, eval_phrase, win_pct
 from .engine import EngineAnalysis, open_maia, run_maia, run_stockfish
+from .engine_cache import open_stockfish
 from .moments import moment_context, pick_critical
 from .narrator import narrate, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
@@ -128,7 +129,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
     warm.start()
 
     evals: list = []
-    sf = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+    sf = open_stockfish()
     try:
         for i, b in enumerate(boards):
             if stop():
@@ -201,8 +202,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
 
         todo = sorted(picks)
         # One Stockfish for the engine-verified concepts of every moment.
-        concept_sf = (chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
-                      if config.settings.concepts and todo else None)
+        concept_sf = (open_stockfish() if config.settings.concepts and todo else None)
         for k, i in enumerate(todo):
             if stop():
                 raise Cancelled()

@@ -13,6 +13,12 @@
 - **A time limit on model calls**: `llm_timeout` (seconds, default 180,
   0 = none). The request is dropped, so Ollama stops generating; the
   comment falls back as above
+- **Stockfish's answers are kept** in `engine_cache.sqlite` next to the
+  config file (`engine_cache`, on by default), keyed by engine version,
+  position, depth, number of lines and any move restriction. Reviewing a
+  game again skips the searches: Homer vs Fritz, model stubbed out, went
+  from 130 s of engine work to under 1 s on the second run (about 90 KB
+  per game). Ask and Explain use it too. Delete the file to clear it
 
 ## 0.11.0 — unreleased
 

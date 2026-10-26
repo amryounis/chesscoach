@@ -1003,8 +1003,8 @@ def ask_routed(board: chess.Board, question: str, model: str, engine,
 
 
 def open_engine():
-    config.settings.require_stockfish()
-    return chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+    from .engine_cache import open_stockfish
+    return open_stockfish()
 
 
 def board_from(fen: str = "", pgn_moves: str = "") -> tuple:

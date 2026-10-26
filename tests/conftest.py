@@ -1,3 +1,4 @@
+import os
 import shutil
 from pathlib import Path
 
@@ -6,6 +7,11 @@ import chess.pgn
 import pytest
 
 from chesscoach import config
+
+# Tests ask Stockfish themselves; the user's engine cache stays out of it
+# (test_engine_cache.py uses its own file).
+os.environ["CHESSCOACH_ENGINE_CACHE"] = "0"
+config.settings.engine_cache = False
 
 DATA = Path(__file__).parent / "data"
 
