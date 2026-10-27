@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.1 — unreleased
+
+- Fix: 0.12.0 kept the practice attempts (practice.json) in the history
+  folder, and the history loader read it as a game record, so reviews and
+  "All your reviewed games" failed with `KeyError: 'id'` after the first
+  practice attempt. The file now lives beside the history folder (moved
+  there automatically), and the loader skips anything that isn't a game.
+
 ## 0.12.0 — unreleased
 
 From an outside review of 0.11.0: two places where the app could say

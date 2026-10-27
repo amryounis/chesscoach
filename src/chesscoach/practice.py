@@ -103,8 +103,17 @@ def drills_from_history(records: list) -> list:
 # --- attempts ---------------------------------------------------------------
 
 def progress_path() -> Path:
+    """practice.json beside the history folder, not in it: the history
+    folder holds one record per game. (0.12.0 put it inside; it is moved.)"""
     from .history import history_dir
-    return history_dir() / "practice.json"
+    path = history_dir().parent / "practice.json"
+    old = history_dir() / "practice.json"
+    if old.exists() and not path.exists():
+        try:
+            old.replace(path)
+        except OSError:
+            return old
+    return path
 
 
 def load_progress(path: Optional[Path] = None) -> dict:

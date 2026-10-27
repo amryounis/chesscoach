@@ -80,3 +80,24 @@ def test_another_winning_move_is_accepted(sf):
     res = practice.judge(drill, "a1a2", engine=sf)
     assert res["verdict"] == "good" and "also works" in res["message"]
     assert res["line"][0] == "Qa7"
+
+
+def test_practice_file_never_breaks_the_history(tmp_path, monkeypatch):
+    """0.12.0 wrote practice.json into the history folder, and the history
+    loader read it as a game ("KeyError: 'id'")."""
+    import json
+    from chesscoach import history
+    hist = tmp_path / "history"
+    hist.mkdir()
+    (hist / "practice.json").write_text(json.dumps({"g1-20": {"tries": 1}}))
+    (hist / "abc.json").write_text(json.dumps(
+        {"id": "abc", "color": "white", "white": "Me", "black": "X", "date": "?",
+         "moves": [_move(themes=[])]}))
+    assert [r["id"] for r in history.load(hist)] == ["abc"]
+    history.patterns(history.load(hist))
+    # The progress file moves out of the history folder.
+    monkeypatch.setattr(history, "history_dir", lambda: hist)
+    path = practice.progress_path()
+    assert path == tmp_path / "practice.json" and path.exists()
+    assert not (hist / "practice.json").exists()
+    assert practice.load_progress(path) == {"g1-20": {"tries": 1}}

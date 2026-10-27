@@ -90,9 +90,13 @@ def load(folder: Optional[Path] = None) -> list:
     out = []
     for p in sorted(folder.glob("*.json")) if folder.exists() else []:
         try:
-            out.append(json.loads(p.read_text(encoding="utf-8")))
+            rec = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        # Only game records: anything else in the folder (0.12.0 kept
+        # practice.json here) is not a game and must not break patterns.
+        if isinstance(rec, dict) and "id" in rec and isinstance(rec.get("moves"), list):
+            out.append(rec)
     out.sort(key=lambda r: (r.get("date", ""), r["id"]))
     return out
 
