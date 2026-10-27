@@ -59,3 +59,74 @@ def test_move_notes_put_the_point_first():
     notes = move_notes(boards[18], moves[18])               # 10.Bxf7+
     assert notes[0] == "It gives check" and "bishop for a pawn" in notes[1]
     assert notes[2].startswith("It IGNORES a threat")
+
+
+# --- Theory claims need evidence (review feedback, 0.11.x) -----------------
+
+from types import SimpleNamespace
+
+from chesscoach.moments import LEFT_BOOK, LEFT_NAMED, moment_context, pick_critical
+from chesscoach.opening import theory_exit
+
+
+def _quiet_evals(n):
+    return [SimpleNamespace(best_move=None, alt_scores=[], score_cp=0, score_mate=None)
+            for _ in range(n + 1)]
+
+
+def test_no_book_never_claims_move_one_left_theory():
+    boards, moves = _game(CM10)
+    no_book = [False] * len(moves)                      # what book_status gives with no book
+    theory = theory_exit(boards, moves, no_book)
+    assert theory == {"ply": 10, "source": "names",
+                      "opening": "Sicilian Defense: Dragon Variation"}
+    picks = pick_critical(boards, moves, _quiet_evals(len(moves)), ["Good"] * len(moves),
+                          no_book, [chess.WHITE, chess.BLACK], theory=theory)
+    assert 0 not in picks
+    assert picks == {10: LEFT_NAMED}
+    # The move notes and the moment picker agree on where theory ended.
+    notes = opening_notes(boards, moves, no_book)
+    assert [i for i, n in enumerate(notes) if "left_theory" in n] == [10]
+    assert notes[10]["left_theory"]["source"] == "names"
+
+
+def test_no_evidence_no_claim():
+    # From a middlegame position nothing is a named opening, and with no
+    # book there is nothing to say about theory at all.
+    b = chess.Board("r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R1BQ1RK1 w - - 0 8")
+    boards, moves = [b.copy()], []
+    for san in "dxc5 Bxc5 e4 dxe4".split():
+        m = b.parse_san(san)
+        moves.append(m)
+        b.push(m)
+        boards.append(b.copy())
+    no_book = [False] * len(moves)
+    assert theory_exit(boards, moves, no_book) == {}
+    assert not any("left_theory" in n for n in opening_notes(boards, moves, no_book))
+    picks = pick_critical(boards, moves, _quiet_evals(len(moves)), ["Good"] * len(moves),
+                          no_book, [chess.WHITE, chess.BLACK], theory={})
+    assert picks == {}
+
+
+def test_book_evidence_wins_and_a_fully_booked_game_never_leaves():
+    boards, moves = _game(CM10)
+    book = [True] * 6 + [False] * (len(moves) - 6)
+    theory = theory_exit(boards, moves, book)
+    assert theory["ply"] == 6 and theory["source"] == "book"
+    picks = pick_critical(boards, moves, _quiet_evals(len(moves)), ["Good"] * len(moves),
+                          book, [chess.WHITE], theory=theory)
+    assert picks == {6: LEFT_BOOK}
+    note, prefix, _ = moment_context(6, LEFT_BOOK, boards, moves, ["Good"] * len(moves),
+                                     book, theory=theory)
+    assert prefix.startswith("This is where the game left known opening theory")
+    assert theory_exit(boards, moves, [True] * len(moves)) == {}
+
+
+def test_named_lines_wording_does_not_claim_theory():
+    boards, moves = _game(CM10)
+    no_book = [False] * len(moves)
+    theory = theory_exit(boards, moves, no_book)
+    note, prefix, _ = moment_context(10, LEFT_NAMED, boards, moves, ["Good"] * len(moves),
+                                     no_book, theory=theory)
+    assert prefix == "This is where the game left the named opening lines. "
+    assert "Sicilian Defense: Dragon Variation" in note and "opening book" not in note

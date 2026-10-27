@@ -30,19 +30,25 @@ def is_natural(board: chess.Board, move: chess.Move, maia_engine=None) -> bool:
     return False
 
 
+LEFT_BOOK = "first move out of the opening book"
+LEFT_NAMED = "first move out of the named opening lines"
+
+
 def pick_critical(boards, moves, evals, labels, book, want,
-                  maia_engine=None) -> dict:
+                  maia_engine=None, theory: dict = None) -> dict:
     """
     Which of the annotated side's moves deserve a comment, and why.
     A real annotator skips the routine moves; so do we.
-      - first move out of the opening book
+      - the move that leaves opening theory, only when `theory` (from
+        opening.theory_exit) has evidence for it
       - Inaccuracy / Mistake / Blunder
       - found the only good move (best line >= 20 win% above the 2nd best)
       - punished the opponent's Mistake/Blunder with the best move
       - delivered checkmate
     """
     picks = {}
-    first_out = next((i for i, b in enumerate(book) if not b), None)
+    theory = theory or {}
+    first_out = theory.get("ply")
     for i, m in enumerate(moves):
         if boards[i].turn not in want or book[i]:
             continue
@@ -64,12 +70,12 @@ def pick_critical(boards, moves, evals, labels, book, want,
                 and played_best:
             picks[i] = "punished the opponent's mistake"
         if i == first_out and i not in picks:
-            picks[i] = "first move out of the opening book"
+            picks[i] = LEFT_BOOK if theory.get("source") == "book" else LEFT_NAMED
     return picks
 
 
 def moment_context(i: int, reason: str, boards: list, moves: list,
-                   labels: list, book: list) -> tuple:
+                   labels: list, book: list, theory: dict = None) -> tuple:
     """
     Verified context explaining WHY this moment was picked, so the model
     explains the real point instead of padding.
@@ -77,11 +83,18 @@ def moment_context(i: int, reason: str, boards: list, moves: list,
     extra instruction for 'What happened').
     """
     note, prefix, focus = "", "", ""
-    left_book = i > 0 and book[i - 1] and not book[i]
-    if reason == "first move out of the opening book" or left_book:
+    theory = theory or {}
+    if theory.get("ply") == i and theory.get("source") == "book":
         prefix = "This is where the game left known opening theory. "
-        note += ("\nOPENING (verified): the moves before this one are standard "
-                 "opening theory; this move leaves it.")
+        note += ("\nOPENING (verified): the moves before this one are in the "
+                 "opening book; this move leaves it.")
+    elif theory.get("ply") == i and theory.get("source") == "names":
+        name = theory.get("opening", "")
+        prefix = "This is where the game left the named opening lines. "
+        note += ("\nOPENING (verified): the position before this move is a named "
+                 f"opening position{f' ({name})' if name else ''}; after this move "
+                 "the position is no longer a named one. Do not claim anything "
+                 "about opening theory beyond that.")
     if reason == "punished the opponent's mistake" and i > 0:
         prev_b, prev_m = boards[i - 1], moves[i - 1]
         opp = side_name(prev_b.turn)

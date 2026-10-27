@@ -17,10 +17,11 @@ from dataclasses import asdict, fields
 from typing import Optional
 
 import chess
+import chess.engine
 import chess.pgn
 
 from .. import config
-from ..play import PlayGame, random_color
+from ..play import PlayGame, preview_opponent, random_color
 from ..review import Cancelled, review_game, write_markdown
 
 
@@ -102,6 +103,9 @@ class Api:
         self._lock = threading.Lock()
         self._play: Optional[PlayGame] = None
         self._coach_lock = threading.Lock()
+        self._drills: dict = {}               # practice: id -> drill, from the last listing
+        self._practice_sf = None
+        self._practice_lock = threading.Lock()
 
     # -- settings ----------------------------------------------------------
 
@@ -273,7 +277,62 @@ class Api:
         with self._lock:
             self._status = status
 
+    # -- practice ----------------------------------------------------------
+
+    @_safe
+    def practice_drills(self, scope: str = "game") -> dict:
+        """Your mistakes as drills: from the game just reviewed ("game") or
+        from every reviewed game in the history ("all"), most-needed first."""
+        from .. import history, practice
+        if scope == "all":
+            drills = practice.drills_from_history(history.load())
+            empty = ("No mistakes to practise yet. Review some games (with your name "
+                     "set in Settings, or one side chosen) and they will collect here.")
+        else:
+            if self._review is None:
+                raise ValueError("Review a game first, or practise all reviewed games.")
+            drills = practice.drills_from_review(self._review)
+            empty = "No inaccuracies, mistakes or blunders in this game for the reviewed side."
+        prog = practice.load_progress()
+        drills = practice.order(drills, prog)
+        self._drills = {d["id"]: d for d in drills}
+        for d in drills:
+            d["progress"] = prog.get(d["id"], {})
+            dests: dict = {}
+            for m in chess.Board(d["fen"]).legal_moves:
+                dests.setdefault(chess.square_name(m.from_square), []).append(
+                    chess.square_name(m.to_square))
+            d["dests"] = dests
+        return {"scope": scope, "drills": drills, "empty": "" if drills else empty}
+
+    def _judge(self, drill_id: str, uci: Optional[str]) -> dict:
+        from .. import practice
+        drill = self._drills.get(drill_id)
+        if drill is None:
+            raise ValueError("That exercise is no longer loaded.")
+        config.settings.require_stockfish()
+        with self._practice_lock:
+            if self._practice_sf is None:
+                self._practice_sf = chess.engine.SimpleEngine.popen_uci(
+                    config.settings.stockfish_path)
+            res = practice.judge(drill, uci, engine=self._practice_sf)
+        res["progress"] = practice.record_attempt(drill_id, res["verdict"])
+        return res
+
+    @_safe
+    def practice_answer(self, drill_id: str, uci: str) -> dict:
+        return self._judge(drill_id, uci)
+
+    @_safe
+    def practice_reveal(self, drill_id: str) -> dict:
+        return self._judge(drill_id, None)
+
     # -- play --------------------------------------------------------------
+
+    @_safe
+    def play_opponent(self, elo: int = 1500) -> dict:
+        """Who the player would face at this rating (shown before starting)."""
+        return preview_opponent(int(elo))
 
     @_safe
     def new_game(self, color: str = "white", elo: int = 1500) -> dict:
@@ -344,6 +403,7 @@ class Api:
                 "dests": {} if g.over or b.turn != g.player_color else g.legal_dests(),
                 "check": b.is_check(), "over": g.over, "status": g.status(),
                 "result": g.result(), "opponent": g.engine_name,
+                "opponent_info": g.opponent,
                 "played": played, "reply": reply or ""}
 
     @_safe
@@ -354,6 +414,12 @@ class Api:
 
     def shutdown(self) -> None:
         self._cancel.set()
+        if self._practice_sf is not None:
+            try:
+                self._practice_sf.quit()
+            except Exception:
+                pass
+            self._practice_sf = None
         if self._play:
             self._play.close()
             self._play = None

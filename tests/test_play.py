@@ -63,3 +63,33 @@ def test_engine_opens_when_player_is_black(stockfish):
     config.settings = config.load_settings(stockfish_path=stockfish, maia_cmd="no-such-maia")
     with PlayGame(chess.BLACK) as g:
         assert g.engine_move() is not None and g.board.turn == chess.BLACK
+
+
+# --- The opponent is said plainly (review feedback, 0.11.x) ---------------
+
+from chesscoach.play import describe_opponent, preview_opponent
+
+
+def test_fallback_is_named_with_its_real_strength(game):
+    op = game.opponent
+    assert op["engine"] == "stockfish" and not op["human_like"]
+    assert op["effective_elo"] == 1500 and not op["clamped"]
+    assert "Maia isn't installed" in op["note"] and "not like a human" in op["note"]
+
+
+def test_low_ratings_say_they_are_clamped(monkeypatch):
+    monkeypatch.setattr(config, "settings", config.load_settings(maia_cmd="no-such-maia"))
+    op = preview_opponent(800)
+    assert op["name"] == "Stockfish 1320" and op["effective_elo"] == 1320 and op["clamped"]
+    assert "lowest setting" in op["note"] and "stronger than the 800 you chose" in op["note"]
+    hi = describe_opponent("stockfish", 3500, "failed")
+    assert hi["effective_elo"] == 3190 and "highest setting" in hi["note"]
+    assert hi["note"].startswith("Maia didn't start")
+
+
+def test_maia_preview_when_installed(monkeypatch):
+    import chesscoach.play as play
+    monkeypatch.setattr(play.shutil, "which", lambda cmd: "/usr/bin/" + cmd)
+    op = preview_opponent(900)
+    assert op == {**op, "engine": "maia", "name": "Maia 900", "effective_elo": 900,
+                  "clamped": False, "human_like": True}

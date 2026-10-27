@@ -333,6 +333,9 @@ select, input:not([type=radio]):not([type=range]) {
 .strength input { width: 100%; accent-color: var(--accent); }
 .play-setup .primary { align-self: flex-start; }
 .status { font: 600 17px/1.3 var(--book); margin: 0; }
+.opponent-note { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.opponent-note:empty { display: none; }
+.opponent-note.warn { color: var(--ink); border-left: 3px solid var(--j-inaccuracy); padding-left: 8px; }
 .play-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* promotion picker */
@@ -468,3 +471,19 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .coach .plan .k.solution { color: var(--j-excellent); }
 .coach .plan .k.outcome { color: var(--muted); }
 .coach .plan .ln { font-family: var(--fig); color: var(--muted); }
+
+/* ---- practice: your reviewed mistakes as exercises */
+#panel-practice .seg { margin-top: 14px; }
+#panel-practice .empty { color: var(--muted); font: 14px var(--ui); margin-top: 18px; }
+.drill { margin-top: 18px; display: grid; gap: 10px; }
+.drill .status b { white-space: nowrap; }
+.drill-result p { margin: 0 0 8px; line-height: 1.45; }
+.drill-result .verdict { font: 15px/1.45 var(--book); padding-left: 10px; border-left: 3px solid var(--line); }
+.drill-result .verdict.ok { border-left-color: var(--j-excellent); }
+.drill-result .verdict.no { border-left-color: var(--j-mistake); }
+.drill-result .k { display: block; font: 600 12px var(--ui); text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); margin-bottom: 2px; }
+.drill-result .line { font-family: var(--fig); }
+.drill-why { font: 14px/1.5 var(--book); }
+.drill-why p { margin: 0 0 6px; }
+.moments .practice-link { margin-left: auto; border-style: dashed; }

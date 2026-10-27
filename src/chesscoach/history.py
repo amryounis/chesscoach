@@ -55,11 +55,22 @@ def record(review, player_name: str = "") -> Optional[dict]:
         "id": game_id(review), "color": color,
         "white": h.get("White", "?"), "black": h.get("Black", "?"),
         "date": h.get("Date", "?"), "result": h.get("Result", "?"),
-        "moves": [{"ply": _get(m, "ply"), "move_label": _get(m, "move_label"),
-                   "label": _get(m, "label"), "fen_before": _get(m, "fen_before"),
-                   "win_before": _get(m, "win_before"), "win_after": _get(m, "win_after"),
-                   "themes": _get(m, "themes") or []} for m in mine],
+        "moves": [_move_record(m) for m in mine],
     }
+
+
+def _move_record(m) -> dict:
+    rec = {"ply": _get(m, "ply"), "move_label": _get(m, "move_label"),
+           "color": _get(m, "color"), "san": _get(m, "san"), "uci": _get(m, "uci"),
+           "label": _get(m, "label"), "fen_before": _get(m, "fen_before"),
+           "best_san": _get(m, "best_san"), "best_uci": _get(m, "best_uci"),
+           "win_before": _get(m, "win_before"), "win_after": _get(m, "win_after"),
+           "themes": _get(m, "themes") or []}
+    if _get(m, "label") in ERRORS:
+        # what the coach said, so the move can be practised later (practice.py)
+        from .practice import explanation_of
+        rec["explanation"] = explanation_of(m)
+    return rec
 
 
 def save(review, player_name: str = "", folder: Optional[Path] = None) -> Optional[Path]:

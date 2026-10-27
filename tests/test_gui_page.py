@@ -168,3 +168,52 @@ def test_annotated_reader(page, monkeypatch):
     page.select_option("#game-pick", "15")
     page.wait_for_function("document.querySelector('#game-title').textContent.includes('Caruana')")
     assert page.errors == []
+
+
+def _click_square(page, sq, orientation="white"):
+    box = page.locator("#board").bounding_box()
+    size = box["width"] / 8
+    f, r = ord(sq[0]) - 97, int(sq[1]) - 1
+    if orientation == "black":
+        f, r = 7 - f, 7 - r
+    page.mouse.click(box["x"] + (f + .5) * size, box["y"] + (7 - r + .5) * size)
+    page.wait_for_timeout(150)
+
+
+def test_practice_your_mistakes(page):
+    page.click("#open-pgn")
+    page.select_option("#review-side", "white")          # White made the mistakes here
+    page.click("#start-review")
+    page.wait_for_selector("#moments .practice-link", timeout=180000)
+    page.click("#moments .practice-link")
+    page.wait_for_selector("#drill:not([hidden])")
+    assert "Find a better move" in page.inner_text("#drill-prompt")
+    first = page.evaluate("window.pywebview.api.practice_drills('game')")["drills"][0]
+    assert first["color"] == "white"                       # the reviewed side's mistakes
+    # Play the engine's move on the board: it is judged correct.
+    _click_square(page, first["best_uci"][:2], "white")
+    _click_square(page, first["best_uci"][2:4], "white")
+    page.wait_for_selector("#drill-result .verdict", timeout=60000)
+    assert page.inner_text("#drill-result .verdict").startswith("Correct")
+    assert "engine line" in page.inner_text("#drill-result").lower()   # shown in caps
+    # "Show me" on the next one reveals the move, the line and the comment.
+    page.click("#drill-next")
+    page.click("#drill-reveal")
+    page.wait_for_selector("#drill-result .verdict", timeout=60000)
+    assert "The engine's move was" in page.inner_text("#drill-result")
+    assert "the coach said in the review" in page.inner_text("#drill-result").lower()
+    assert page.errors == []
+
+
+def test_play_says_who_the_opponent_is(page):
+    page.click("#tab-play")
+    page.fill("#elo", "800")
+    page.dispatch_event("#elo", "input")
+    page.wait_for_function("document.querySelector('#opponent-note').textContent.includes('1320')")
+    note = page.inner_text("#opponent-note")
+    assert "lowest setting" in note and "stronger than the 800" in note
+    assert "warn" in page.get_attribute("#opponent-note", "class")
+    page.click("#start-game")
+    page.wait_for_selector("#play-live:not([hidden])")
+    assert "Stockfish at 1320" in page.inner_text("#play-opponent")
+    assert page.errors == []

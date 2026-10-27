@@ -101,6 +101,11 @@ def test_patterns_across_games(tmp_path):
     # Re-reviewing a game replaces its record instead of counting it twice.
     history.save(g1, folder=tmp_path)
     assert len(history.load(tmp_path)) == 2
+    # Records keep what Practice needs: the move, the engine's move, the comment.
+    for rec in recs:
+        for m in rec["moves"]:
+            assert {"san", "uci", "best_san", "best_uci", "color"} <= set(m)
+            assert ("explanation" in m) == (m["label"] in ("Inaccuracy", "Mistake", "Blunder"))
 
 
 @pytest.mark.engine

@@ -107,14 +107,43 @@ def theory_alternatives(board: chess.Board, played: chess.Move, book_path: str =
     return out[:n]
 
 
+def theory_exit(boards: list, moves: list, book: Optional[list] = None) -> dict:
+    """Where the game leaves opening theory, claimed only on evidence.
+
+    {"ply": i, "source": "book" | "names", "opening": name} or {} when the
+    game never provably leaves theory.
+      - "book": the Polyglot book knew at least the first move; the first
+        ply it doesn't know leaves theory (all known -> no exit).
+      - "names": no book evidence, so the only evidence is the openings
+        table; the ply after the last one that reached a named position
+        leaves the named lines.
+      - nothing named and no book hit: nothing is claimed. An empty or
+        missing book is NOT evidence that move 1 left theory.
+    The moment picker, the move notes and the reports all use this one
+    rule, so they can never disagree about where theory ended."""
+    named = [name_at(boards[i + 1]) for i in range(len(moves))]
+    if book and any(book):
+        ply = next((i for i, b in enumerate(book) if not b), None)
+        source = "book"
+    else:
+        last = max((i for i, hit in enumerate(named) if hit), default=None)
+        ply = None if last is None or last + 1 >= len(moves) else last + 1
+        source = "names"
+    if ply is None:
+        return {}
+    name_then = next((named[j][1] for j in range(ply - 1, -1, -1) if named[j]), "")
+    if source == "names" and not name_then:
+        return {}
+    return {"ply": ply, "source": source, "opening": name_then}
+
+
 def opening_notes(boards: list, moves: list, book: Optional[list] = None,
                   book_path: str = "") -> list:
     """Per ply: {"opening": {eco, name, idea}} when the move reaches a newly
     named opening position (the idea only the first time its key appears),
-    and {"left_theory": {"alternatives": [{san, name}], "opening": name}} on
-    the move that leaves theory. Theory = the Polyglot book when `book`
-    flags are given and any is set, else the named positions of the table
-    (the last ply after which a named position is still reached)."""
+    and {"left_theory": {"alternatives": [{san, name}], "opening": name,
+    "source": "book" | "names"}} on the move that leaves theory, as decided
+    by theory_exit()."""
     out = [{} for _ in moves]
     current, seen_ideas = None, set()
     named = [name_at(boards[i + 1]) for i in range(len(moves))]
@@ -129,15 +158,11 @@ def opening_notes(boards: list, moves: list, book: Optional[list] = None,
                 seen_ideas.add(key)
             out[i]["opening"] = rec
             current = hit
-    if book and any(book):
-        leave = next((i for i, b in enumerate(book) if not b), None)
-    else:
-        last = max((i for i, hit in enumerate(named) if hit), default=None)
-        leave = None if last is None or last + 1 >= len(moves) else last + 1
-    if leave is not None and current is not None:
+    exit_ = theory_exit(boards, moves, book)
+    if exit_:
+        leave = exit_["ply"]
         alts = theory_alternatives(boards[leave], moves[leave],
-                                   book_path if book and any(book) else "")
-        name_then = next((named[j][1] for j in range(leave - 1, -1, -1) if named[j]), "")
+                                   book_path if exit_["source"] == "book" else "")
         out[leave]["left_theory"] = {"alternatives": [{"san": s, "name": nm} for s, nm in alts],
-                                     "opening": name_then}
+                                     "opening": exit_["opening"], "source": exit_["source"]}
     return out

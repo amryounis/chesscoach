@@ -47,6 +47,8 @@ def test_review_runs_in_background_and_returns_moves(api):
 def test_play_then_review_the_game(api):
     st = api.new_game("white", 1500)
     assert st["orientation"] == "white" and "e2" in st["dests"]
+    assert st["opponent_info"]["name"] == st["opponent"]           # who you face, said plainly
+    assert api.play_opponent(800)["effective_elo"] == 1320            # Maia missing here
     st = api.play_move("e2e4")
     assert st["played"] == "e4" and st["reply"] and len(st["moves"]) == 2
     assert "error" in api.play_move("e2e4")                    # pawn already moved

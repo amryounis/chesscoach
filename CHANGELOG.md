@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.12.0 — unreleased
+
+From an outside review of 0.11.0: two places where the app could say
+something inaccurate, and the first practice loop.
+
+- **"Left theory" only on evidence** (`opening.theory_exit`). Without an
+  opening book every ply was "not book", so the moment picker called move
+  1 the move that left theory, while the move notes used the openings
+  table and could name a different move. One rule now serves the moment
+  picker, the coach's prompt, the move notes and the report: the book
+  when it knows the game's first move; otherwise the openings table,
+  worded as "left the named opening lines" (never "theory"); with neither,
+  nothing is claimed
+- **Play says who you are playing.** Without Maia, Play falls back to
+  Stockfish, which can't go below 1320. The setup screen now names the
+  opponent and its real strength as the slider moves ("Stockfish at 1320,
+  its lowest setting, which is stronger than the 800 you chose"), the
+  intro stops promising Maia, and the note stays above the game. "Maia
+  didn't start" and "Maia isn't installed" are told apart
+- **Practice** (new tab, `practice.py`): your inaccuracies, mistakes and
+  blunders come back as positions. Make a move on the board; Stockfish
+  judges it with the review's own thresholds, so another move that keeps
+  your chances is accepted and said to be so, the game's move is
+  recognised, and a losing one is labelled like a review would. Then the
+  engine's move, its line and the coach's comment from the review.
+  Exercises come from the game just reviewed or from every reviewed game
+  (history records now keep the move, the engine's move and the comment;
+  records saved before 0.12 have no engine move and are skipped).
+  Attempts are kept in `practice.json` next to the history: missed ones
+  come back first, blunders before mistakes before inaccuracies. A
+  "Practise these moves" button sits after the critical moments
+
 ## 0.11.0 — unreleased
 
 Plans (after DecodeChess) and the new move notes in the coach's prompts.

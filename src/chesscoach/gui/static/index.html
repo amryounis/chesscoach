@@ -14,6 +14,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" id="tab-review" aria-selected="true" data-tab="review">Review</button>
     <button role="tab" id="tab-play" aria-selected="false" data-tab="play">Play</button>
+    <button role="tab" id="tab-practice" aria-selected="false" data-tab="practice">Practice</button>
   </nav>
   <button class="quiet" id="open-settings">Settings</button>
 </header>
@@ -99,7 +100,7 @@
   <section class="panel" id="panel-play" role="tabpanel" aria-labelledby="tab-play" hidden>
     <div class="play-setup" id="play-setup">
       <h1>Play a training game</h1>
-      <p class="sub">Maia plays like a human of the rating you choose, mistakes included. When the game ends, review it here.</p>
+      <p class="sub" id="play-sub">Maia plays like a human of the rating you choose, mistakes included. When the game ends, review it here.</p>
       <fieldset class="seg">
         <legend>You play</legend>
         <label><input type="radio" name="color" value="white" checked> White</label>
@@ -109,11 +110,13 @@
       <label class="strength"><span>Opponent's rating <output id="elo-out">1500</output></span>
         <input type="range" id="elo" min="600" max="2400" step="100" value="1500">
       </label>
+      <p class="opponent-note" id="opponent-note" aria-live="polite"></p>
       <button class="primary" id="start-game">Start game</button>
     </div>
 
     <div class="play-live" id="play-live" hidden>
       <p class="status" id="play-status"></p>
+      <p class="opponent-note" id="play-opponent"></p>
       <div class="movelist compact" id="play-moves"></div>
       <div class="play-actions">
         <button id="takeback">Take back</button>
@@ -121,6 +124,32 @@
         <button class="primary" id="review-played" hidden>Review this game</button>
         <button id="save-pgn" hidden>Save PGN…</button>
         <button class="quiet" id="new-game" hidden>New game</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Practice -->
+  <section class="panel" id="panel-practice" role="tabpanel" aria-labelledby="tab-practice" hidden>
+    <div class="game-head">
+      <div>
+        <h1>Practise your mistakes</h1>
+        <p class="sub">Positions from your reviewed games where you went wrong. Find a better move on the board; Stockfish judges it, so any move that keeps your chances counts.</p>
+      </div>
+    </div>
+    <fieldset class="seg" id="practice-scope">
+      <legend>Exercises from</legend>
+      <label><input type="radio" name="pscope" value="game" checked> The game you reviewed</label>
+      <label><input type="radio" name="pscope" value="all"> All your reviewed games</label>
+    </fieldset>
+    <p class="empty" id="practice-empty" hidden></p>
+    <div class="drill" id="drill" hidden>
+      <p class="sub" id="drill-count"></p>
+      <p class="status" id="drill-prompt"></p>
+      <div class="drill-result" id="drill-result" aria-live="polite"></div>
+      <div class="play-actions">
+        <button id="drill-reveal">Show me</button>
+        <button id="drill-retry" hidden>Try again</button>
+        <button class="primary" id="drill-next">Next exercise</button>
       </div>
     </div>
   </section>

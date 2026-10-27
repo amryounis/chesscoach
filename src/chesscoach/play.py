@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime
 import random
+import shutil
 from typing import Optional
 
 import chess
@@ -23,6 +24,44 @@ from .engine import open_maia
 # Maia samples from its move distribution at this temperature. 1.0 is the
 # distribution as learned from real games; lower plays more predictably.
 PLAY_TEMPERATURE = 1.0
+
+# Stockfish's UCI_Elo range: below 1320 it simply won't go.
+STOCKFISH_MIN_ELO, STOCKFISH_MAX_ELO = 1320, 3190
+
+
+def describe_opponent(engine: str, elo: int, why: str = "") -> dict:
+    """The opponent the player actually faces, said plainly.
+
+    engine: "maia" or "stockfish"; elo: the rating the player asked for;
+    why (Stockfish only): "missing" (Maia isn't installed) or "failed"
+    (it is installed but didn't start).
+    -> {engine, name, requested_elo, effective_elo, clamped, human_like, note}
+    """
+    if engine == "maia":
+        return {"engine": "maia", "name": f"Maia {elo}", "requested_elo": elo,
+                "effective_elo": elo, "clamped": False, "human_like": True,
+                "note": f"Maia plays like a human rated about {elo}, mistakes included."}
+    sf_elo = max(STOCKFISH_MIN_ELO, min(STOCKFISH_MAX_ELO, elo))
+    cause = ("Maia didn't start" if why == "failed"
+             else f"Maia isn't installed (command: {config.settings.maia_cmd})")
+    if sf_elo > elo:
+        strength = (f"Stockfish at {sf_elo}, its lowest setting, which is stronger "
+                    f"than the {elo} you chose")
+    elif sf_elo < elo:
+        strength = f"Stockfish at {sf_elo}, its highest setting"
+    else:
+        strength = f"Stockfish limited to {sf_elo}"
+    return {"engine": "stockfish", "name": f"Stockfish {sf_elo}", "requested_elo": elo,
+            "effective_elo": sf_elo, "clamped": sf_elo != elo, "human_like": False,
+            "note": (f"{cause}, so your opponent is {strength}. It plays like an engine "
+                     "that blunders on purpose, not like a human of that rating.")}
+
+
+def preview_opponent(elo: int) -> dict:
+    """Who Play would use at this rating, without starting an engine. If
+    Maia is installed but then fails to start, PlayGame.opponent says so."""
+    return describe_opponent("maia" if shutil.which(config.settings.maia_cmd)
+                             else "stockfish", int(elo))
 
 
 class PlayGame:
@@ -37,14 +76,16 @@ class PlayGame:
         self._engine = open_maia(elo, temperature)
         self._limit = chess.engine.Limit(nodes=1)
         if self._engine is not None:
-            self.engine_name = f"Maia {elo}"
+            self.opponent = describe_opponent("maia", elo)
         else:
+            why = "failed" if shutil.which(config.settings.maia_cmd) else "missing"
+            self.opponent = describe_opponent("stockfish", elo, why)
             config.settings.require_stockfish()
             self._engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
-            sf_elo = max(1320, min(3190, elo))
-            self._engine.configure({"UCI_LimitStrength": True, "UCI_Elo": sf_elo})
+            self._engine.configure({"UCI_LimitStrength": True,
+                                    "UCI_Elo": self.opponent["effective_elo"]})
             self._limit = chess.engine.Limit(time=0.2)
-            self.engine_name = f"Stockfish {sf_elo}"
+        self.engine_name = self.opponent["name"]
 
     # -- state -------------------------------------------------------------
 

@@ -107,10 +107,15 @@ function showTab(name) {
     b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   $("panel-review").hidden = name !== "review";
   $("panel-play").hidden = name !== "play";
+  $("panel-practice").hidden = name !== "practice";
   $("nav").hidden = name !== "review";
   $("eval").classList.toggle("off", name !== "review");
   if (name === "review") renderReviewBoard();
-  else renderPlayBoard();
+  else if (name === "practice") openPractice();
+  else {
+    renderPlayBoard();
+    if (!P.state) showOpponent();       // Maia may have been set up since
+  }
 }
 
 // ---------------------------------------------------------------- review
@@ -320,6 +325,19 @@ function renderMoments() {
     b.title = m.reason;
     if (m.ply === R.cursor) b.classList.add("on");
     b.addEventListener("click", () => goTo(m.ply));
+    el.append(b);
+  }
+  const errors = ms.filter((m) => BAD.has(m.label)).length;
+  if (errors) {
+    const b = document.createElement("button");
+    b.className = "practice-link";
+    b.textContent = `Practise ${errors === 1 ? "this move" : `these ${errors} moves`}`;
+    b.title = "Replay the positions and find a better move";
+    b.addEventListener("click", () => {
+      document.querySelector("input[name=pscope][value=game]").checked = true;
+      X.loaded = null;
+      showTab("practice");
+    });
     el.append(b);
   }
 }
@@ -611,12 +629,17 @@ function openingHtml(mv) {
     html += `<div class="opening"><span class="eco">${esc(mv.opening.eco)}</span> ${esc(mv.opening.name)}</div>`;
     if (mv.opening.idea) html += `<p class="idea">${esc(mv.opening.idea)}</p>`;
   }
-  if (mv.left_theory && mv.left_theory.opening) {
+  if (mv.left_theory && (mv.left_theory.opening || mv.left_theory.source)) {
     const n = mv.move_label.match(/^(\d+)(\.\.\.|\. )/);
     const num = n ? (n[2] === ". " ? `${n[1]}. ` : `${n[1]}...`) : "";
     const alts = (mv.left_theory.alternatives || []).map((a) =>
       `<b>${esc(figurine(num + a.san))}</b>${a.name ? ` (${esc(a.name)})` : ""}`);
-    html += `<p class="theory">This move leaves known opening theory${alts.length ? `; theory continues with ${alts.join(" or ")}` : ""}.</p>`;
+    // Without an opening book the only evidence is the openings table, so
+    // say exactly that rather than claiming the game left "theory".
+    const named = mv.left_theory.source === "names";
+    const what = named ? "This move leaves the named opening lines" : "This move leaves known opening theory";
+    const cont = named ? "the named lines continue with" : "theory continues with";
+    html += `<p class="theory">${what}${alts.length ? `; ${cont} ${alts.join(" or ")}` : ""}.</p>`;
   }
   return html;
 }
@@ -797,6 +820,7 @@ async function pollReview() {
     R.game.summary = res.summary || [];
     R.game.patterns = res.patterns || [];
     R.reviewed = true;
+    X.loaded = null;                // the practice list follows the latest review
     renderGraph();
     $("save-report").hidden = false;
     toast(`Review complete: ${res.moves.filter((m) => m.reason).length} critical moments.`);
@@ -845,12 +869,34 @@ document.addEventListener("keydown", (e) => {
 
 const P = { state: null, busy: false };
 
-$("elo").addEventListener("input", () => ($("elo-out").textContent = $("elo").value));
+$("elo").addEventListener("input", () => {
+  $("elo-out").textContent = $("elo").value;
+  showOpponent();
+});
+
+// Say who the player will actually face: Maia at the chosen rating, or, when
+// Maia is missing, Stockfish at its effective (possibly clamped) strength.
+let opponentSeq = 0;
+async function showOpponent() {
+  const seq = ++opponentSeq;
+  const op = await call("play_opponent", Number($("elo").value));
+  if (!op || seq !== opponentSeq) return;
+  opponentNote($("opponent-note"), op);
+  $("play-sub").textContent = op.human_like
+    ? "Maia plays like a human of the rating you choose, mistakes included. When the game ends, review it here."
+    : "Pick a rating and play. When the game ends, review it here.";
+}
+
+function opponentNote(el, op) {
+  el.textContent = op ? op.note : "";
+  el.classList.toggle("warn", !!op && !op.human_like);
+}
 
 $("start-game").addEventListener("click", startGame);
 $("new-game").addEventListener("click", () => {
   $("play-live").hidden = true;
   $("play-setup").hidden = false;
+  showOpponent();
   P.state = null;
   renderPlayBoard();
 });
@@ -873,6 +919,7 @@ function applyPlayState(st) {
   setOrientation(st.orientation);
   renderPlayBoard();
   $("play-status").textContent = st.status;
+  opponentNote($("play-opponent"), st.opponent_info);
   fillMoveGrid($("play-moves"), st.moves, st.moves.length - 1, null, false);
   $("takeback").hidden = st.over;
   $("resign").hidden = st.over;
@@ -1004,6 +1051,143 @@ $("settings-form").addEventListener("submit", async (e) => {
     document.addEventListener("mouseup", up);
   });
 })();
+
+// ---------------------------------------------------------------- practice
+//
+// Your reviewed mistakes come back as positions to solve. The board takes
+// one move; Stockfish (in Python) judges it against the review's numbers.
+
+const X = { drills: [], i: 0, result: null, loaded: null, busy: false };
+const VERDICT = { best: "Correct", good: "That works too", repeat: "Same move as in the game",
+                  miss: "Not quite", revealed: "The answer" };
+
+document.querySelectorAll("input[name=pscope]").forEach((r) =>
+  r.addEventListener("change", () => { X.loaded = null; openPractice(); }));
+$("drill-next").addEventListener("click", () => {
+  if (!X.drills.length) return;
+  X.i = (X.i + 1) % X.drills.length;
+  X.result = null;
+  renderDrill();
+});
+$("drill-retry").addEventListener("click", () => { X.result = null; renderDrill(); });
+$("drill-reveal").addEventListener("click", () => submitDrill(null));
+
+async function openPractice() {
+  let scope = document.querySelector("input[name=pscope]:checked").value;
+  if (scope === "game" && !R.reviewed) {
+    scope = "all";
+    document.querySelector("input[name=pscope][value=all]").checked = true;
+  }
+  if (X.loaded !== scope) {
+    X.drills = []; X.result = null; X.i = 0;
+    renderDrill();
+    const res = await call("practice_drills", scope);
+    X.loaded = scope;
+    X.drills = res ? res.drills : [];
+    $("practice-empty").textContent = res ? res.empty : "";
+  }
+  renderDrill();
+}
+
+const curDrill = () => X.drills[X.i] || null;
+
+function lineText(fen, sans) {
+  const parts = fen.split(" ");
+  let n = Number(parts[5]) || 1, white = parts[1] === "w";
+  return sans.map((san, k) => {
+    const s = white ? `${n}. ${san}` : (k === 0 ? `${n}...${san}` : san);
+    if (!white) n += 1;
+    white = !white;
+    return figurine(s);
+  }).join(" ");
+}
+
+function renderDrill() {
+  const d = curDrill();
+  $("practice-empty").hidden = !!d || !X.loaded;
+  $("drill").hidden = !d;
+  renderPlayers();
+  setEval(50);
+  if (!d) {
+    if (tab === "practice") {
+      board.set({ fen: START, lastMove: undefined, check: false, movable: { color: undefined, dests: new Map() } });
+      board.setAutoShapes([]);
+    }
+    return;
+  }
+  const where = d.game_name ? ` · ${d.game_name}` : "";
+  const p = d.progress || {};
+  const record = p.tries ? ` · solved ${p.solved} of ${p.tries} tries` : "";
+  $("drill-count").textContent = `Exercise ${X.i + 1} of ${X.drills.length}${where}${record}`;
+  const side = d.color === "white" ? "White" : "Black";
+  $("drill-prompt").innerHTML = `${side} to move. In the game you played <b>${esc(figurine(d.move_label))}</b>, ${/^[aeiou]/i.test(d.label) ? "an" : "a"} ${esc(d.label.toLowerCase())}. Find a better move.`;
+  const r = X.result;
+  $("drill-reveal").hidden = !!r;
+  $("drill-retry").hidden = !r || r.verdict === "best" || r.verdict === "revealed";
+  $("drill-result").innerHTML = r ? drillResultHtml(d, r) : "";
+  if (tab !== "practice") return;
+  if (orientation !== d.color) setOrientation(d.color);
+  const answered = r && r.answer_san;
+  board.set({
+    fen: d.fen,
+    turnColor: d.color,
+    lastMove: undefined,
+    check: false,
+    movable: {
+      free: false,
+      color: r || X.busy ? undefined : d.color,
+      dests: new Map(Object.entries(d.dests || {})),
+      showDests: true,
+      events: { after: onDrillMove },
+    },
+  });
+  const shapes = [];
+  if (r) {
+    if (answered && r.verdict !== "best") {
+      const u = r.answer_uci || "";
+      if (u) shapes.push({ orig: u.slice(0, 2), dest: u.slice(2, 4), brush: r.verdict === "good" ? "played" : "attack" });
+    }
+    shapes.push({ orig: d.best_uci.slice(0, 2), dest: d.best_uci.slice(2, 4), brush: "defend" });
+  }
+  board.setAutoShapes(shapes);
+}
+
+function drillResultHtml(d, r) {
+  const cls = r.verdict === "best" || r.verdict === "good" ? "ok" : "no";
+  let html = `<p class="verdict ${cls}"><b>${esc(VERDICT[r.verdict] || "")}.</b> ${esc(figurineText(r.message))}</p>`;
+  if (r.line && r.line.length) html += `<p class="line"><b class="k">Engine line</b> ${esc(lineText(d.fen, r.line))}</p>`;
+  if (d.explanation) html += `<div class="drill-why"><b class="k">The coach said in the review</b>${renderAnnotation(d.explanation)}</div>`;
+  return html;
+}
+
+async function onDrillMove(orig, dest) {
+  const d = curDrill();
+  if (!d) return;
+  let uci = orig + dest;
+  const piece = board.state.pieces.get(dest);
+  if (piece && piece.role === "pawn" && (dest[1] === "8" || dest[1] === "1")) {
+    const promo = await pickPromotion();
+    if (!promo) { renderDrill(); return; }
+    uci += promo;
+  }
+  await submitDrill(uci);
+}
+
+async function submitDrill(uci) {
+  const d = curDrill();
+  if (!d || X.busy) return;
+  X.busy = true;
+  board.set({ movable: { color: undefined } });
+  $("drill-result").innerHTML = `<p class="sub">Checking with Stockfish…</p>`;
+  const res = uci ? await call("practice_answer", d.id, uci) : await call("practice_reveal", d.id);
+  X.busy = false;
+  if (!res) { renderDrill(); return; }
+  res.answer_uci = uci || "";
+  d.progress = res.progress || d.progress;
+  X.result = res;
+  renderDrill();
+  if (uci) board.set({ fen: d.fen });        // show the position, arrows carry the moves
+}
 
 // ---------------------------------------------------------------- start
 

@@ -23,7 +23,7 @@ from .engine import EngineAnalysis, open_maia, run_maia, run_stockfish
 from .moments import moment_context, pick_critical
 from .narrator import narrate, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
-from .opening import book_status, opening_notes
+from .opening import book_status, opening_notes, theory_exit
 from .report import print_scoreboard
 from .summary import summarize
 from .themes import move_themes
@@ -148,6 +148,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
               for i in range(len(moves))]
     book = book_status(config.settings.book_path, boards, moves)
     openings = opening_notes(boards, moves, book, config.settings.book_path)
+    theory = theory_exit(boards, moves, book)
 
     want = {"white": [chess.WHITE], "black": [chess.BLACK],
             "both": [chess.WHITE, chess.BLACK]}[side]
@@ -161,7 +162,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                      if boards[i].turn in want and not book[i]}
         else:
             picks = pick_critical(boards, moves, evals, labels, book, want,
-                                  maia_engine)
+                                  maia_engine, theory=theory)
 
         for i, m in enumerate(moves):
             b = boards[i]
@@ -209,7 +210,8 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
             mv = review.moves[i]
             progress("narrate", k, len(todo), f"Writing comment on {mv.move_label}")
             maia = run_maia(boards[i], engine=maia_engine) if maia_engine else None
-            note, prefix, focus = moment_context(i, picks[i], boards, moves, labels, book)
+            note, prefix, focus = moment_context(i, picks[i], boards, moves, labels, book,
+                                                theory=theory)
             prep = prepare_move(boards[i], moves[i], evals[i], evals[i + 1],
                                 maia, opening_note=note, reason=picks[i],
                                 fixed_prefix=prefix, focus=focus, engine=concept_sf)
@@ -259,8 +261,10 @@ def _opening_lines(review: GameReview) -> list:
         num = left.move_label.split(".")[0] + ("..." if left.color == "black" else ". ")
         alts = " or ".join(num + a["san"] + (f" ({a['name']})" if a["name"] else "")
                            for a in left.left_theory["alternatives"])
-        out.append(f"{left.move_label} left known theory"
-                   + (f"; theory continues with {alts}." if alts else "."))
+        named_only = left.left_theory.get("source") == "names"
+        what, cont = (("left the named opening lines", "the named lines continue with")
+                      if named_only else ("left known theory", "theory continues with"))
+        out.append(f"{left.move_label} {what}" + (f"; {cont} {alts}." if alts else "."))
     return out + [""] if out else []
 
 

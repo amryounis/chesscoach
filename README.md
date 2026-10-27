@@ -83,7 +83,14 @@ chesscoach gui
   green. Arrow keys step through the game.
 - **Play**: a training game against Maia at the rating you choose. Maia plays
   like a human of that strength, mistakes included. When the game ends,
-  *Review this game* sends it straight to the coach.
+  *Review this game* sends it straight to the coach. Without Maia the
+  opponent is Stockfish, which can't play below 1320 and plays like an
+  engine; the setup screen says so, with its real strength, before you start.
+- **Practice**: your inaccuracies, mistakes and blunders from reviewed games
+  come back as positions to solve. Make a move; Stockfish judges it (another
+  move that keeps your chances counts), then you see the engine's move, its
+  line and what the coach said in the review. Exercises you miss come back
+  first. Choose the game you just reviewed or all your reviewed games.
 - **Explain this position / Ask the coach**: under the comment, for any move
   of the open game. The coach explains the position, or answers a question
   such as "Why not Nd2?", "Is my bishop safe?" or "After Re1+ Kd8 Ne5,
@@ -184,7 +191,12 @@ roles, a grounding check on everything the model writes, an answer-key
 harness, "Explain this position" and "Ask the coach", and the desktop app
 with review and play against Maia.
 
-Next: game summaries and recurring themes across your games.
+Also done: game summaries, recurring themes across your games, and
+practising your own mistakes.
+
+Next: a quicker review mode for modest hardware, a board editor / FEN
+import so the coach can explain any position, and an easier first-run
+setup.
 
 ## License
 

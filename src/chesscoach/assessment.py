@@ -50,18 +50,20 @@ def compute_assessment(prev_score_cp: Optional[int], curr_score_cp: Optional[int
             else (curr_score_cp - prev_score_cp)
         cp_loss = max(0, diff)
 
-    drop = before - after
+    return (label_for_drop(before - after), cp_loss)
+
+
+def label_for_drop(drop: float) -> str:
+    """Move label from the drop in the mover's winning chances (%)."""
     if drop < 5:
-        label = "Excellent"
-    elif drop < 10:
-        label = "Good"
-    elif drop < 20:
-        label = "Inaccuracy"
-    elif drop < 30:
-        label = "Mistake"
-    else:
-        label = "Blunder"
-    return (label, cp_loss)
+        return "Excellent"
+    if drop < 10:
+        return "Good"
+    if drop < 20:
+        return "Inaccuracy"
+    if drop < 30:
+        return "Mistake"
+    return "Blunder"
 
 
 def eval_phrase(score_cp: Optional[int], score_mate: Optional[int]) -> tuple:
