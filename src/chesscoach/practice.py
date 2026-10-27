@@ -141,6 +141,16 @@ def record_attempt(drill_id: str, verdict: str, path: Optional[Path] = None) -> 
     return p
 
 
+def queue_tag(progress: dict) -> str:
+    """Why a drill sits where it does in the cross-game queue (order())."""
+    if not progress or not progress.get("tries"):
+        return "New"
+    if progress.get("last_verdict") not in SOLVED:
+        return "Missed last time"
+    n = progress.get("solved", 0)
+    return "Solved once" if n == 1 else f"Solved {n} times"
+
+
 def order(drills: list, progress: dict) -> list:
     """Not yet solved (never tried, or missed last time) first, then the
     ones solved least often, oldest attempt first; within that, blunders

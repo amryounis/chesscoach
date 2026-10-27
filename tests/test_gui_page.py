@@ -188,7 +188,9 @@ def test_practice_your_mistakes(page):
     page.click("#moments .practice-link")
     page.wait_for_selector("#drill:not([hidden])")
     assert "Find a better move" in page.inner_text("#drill-prompt")
-    first = page.evaluate("window.pywebview.api.practice_drills('game')")["drills"][0]
+    listing = page.evaluate("window.pywebview.api.practice_drills('game')")["drills"]
+    assert [d["ply"] for d in listing] == sorted(d["ply"] for d in listing)   # move order
+    first = listing[0]
     assert first["color"] == "white"                       # the reviewed side's mistakes
     # Play the engine's move on the board: it is judged correct.
     _click_square(page, first["best_uci"][:2], "white")
@@ -223,4 +225,43 @@ def test_play_says_who_the_opponent_is(page):
     page.click("#start-game")
     page.wait_for_selector("#play-live:not([hidden])")
     assert "Stockfish at 1320" in page.inner_text("#play-opponent")
+    assert page.errors == []
+
+
+def test_review_fills_the_annotations_and_keeps_comments_visible(page):
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    # The coach's comments are in the Annotations pane, beside the annotator's.
+    assert page.is_visible("#annotations")
+    notes = page.inner_text("#annotations")
+    assert "Comments by the coach from this review" in notes or \
+        "comments by the coach from this review" in notes
+    assert page.locator("#annotations .cmt.coach").count() >= 1
+    assert "A reason." in page.inner_text("#annotations .cmt.coach >> nth=0")
+    # The graph is a framed line, with ticks at the errors.
+    assert page.locator("#evalgraph .area").count() == 0
+    assert page.locator("#evalgraph .ln").count() == 1
+    # Explain this position: the answer goes below the comment, which stays.
+    page.click("#moments button >> nth=1")
+    comment = page.inner_text("#coach")
+    assert "A reason." in comment
+    page.click("#explain-btn")
+    page.wait_for_selector(".ask-answer .meta", timeout=120000)
+    assert page.inner_text("#coach") == comment
+    assert "Explain this position" in page.inner_text("#ask-answer")
+    # Leave and come back: the move opens on its comment again.
+    page.click("#moments button >> nth=2")
+    page.click("#moments button >> nth=1")
+    assert page.evaluate("document.getElementById('coach-scroll').scrollTop") == 0
+    assert "A reason." in page.inner_text("#coach")
+    # The splitter still resizes the move list.
+    split = page.locator("#splitter").bounding_box()
+    page.click("#viewtabs [data-view=moves]")
+    h0 = page.locator("#movelist").bounding_box()["height"]
+    page.mouse.move(split["x"] + 20, split["y"] + 2)
+    page.mouse.down()
+    page.mouse.move(split["x"] + 20, split["y"] + 80, steps=5)
+    page.mouse.up()
+    assert page.locator("#movelist").bounding_box()["height"] > h0 + 40
     assert page.errors == []

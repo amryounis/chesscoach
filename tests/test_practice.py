@@ -101,3 +101,10 @@ def test_practice_file_never_breaks_the_history(tmp_path, monkeypatch):
     assert path == tmp_path / "practice.json" and path.exists()
     assert not (hist / "practice.json").exists()
     assert practice.load_progress(path) == {"g1-20": {"tries": 1}}
+
+
+def test_queue_tags_say_why():
+    assert practice.queue_tag({}) == "New"
+    assert practice.queue_tag({"tries": 2, "solved": 1, "last_verdict": "miss"}) == "Missed last time"
+    assert practice.queue_tag({"tries": 1, "solved": 1, "last_verdict": "best"}) == "Solved once"
+    assert practice.queue_tag({"tries": 3, "solved": 2, "last_verdict": "good"}) == "Solved 2 times"

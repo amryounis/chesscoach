@@ -265,13 +265,13 @@ select, input:not([type=radio]):not([type=range]) {
 .mv.current .mark { color: var(--accent-ink); }
 
 /* ---- the coach: the one place the page speaks in a book voice ---- */
-.coach {
+.coach-scroll {
   overflow-y: auto;
   min-height: 0;
   flex: 1;
-  font: 16px/1.62 var(--book);
   padding-right: 6px;
 }
+.coach { font: 16px/1.62 var(--book); }
 /* The box spans the panel so its scrollbar lines up with the move list's;
    the text inside keeps a readable line length. */
 .coach > *, .ask-answer > * { max-width: 62ch; }
@@ -318,9 +318,10 @@ select, input:not([type=radio]):not([type=range]) {
   background: var(--panel);
   color: var(--ink);
 }
-.ask-answer { font: 15px/1.6 var(--book); max-height: 38vh; overflow-y: auto; }
+.ask-answer { font: 15px/1.6 var(--book); border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 10px; }
 .ask-answer:empty { display: none; }
-.ask-answer .q { font: 600 13px var(--ui); color: var(--muted); margin: 0 0 4px; }
+.ask-answer .q { font: 600 13px var(--ui); color: var(--muted); margin: 14px 0 4px; }
+.ask-answer .q:first-child { margin-top: 0; }
 .ask-answer p { margin: 0 0 8px; }
 .ask-answer .meta { font: 12px var(--ui); color: var(--muted); }
 .ask-answer .thinking { font: 13px var(--ui); color: var(--muted); }
@@ -412,10 +413,17 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .evalgraph { margin: 6px 0 8px; }
 .evalgraph .g-head { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--ui); margin-bottom: 2px; }
 .evalgraph .g-tip { color: var(--ink); font-variant-numeric: tabular-nums; }
-.evalgraph svg { width: 100%; height: 44px; display: block; cursor: pointer; background: var(--eval-black); border-radius: 4px; }
-.evalgraph .mid { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
-.evalgraph .area { fill: var(--eval-white); }
-.evalgraph .ln { fill: none; stroke: var(--muted); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.evalgraph .g-frame { display: flex; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); overflow: hidden; }
+.evalgraph svg { flex: 1; min-width: 0; height: 64px; display: block; cursor: pointer; }
+/* which way is which, in a gutter so nothing on the graph hides it */
+.evalgraph .g-axis { display: flex; flex-direction: column; justify-content: space-between; padding: 3px 6px;
+  border-right: 1px solid var(--line); font: 600 10px var(--ui); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.evalgraph .mid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.evalgraph .ln { fill: none; stroke: var(--ink); stroke-width: 1.75; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.evalgraph .tick { stroke-width: 3; vector-effect: non-scaling-stroke; }
+.evalgraph .tick.j-Inaccuracy { stroke: var(--j-inaccuracy); }
+.evalgraph .tick.j-Mistake { stroke: var(--j-mistake); }
+.evalgraph .tick.j-Blunder { stroke: var(--j-blunder); }
 .evalgraph .cur { stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .evalgraph .hov { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .viewtabs { display: flex; gap: 4px; margin: 4px 0 6px; border-bottom: 1px solid var(--line); }
@@ -425,6 +433,10 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .annotations p { margin: 0 0 7px; }
 .annotations .by { color: var(--muted); font: 12px var(--ui); }
 .annotations .de { color: var(--muted); font-style: italic; }
+/* the coach's comments from a review, set apart from the annotator's */
+.annotations .cmt.coach { margin: 2px 0 9px; padding: 4px 0 2px 10px; border-left: 3px solid var(--accent); }
+.annotations .cmt.coach p { margin: 0 0 4px; }
+.annotations .by-coach { display: block; font: 600 11.5px var(--ui); color: var(--accent); letter-spacing: .02em; margin-bottom: 2px; }
 .annotations .var-block { margin-left: 14px; padding-left: 8px; border-left: 2px solid var(--line); font-size: 13.5px; color: var(--muted); }
 .annotations .var { color: var(--muted); font-size: 13.5px; }
 .annotations a.tok { color: var(--ink); text-decoration: none; padding: 0 2px; border-radius: 3px; white-space: nowrap; font-family: var(--fig); font-size: 13.5px; }

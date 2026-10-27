@@ -133,7 +133,7 @@ function loadSummary(summary) {
   if (summary.games) R.games = summary.games;
   renderGamePick(summary.index || 0);
   const tree = summary.tree;
-  $("viewtabs").hidden = !(tree && tree.annotated);
+  $("viewtabs").hidden = !(tree && tree.annotated);   // shown for every reviewed game too
   setView(tree && tree.annotated ? "notes" : "moves");
   $("ask").hidden = false;
   const h = summary.headers;
@@ -297,6 +297,7 @@ function goTo(i) {
   renderCoach();
   renderMoments();
   renderAsk();
+  $("coach-scroll").scrollTop = 0;   // a move opens on its comment
 }
 
 // A move inside one of the annotator's variations.
@@ -311,6 +312,7 @@ function goToNode(id) {
   renderReviewBoard();
   renderCoach();
   renderAsk();
+  $("coach-scroll").scrollTop = 0;
 }
 
 function renderMoments() {
@@ -440,7 +442,9 @@ function commentText(c) {
 
 function moveTok(n, withNumber) {
   const num = n.white ? `${n.move_label.split(".")[0]}. ` : withNumber ? `${n.move_label.split("...")[0]}... ` : "";
-  const moveGlyph = n.nags.filter((g) => g.move).map((g) => g.glyph).join("");
+  const rv = n.main ? reviewedMove(n.ply) : null;
+  const moveGlyph = n.nags.filter((g) => g.move).map((g) => g.glyph).join("")
+    || (rv && rv.reason ? markOf(rv) : "");
   const posGlyph = n.nags.filter((g) => !g.move).map((g) => `<span class="pos" title="${esc(g.words)}">${esc(g.glyph)}</span>`).join(" ");
   const cls = "tok" + (n.main ? " main" : "") + (moveGlyph.includes("?") ? " bad" : moveGlyph.includes("!") ? " good" : "");
   const title = n.nags.map((g) => g.words).filter(Boolean).join(", ");
@@ -451,7 +455,23 @@ function moveTok(n, withNumber) {
   if (posGlyph) html += ` ${posGlyph}`;
   const c = commentText(n.comment);
   if (c) html += n.main ? `</p><p class="cmt main">${c}</p><p class="line">` : ` <span class="cmt">${c}</span>`;
-  return { html, broke: Boolean(c) };
+  const coach = n.main ? coachNote(n.ply) : "";
+  if (coach) html += `</p>${coach}<p class="line">`;
+  return { html, broke: Boolean(c || coach) };
+}
+
+// The coach's comment on a reviewed move, for the Annotations pane: what the
+// review's comment says, with the move's mark when the PGN gave it none.
+function reviewedMove(ply) {
+  return R.reviewed && ply >= 0 ? R.game.moves[ply] : null;
+}
+function coachNote(ply) {
+  const mv = reviewedMove(ply);
+  const text = mv && Object.values(mv.annotations || {})[0];
+  if (!text || !mv.reason) return "";
+  const mark = markOf(mv);
+  const head = `${esc(JUDGMENT_TEXT[mv.label] || mv.label)}${mark ? ` ${esc(mark)}` : ""}`;
+  return `<div class="cmt coach"><span class="by-coach">Coach · ${head}</span>${renderAnnotation(text)}</div>`;
 }
 
 // Main line in paragraphs, variations inline in brackets, as in a book.
@@ -477,10 +497,13 @@ function lineFrom(id, inVariation) {
 function renderNotes() {
   const el = $("annotations");
   const tree = R.game && R.game.tree;
-  if (!tree || !tree.annotated) { el.innerHTML = ""; return; }
+  if (!tree || !(tree.annotated || R.reviewed)) { el.innerHTML = ""; return; }
   const intro = commentText(tree.nodes[0].comment);
   const h = R.game.headers;
-  let html = h.Annotator ? `<p class="by">Annotated by ${esc(h.Annotator)}</p>` : "";
+  const by = [];
+  if (tree.annotated) by.push(h.Annotator ? `Annotated by ${esc(h.Annotator)}` : "The PGN's annotations");
+  if (R.reviewed) by.push(`${by.length ? "c" : "C"}omments by the coach from this review (${esc((R.game.models || [])[0] || "local model")})`);
+  let html = by.length ? `<p class="by">${by.join("; ")}</p>` : "";
   if (intro) html += `<p class="cmt main">${intro}</p>`;
   html += `<p class="line">${lineFrom(0, false)}</p>`;
   el.innerHTML = html.replace(/<p class="line">\s*<\/p>/g, "");
@@ -537,22 +560,23 @@ function renderGraph() {
   if (!s) { el.hidden = true; el.innerHTML = ""; return; }
   const n = s.vals.length, W = 1000, H = 100;
   const x = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), y = (v) => H - (v / 100) * H;
-  let path = "", started = false, lastX = 0;
+  let path = "", started = false;
   s.vals.forEach((v, i) => {
     if (v === null) return;
     path += `${started ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
-    started = true; lastX = x(i);
+    started = true;
   });
-  const firstX = x(s.vals.findIndex((v) => v !== null));
-  // White's share fills from the bottom up to the line, like the eval bar.
-  const area = started ? `${path}L${lastX},${H}L${firstX},${H}Z` : "";
+  // A line on a framed panel: up is White, down is Black. (The filled area
+  // blended into the page; a line reads at any size, in both themes.)
+  const ticks = R.reviewed ? R.game.moves.map((m, i) => (m.reason && BAD.has(m.label)
+    ? `<line class="tick j-${m.label}" x1="${x(i).toFixed(1)}" y1="${H - 9}" x2="${x(i).toFixed(1)}" y2="${H}"/>` : "")).join("") : "";
   el.hidden = false;
   el.innerHTML = `<div class="g-head"><span>${s.src === "review" ? "Evaluation (Stockfish, this review)" : "Evaluation (the annotator's engine)"}</span><span class="g-tip" id="g-tip"></span></div>`
-    + `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="White's winning chance move by move">`
+    + `<div class="g-frame"><div class="g-axis"><span>White</span><span>Black</span></div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="White's winning chance move by move">`
     + `<line class="mid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>`
-    + `<path class="area" d="${area}"/><path class="ln" d="${path}"/>`
+    + ticks + `<path class="ln" d="${path}"/>`
     + `<line class="cur" id="g-cur" x1="-10" y1="0" x2="-10" y2="${H}"/>`
-    + `<line class="hov" id="g-hov" x1="-10" y1="0" x2="-10" y2="${H}"/></svg>`;
+    + `<line class="hov" id="g-hov" x1="-10" y1="0" x2="-10" y2="${H}"/></svg></div>`;
   const svg = el.querySelector("svg");
   const plyAt = (ev) => {
     const r = svg.getBoundingClientRect();
@@ -752,7 +776,6 @@ function renderAsk() {
     if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;
   }
   el.innerHTML = html;
-  el.scrollTop = el.scrollHeight;
   $("explain-btn").disabled = R.asking;
   $("ask-btn").disabled = R.asking;
 }
@@ -764,12 +787,21 @@ async function askCoach(question) {
   (R.answers[ply] = R.answers[ply] || []).push(entry);
   R.asking = true;
   renderAsk();
+  showLatestAnswer();
   const res = question ? await call("ask_coach", ply, question)
                        : await call("explain_position", ply);
   R.asking = false;
   if (res) Object.assign(entry, res, { pending: false });
   else R.answers[ply] = R.answers[ply].filter((a) => a !== entry);
-  if (R.cursor === ply) renderAsk(); else { $("explain-btn").disabled = false; $("ask-btn").disabled = false; }
+  if (R.cursor === ply) { renderAsk(); showLatestAnswer(); }
+  else { $("explain-btn").disabled = false; $("ask-btn").disabled = false; }
+}
+
+// The newest question at the top of the view; the comment is above it, one
+// scroll away, and comes back first when you return to this move.
+function showLatestAnswer() {
+  const qs = $("ask-answer").querySelectorAll(".q");
+  if (qs.length) qs[qs.length - 1].scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
 $("explain-btn").addEventListener("click", () => askCoach(""));
@@ -819,9 +851,15 @@ async function pollReview() {
     R.game.moves = res.moves;
     R.game.summary = res.summary || [];
     R.game.patterns = res.patterns || [];
+    R.game.models = res.models || [];
     R.reviewed = true;
     X.loaded = null;                // the practice list follows the latest review
     renderGraph();
+    // The coach's comments are now part of the game: read them in the
+    // Annotations pane, alongside the annotator's when the PGN had them.
+    $("viewtabs").hidden = !R.game.tree;
+    renderNotes();
+    if (R.game.tree) setView("notes");
     $("save-report").hidden = false;
     toast(`Review complete: ${res.moves.filter((m) => m.reason).length} critical moments.`);
     goTo(-1);                       // open on the game summary
@@ -1117,8 +1155,9 @@ function renderDrill() {
   }
   const where = d.game_name ? ` · ${d.game_name}` : "";
   const p = d.progress || {};
-  const record = p.tries ? ` · solved ${p.solved} of ${p.tries} tries` : "";
-  $("drill-count").textContent = `Exercise ${X.i + 1} of ${X.drills.length}${where}${record}`;
+  const record = p.tries ? ` · solved ${p.solved} of ${p.tries} ${p.tries === 1 ? "try" : "tries"}` : "";
+  const why = d.queue ? ` · ${d.queue}` : "";           // all games: why it is in this place
+  $("drill-count").textContent = `Exercise ${X.i + 1} of ${X.drills.length}${where}${why}${record}`;
   const side = d.color === "white" ? "White" : "Black";
   $("drill-prompt").innerHTML = `${side} to move. In the game you played <b>${esc(figurine(d.move_label))}</b>, ${/^[aeiou]/i.test(d.label) ? "an" : "a"} ${esc(d.label.toLowerCase())}. Find a better move.`;
   const r = X.result;

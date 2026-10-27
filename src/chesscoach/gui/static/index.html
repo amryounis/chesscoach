@@ -81,7 +81,12 @@
     <div class="splitter" id="splitter" role="separator" aria-orientation="horizontal"
          aria-label="Drag to share the space between the moves and the comments" title="Drag to resize"></div>
 
-    <article class="coach" id="coach" aria-live="polite"></article>
+    <!-- The comment and the answers about this position scroll together, so
+         an answer never pushes the comment out of view. -->
+    <div class="coach-scroll" id="coach-scroll">
+      <article class="coach" id="coach" aria-live="polite"></article>
+      <div class="ask-answer" id="ask-answer" aria-live="polite"></div>
+    </div>
 
     <section class="ask" id="ask" hidden aria-label="Ask the coach">
       <div class="ask-row">
@@ -92,7 +97,6 @@
           <button type="submit" id="ask-btn">Ask</button>
         </form>
       </div>
-      <div class="ask-answer" id="ask-answer" aria-live="polite"></div>
     </section>
   </section>
 
@@ -138,8 +142,8 @@
     </div>
     <fieldset class="seg" id="practice-scope">
       <legend>Exercises from</legend>
-      <label><input type="radio" name="pscope" value="game" checked> The game you reviewed</label>
-      <label><input type="radio" name="pscope" value="all"> All your reviewed games</label>
+      <label title="The game's errors in move order"><input type="radio" name="pscope" value="game" checked> The game you reviewed</label>
+      <label title="New and missed exercises first, then the ones solved least"><input type="radio" name="pscope" value="all"> All your reviewed games</label>
     </fieldset>
     <p class="empty" id="practice-empty" hidden></p>
     <div class="drill" id="drill" hidden>

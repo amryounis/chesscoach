@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.2 — unreleased
+
+From using 0.12.1:
+
+- **Explain this position / Ask the coach no longer hide the comment.**
+  The answer used to take a fixed 38% of the height below the comment,
+  which squeezed the comment out of view (and left the splitter nothing to
+  resize). The comment and the answers about a position now scroll
+  together: the answer appears under the comment and is scrolled into
+  view, and going to a move always opens on its comment. The splitter
+  works again
+- **The coach's comments are in the Annotations pane** once a game is
+  reviewed, set apart from the annotator's (a teal bar headed "Coach ·
+  Mistake ?"), with the review's mark on the move when the PGN gave none.
+  The pane now exists for every game, annotated or not, and opens after a
+  review
+- **The evaluation graph is a line on a framed panel** instead of a white
+  area that blended into the page; White/Black are named in a gutter, and
+  short ticks mark the errors (inaccuracy, mistake, blunder colours)
+- **Practice order:** one game's exercises now come in move order; "All
+  your reviewed games" keeps the review queue (new and missed first) and
+  says why each one is where it is ("New", "Missed last time", "Solved
+  once")
+
 ## 0.12.1 — unreleased
 
 - Fix: 0.12.0 kept the practice attempts (practice.json) in the history

@@ -73,9 +73,10 @@ def game_summary(game: chess.pgn.Game) -> dict:
     for mv, extra in zip(moves, opening_notes(boards, plain)):
         mv.update(extra)
     from ..pgn_reader import game_tree
-    tree = game_tree(game)
+    # Always the tree: the Annotations pane shows the annotator's notes when
+    # the PGN has them and the coach's once the game is reviewed.
     return {"headers": dict(game.headers), "start_fen": game.board().fen(),
-            "moves": moves, "tree": tree if tree["annotated"] or tree["evp"] else None}
+            "moves": moves, "tree": game_tree(game)}
 
 
 def _patterns_after(review) -> list:
@@ -299,10 +300,16 @@ class Api:
             drills = practice.drills_from_review(self._review)
             empty = "No inaccuracies, mistakes or blunders in this game for the reviewed side."
         prog = practice.load_progress()
-        drills = practice.order(drills, prog)
+        # One game: its errors in move order, like replaying it. All games:
+        # a review queue (new and missed first), each with the reason shown.
+        if scope == "all":
+            drills = practice.order(drills, prog)
+        else:
+            drills = sorted(drills, key=lambda d: d["ply"])
         self._drills = {d["id"]: d for d in drills}
         for d in drills:
             d["progress"] = prog.get(d["id"], {})
+            d["queue"] = practice.queue_tag(d["progress"]) if scope == "all" else ""
             dests: dict = {}
             for m in chess.Board(d["fen"]).legal_moves:
                 dests.setdefault(chess.square_name(m.from_square), []).append(
