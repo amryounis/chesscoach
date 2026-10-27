@@ -270,9 +270,11 @@ select, input:not([type=radio]):not([type=range]) {
   min-height: 0;
   flex: 1;
   font: 16px/1.62 var(--book);
-  max-width: 62ch;
   padding-right: 6px;
 }
+/* The box spans the panel so its scrollbar lines up with the move list's;
+   the text inside keeps a readable line length. */
+.coach > *, .ask-answer > * { max-width: 62ch; }
 .coach .move {
   font: 600 26px/1.15 var(--fig);
   display: flex;
@@ -316,7 +318,7 @@ select, input:not([type=radio]):not([type=range]) {
   background: var(--panel);
   color: var(--ink);
 }
-.ask-answer { font: 15px/1.6 var(--book); max-width: 62ch; max-height: 38vh; overflow-y: auto; }
+.ask-answer { font: 15px/1.6 var(--book); max-height: 38vh; overflow-y: auto; }
 .ask-answer:empty { display: none; }
 .ask-answer .q { font: 600 13px var(--ui); color: var(--muted); margin: 0 0 4px; }
 .ask-answer p { margin: 0 0 8px; }

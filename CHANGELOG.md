@@ -31,6 +31,14 @@ something inaccurate, and the first practice loop.
   Attempts are kept in `practice.json` next to the history: missed ones
   come back first, blunders before mistakes before inaccuracies. A
   "Practise these moves" button sits after the critical moments
+- **Ollama is checked before a review starts.** If it isn't running, or the
+  narrator model isn't pulled, the review stops at once and says which, in
+  plain words, instead of spending minutes on Stockfish and then writing
+  "Failed to connect to Ollama" as every comment. If Ollama goes away in
+  the middle, the review stops with the same message. Explain this
+  position and Ask the coach give the same plain reason
+- The comment box spans the panel, so its scrollbar lines up with the move
+  list's (the text keeps its readable width)
 - The version shows in the window title and next to the name in the top
   bar ("chesscoach v0.12.0"), so you can tell which build is running
 

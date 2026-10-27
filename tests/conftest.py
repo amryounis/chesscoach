@@ -49,3 +49,13 @@ def stockfish():
     if not path:
         pytest.skip("no Stockfish found (set CHESSCOACH_STOCKFISH_PATH)")
     return path
+
+
+@pytest.fixture(autouse=True)
+def ollama_model_listed(monkeypatch):
+    """Tests mock ollama.chat; make ollama.list agree that the configured
+    model is installed, so the up-front Ollama check passes. Tests of the
+    check itself replace this."""
+    from chesscoach import narrator
+    monkeypatch.setattr(narrator.ollama, "list",
+                        lambda: {"models": [{"model": config.settings.model}]})

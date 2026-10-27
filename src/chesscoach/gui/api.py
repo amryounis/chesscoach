@@ -196,6 +196,8 @@ class Api:
         finally:
             self._coach_lock.release()
         if a.error:
+            from ..narrator import check_ollama
+            check_ollama(config.settings.model)    # the plain reason, when it's Ollama
             raise ValueError(a.error)
         return {"text": a.text, "removed": a.removed, "secs": round(a.secs, 1),
                 "tools": [n for n, _ in a.tool_calls], "facts": a.facts}
@@ -226,6 +228,8 @@ class Api:
         if self._job and self._job.is_alive():
             raise ValueError("A review is already running.")
         config.settings.require_stockfish()
+        from ..narrator import check_ollama
+        check_ollama(config.settings.model)     # say so now, not after the engine pass
         self._cancel.clear()
         self._set_status(state="running", stage="engine", done=0, total=1,
                          message="Starting")

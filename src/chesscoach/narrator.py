@@ -304,6 +304,38 @@ def narrate(model: str, prep: dict) -> dict:
             "first_fails": first_fails, "secs": time.time() - t0}
 
 
+class NarratorUnavailable(config.ConfigError):
+    """Ollama can't narrate: not running, or the model isn't pulled."""
+
+
+def _model_names(listing) -> set:
+    models = listing.get("models", []) if isinstance(listing, dict) else \
+        getattr(listing, "models", []) or []
+    names = set()
+    for m in models:
+        for key in ("model", "name"):
+            v = m.get(key) if isinstance(m, dict) else getattr(m, key, None)
+            if v:
+                names.add(v)
+    return names
+
+
+def check_ollama(model: str) -> None:
+    """Fail early, in plain words, when the model can't narrate: before a
+    review spends minutes on Stockfish, and again if Ollama goes away in
+    the middle. Raises NarratorUnavailable."""
+    try:
+        names = _model_names(ollama.list())
+    except Exception as e:
+        raise NarratorUnavailable(
+            "Ollama isn't running, so the coach can't write comments. Start Ollama "
+            "(or install it from https://ollama.com/download), then review again.") from e
+    if model not in names and f"{model}:latest" not in names:
+        raise NarratorUnavailable(
+            f"Ollama is running but the model '{model}' isn't installed. Run "
+            f"`ollama pull {model}`, or choose an installed model in Settings.")
+
+
 def warm_up(model: str):
     """Ask Ollama to load the model and keep it loaded; no text generated."""
     try:

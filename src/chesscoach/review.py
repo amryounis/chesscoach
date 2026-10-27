@@ -21,7 +21,7 @@ from . import config
 from .assessment import compute_assessment, eval_phrase, win_pct
 from .engine import EngineAnalysis, open_maia, run_maia, run_stockfish
 from .moments import moment_context, pick_critical
-from .narrator import narrate, prepare_move, warm_up
+from .narrator import check_ollama, narrate, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
 from .opening import book_status, opening_notes, theory_exit
 from .report import print_scoreboard
@@ -122,6 +122,10 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
     # Stockfish: every position once. Position N+1's analysis is both the
     # 'after' of move N and the 'before' of move N+1. One engine process.
     config.settings.require_stockfish()
+    # Ollama must be up before Stockfish spends minutes on the game: a
+    # review whose comments all read "Failed to connect" is no review.
+    for model in models:
+        check_ollama(model)
     # Load the first model into VRAM while Stockfish works, so the first
     # annotation doesn't wait ~3 minutes for the model to load.
     warm = threading.Thread(target=warm_up, args=(models[0],), daemon=True)
@@ -229,6 +233,8 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 on_prompt(prep["prompt"])
             for model in models:
                 r = narrate(model, prep)
+                if r["err"]:
+                    check_ollama(model)     # Ollama went away mid-review: stop, say so
                 mv.annotations[model] = r["err"] or r["text"]
                 mv.issues[model] = r["issues"]
                 mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
