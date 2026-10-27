@@ -1193,6 +1193,10 @@ async function submitDrill(uci) {
 
 async function init() {
   settingsCache = await api().get_settings();
+  if (settingsCache && settingsCache.version) {
+    $("app-version").textContent = `v${settingsCache.version}`;
+    document.title = `chesscoach ${settingsCache.version}`;
+  }
   if (settingsCache && !settingsCache.error && !settingsCache.stockfish_path) {
     toast("Set the Stockfish path in Settings before reviewing a game.", 6000);
   }

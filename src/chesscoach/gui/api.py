@@ -20,7 +20,7 @@ import chess
 import chess.engine
 import chess.pgn
 
-from .. import config
+from .. import __version__, config
 from ..play import PlayGame, preview_opponent, random_color
 from ..review import Cancelled, review_game, write_markdown
 
@@ -113,6 +113,7 @@ class Api:
     def get_settings(self) -> dict:
         s = asdict(config.settings)
         s["config_file"] = str(config.user_config_path())
+        s["version"] = __version__
         return s
 
     @_safe

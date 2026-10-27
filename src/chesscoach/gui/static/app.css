@@ -487,3 +487,6 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .drill-why { font: 14px/1.5 var(--book); }
 .drill-why p { margin: 0 0 6px; }
 .moments .practice-link { margin-left: auto; border-style: dashed; }
+
+/* version next to the name in the top bar */
+.brand .ver { font: 500 12px var(--ui); color: var(--muted); margin-left: 4px; letter-spacing: 0; }

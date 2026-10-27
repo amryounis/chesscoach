@@ -205,6 +205,13 @@ def test_practice_your_mistakes(page):
     assert page.errors == []
 
 
+def test_version_is_shown(page):
+    from chesscoach import __version__
+    page.wait_for_function("document.querySelector('#app-version').textContent !== ''")
+    assert page.inner_text("#app-version") == f"v{__version__}"
+    assert page.title() == f"chesscoach {__version__}"
+
+
 def test_play_says_who_the_opponent_is(page):
     page.click("#tab-play")
     page.fill("#elo", "800")

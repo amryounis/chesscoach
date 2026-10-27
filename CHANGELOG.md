@@ -31,6 +31,8 @@ something inaccurate, and the first practice loop.
   Attempts are kept in `practice.json` next to the history: missed ones
   come back first, blunders before mistakes before inaccuracies. A
   "Practise these moves" button sits after the critical moments
+- The version shows in the window title and next to the name in the top
+  bar ("chesscoach v0.12.0"), so you can tell which build is running
 
 ## 0.11.0 — unreleased
 

@@ -13,7 +13,7 @@ import http.server
 import threading
 from pathlib import Path
 
-from .. import config
+from .. import __version__, config
 from .api import Api
 
 STATIC = Path(__file__).parent / "static"
@@ -47,7 +47,7 @@ def launch(debug: bool = False) -> None:
     api = Api()
     port = server.server_address[1]
     window = webview.create_window(
-        "chesscoach", url=f"http://127.0.0.1:{port}/index.html", js_api=api,
+        f"chesscoach {__version__}", url=f"http://127.0.0.1:{port}/index.html", js_api=api,
         width=1320, height=860, min_size=(1000, 680))
     api._window = window
     window.events.closing += api.shutdown
