@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,3 +31,50 @@ jobs:
         env:
           CHESSCOACH_STOCKFISH_PATH: /usr/games/stockfish
         run: chesscoach eval --strict
+
+  # The desktop app is used on Windows: install it there with the GUI extra
+  # (pywebview + pythonnet), import the window code, and run every test that
+  # needs no engine (the engine tests skip themselves without Stockfish).
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install package with the GUI
+        run: |
+          pip install -e ".[dev,gui]"
+          python -m playwright install chromium
+      - name: The window code imports
+        run: python -c "import webview; from chesscoach.gui import app, api; from chesscoach.gui.api import _dialog_kind; _dialog_kind('OPEN')"
+      - name: Test (no engine)
+        run: pytest -v
+
+  # What a user gets from pip: build the wheel, install it alone in a clean
+  # venv, and check the data files and the page came with it.
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          pip install build
+          python -m build --wheel -o dist .
+      - name: Install the wheel alone and check its contents
+        run: |
+          python -m venv /tmp/w
+          /tmp/w/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/w/bin/python -I -c "
+          import chesscoach, importlib.resources as r
+          f = r.files('chesscoach')
+          for p in ('data/openings.json.gz', 'data/opening_ideas.toml', 'gui/static/index.html',
+                    'gui/static/app.js', 'gui/static/vendor/chessground.min.js',
+                    'answer_keys/homer_vs_fritz.toml'):
+              assert f.joinpath(p).is_file(), p
+          print('wheel ok', chesscoach.__version__)"
+          /tmp/w/bin/chesscoach --version

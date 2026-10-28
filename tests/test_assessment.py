@@ -1,3 +1,4 @@
+import pytest
 from chesscoach.assessment import compute_assessment, eval_phrase, win_pct
 
 
@@ -31,3 +32,24 @@ def test_eval_phrase_bands():
     assert eval_phrase(302, None)[0] == "White is much better"
     assert eval_phrase(900, None) == ("White is winning", True)
     assert eval_phrase(None, -3) == ("Black has a forced checkmate", True)
+
+
+@pytest.mark.engine
+def test_a_delivered_mate_keeps_its_winner(stockfish):
+    """Review feedback: Stockfish says "mate 0" for a checkmated position and
+    .mate() dropped the sign, so White got 0% after White had mated."""
+    import chess
+    from chesscoach import config
+    from chesscoach.assessment import eval_phrase, win_pct
+    from chesscoach.engine import run_stockfish
+    config.settings = config.load_settings(stockfish_path=stockfish, depth=8)
+    white_mated_black = chess.Board("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1")
+    white_mated_black.push_san("Ra8#")
+    ea = run_stockfish(white_mated_black)
+    assert ea.score_mate == 1 and win_pct(ea.score_cp, ea.score_mate, True) == 100.0
+    assert eval_phrase(ea.score_cp, ea.score_mate)[0].startswith("White")
+    fools = chess.Board()
+    for san in "f3 e5 g4 Qh4#".split():
+        fools.push_san(san)
+    ea = run_stockfish(fools)
+    assert ea.score_mate == -1 and win_pct(ea.score_cp, ea.score_mate, False) == 100.0

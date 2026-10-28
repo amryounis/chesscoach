@@ -108,3 +108,14 @@ def test_queue_tags_say_why():
     assert practice.queue_tag({"tries": 2, "solved": 1, "last_verdict": "miss"}) == "Missed last time"
     assert practice.queue_tag({"tries": 1, "solved": 1, "last_verdict": "best"}) == "Solved once"
     assert practice.queue_tag({"tries": 3, "solved": 2, "last_verdict": "good"}) == "Solved 2 times"
+
+
+def test_a_model_error_is_never_the_coachs_explanation():
+    """Review feedback: "Failed to connect to Ollama..." was stored as the
+    comment and shown under "The coach said in the review"."""
+    for err in ("Failed to connect to Ollama. Please check that Ollama is running "
+                "(is 'qwen3:14b' pulled? run: ollama list)",
+                "model 'qwen3:14b' not found (is 'qwen3:14b' pulled? run: ollama list)"):
+        assert practice.explanation_of({"annotations": {"m": err}}) == ""
+        assert practice.make_drill(_move(annotations={"m": err}), "g")["explanation"] == ""
+    assert practice.explanation_of(_move()).startswith("**What happened**")

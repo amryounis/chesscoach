@@ -1,5 +1,7 @@
 """Phase 5: the game summary and patterns, built only from stored facts."""
 
+import json
+
 import chess
 import chess.engine
 import pytest
@@ -172,3 +174,37 @@ def test_accuracy_and_mates_are_counted_from_stored_moves():
     assert "You missed a forced mate with 3...Qh4." in texts
     assert "3...Qh4 allowed a forced mate." in texts
     assert verify(r) == []
+
+
+def test_bad_history_records_cost_only_their_bad_parts(tmp_path):
+    """Review feedback: one old or corrupted record raised in patterns() and
+    the finished review was lost."""
+    import json
+    good = {"id": "g1", "color": "black", "white": "A", "black": "Me", "date": "2026.10.01",
+            "moves": [{"ply": 15, "move_label": "8...Bg4", "label": "Mistake",
+                       "fen_before": chess.STARTING_FEN,
+                       "themes": [{"tag": "king_shelter", "fact": "x"},
+                                  {"tag": "no-such-tag", "fact": "y"}, "junk"]},
+                      {"ply": 17, "label": "Blunder"},              # no move_label
+                      "junk"]}
+    (tmp_path / "g1.json").write_text(json.dumps(good))
+    (tmp_path / "bad1.json").write_text("{not json")
+    (tmp_path / "bad2.json").write_text(json.dumps({"id": "x", "moves": "nope"}))
+    (tmp_path / "bad3.json").write_text(json.dumps([1, 2, 3]))
+    recs = history.load(tmp_path)
+    assert [r["id"] for r in recs] == ["g1"]
+    assert [m["move_label"] for m in recs[0]["moves"]] == ["8...Bg4"]
+    assert [t["tag"] for t in recs[0]["moves"][0]["themes"]] == ["king_shelter"]
+    history.patterns(recs)                                    # does not raise
+
+
+def test_history_writes_are_atomic_and_versioned(tmp_path):
+    from types import SimpleNamespace
+    mv = SimpleNamespace(ply=1, move_label="1...e5", color="black", san="e5", uci="e7e5",
+                         label="Good", fen_before=chess.STARTING_FEN, best_san="e5",
+                         best_uci="e7e5", win_before=50, win_after=50, themes=[],
+                         book=False, annotations={})
+    rv = SimpleNamespace(side="black", headers={}, start_fen=chess.STARTING_FEN, moves=[mv])
+    path = history.save(rv, folder=tmp_path)
+    assert json.loads(path.read_text())["v"] == history.SCHEMA
+    assert not list(tmp_path.glob("*.tmp"))

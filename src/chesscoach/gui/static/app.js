@@ -29,6 +29,8 @@ const JUDGMENT_TEXT = {
   Good: "Good move", Excellent: "Excellent", Book: "Opening theory",
 };
 const BAD = new Set(["Inaccuracy", "Mistake", "Blunder"]);
+// Said under every comment, so no one reads the model's opinions as verified.
+const CHECKED_NOTE = `<div class="checked scope" title="Checked: pieces on squares, attacks and defences between named pieces, pins, forks, king shelter, files opened, material, legal moves. Not checked: judgements such as strong, weak, active or the initiative, and wording the checker does not recognise.">Facts about the pieces were checked against the board; judgements are the coach's opinion.</div>`;
 
 function winPctWhite(cp, mate) {
   if (mate !== null && mate !== undefined) return mate > 0 ? 100 : mate < 0 ? 0 : 50;
@@ -405,7 +407,10 @@ function renderCoach() {
     html += renderAnnotation(text) + legendHtml(mv) + planHtml(mv);
     const removed = (Object.values(mv.stats || {})[0] || {}).removed || 0;
     if (removed) html += `<div class="checked" title="The coach's statements are checked against the board. A statement that was not true was taken out rather than shown.">${removed === 1 ? "One sentence was" : removed + " sentences were"} left out because ${removed === 1 ? "it was" : "they were"} not true on the board.</div>`;
+    html += CHECKED_NOTE;
     html += factsHtml(mv);
+  } else if (mv.reason && Object.values(mv.errors || {})[0]) {
+    html += notesHtml(mv) + `<p class="coach-error">The coach could not write this comment: ${esc(Object.values(mv.errors)[0])}</p>`;
   } else if (mv.book) {
     html += notesHtml(mv) + (mv.opening && mv.opening.name ? "" : `<p class="empty">A standard opening move.</p>`);
   } else {
@@ -771,7 +776,7 @@ function renderAsk() {
     const meta = [];
     if (a.removed && a.removed.length)
       meta.push(`${a.removed.length === 1 ? "One sentence was" : a.removed.length + " sentences were"} left out because ${a.removed.length === 1 ? "it was" : "they were"} not true on the board.`);
-    if (!(a.removed && a.removed.length)) meta.push("Checked against the board.");
+    if (!(a.removed && a.removed.length)) meta.push("Piece facts checked against the board; judgements are the model's.");
     if (a.secs) meta.push(`${a.secs}s`);
     if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;
   }
@@ -821,10 +826,17 @@ $("open-pgn").addEventListener("click", async () => {
 });
 
 $("start-review").addEventListener("click", startReview);
+// While a review runs, the game and the settings stay as they are: the
+// result belongs to the game it was started on.
+function lockForReview(on) {
+  for (const id of ["start-review", "game-pick", "open-pgn", "open-settings", "review-played", "review-side"])
+    $(id).disabled = on;
+}
+
 async function startReview() {
   const res = await call("start_review", $("review-side").value, false);
   if (!res) return;
-  $("start-review").disabled = true;
+  lockForReview(true);
   $("progress").hidden = false;
   $("progress-fill").style.width = "0%";
   $("progress-text").textContent = "Starting";
@@ -844,10 +856,14 @@ async function pollReview() {
     return;
   }
   clearInterval(R.polling);
-  $("start-review").disabled = false;
+  lockForReview(false);
   $("progress").hidden = true;
   if (s.state === "finished") {
     const res = s.result;
+    if (res.key !== undefined && R.game.key !== undefined && res.key !== R.game.key) {
+      toast("That review was for another game; it was not applied.", 5000);
+      return;
+    }
     R.game.moves = res.moves;
     R.game.summary = res.summary || [];
     R.game.patterns = res.patterns || [];

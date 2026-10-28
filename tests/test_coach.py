@@ -218,3 +218,20 @@ def test_router_compares_captures_on_named_squares(sf, fake):
     assert "Nxd4" in a.fixed and "Bxd4" in a.fixed
     assert any("KEY FACTS" in s and "Nxd4: The knight no longer defends the White pawn "
                "on e5" in s for s in a.facts)
+
+
+def test_is_my_bishop_safe_finds_the_bishop():
+    """Review feedback: the README's own example question was routed as a
+    general question, with no square and no safety facts."""
+    import chess
+    from chesscoach.coach import route_question
+    b = chess.Board("r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+    b.remove_piece_at(chess.C1)                         # White has one bishop, on c4
+    r = route_question(b, "Is my bishop safe?", me=chess.WHITE)
+    assert r.kind == "safety" and r.squares == [chess.C4]
+    r = route_question(b, "is black's bishop attacked?")
+    assert r.kind == "safety" and r.squares == [chess.C5, chess.C8]
+    r = route_question(b, "Is my bishop safe?")          # side unknown: both, said so
+    assert r.kind == "safety" and chess.C4 in r.squares and chess.C5 in r.squares
+    assert any("not known which side" in n for n in r.notes)
+    assert route_question(b, "Is the bishop on c4 safe?").squares == [chess.C4]

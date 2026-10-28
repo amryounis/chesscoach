@@ -79,3 +79,29 @@ def test_a_file_with_many_annotated_games(tmp_path):
     assert "error" in api.select_game(99)
     plain = api.load_pgn_file(str(DATA / "homer_vs_fritz.pgn"))
     assert plain["games"] == [] and plain["tree"] is not None   # its two comments count
+
+
+def test_game_and_settings_are_locked_while_a_review_runs(api, monkeypatch):
+    """Review feedback: switching games during a review put its result on
+    the other game, and settings changes mixed depths within one review."""
+    import threading
+    from chesscoach.gui import api as api_mod
+    from conftest import DATA
+    gate = threading.Event()
+
+    def slow_review(game, *a, should_stop=None, **kw):
+        gate.wait(10)
+        raise api_mod.Cancelled()
+
+    monkeypatch.setattr(api_mod, "review_game", slow_review)
+    first = api.load_pgn_file(str(DATA / "homer_vs_fritz.pgn"))
+    assert first["key"]
+    assert api.start_review("black") == {"ok": True}
+    try:
+        for res in (api.select_game(0), api.load_pgn_text("1. e4 e5 *"),
+                    api.save_settings({"depth": 12})):
+            assert "A review is running" in res["error"]
+    finally:
+        gate.set()
+        api._job.join(5)
+    assert "error" not in api.select_game(0)                  # free again afterwards

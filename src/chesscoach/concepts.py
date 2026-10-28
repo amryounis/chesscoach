@@ -30,6 +30,7 @@ import chess.engine
 
 from . import config
 from .assessment import win_pct
+from .engine import white_mate
 from .describe import PIECE_NAMES, describe_move, piece_label, side_name
 
 VALUES = {chess.PAWN: 100, chess.KNIGHT: 300, chess.BISHOP: 300,
@@ -72,7 +73,7 @@ def search(engine, board: chess.Board, depth: Optional[int] = None,
                           root_moves=roots)
     score = info["score"].white()
     return Search(None if score.is_mate() else score.score(),
-                  score.mate() if score.is_mate() else None,
+                  white_mate(score) if score.is_mate() else None,
                   list(info.get("pv", [])))
 
 

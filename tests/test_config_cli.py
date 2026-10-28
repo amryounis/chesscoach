@@ -32,3 +32,15 @@ def test_config_init_writes_template(tmp_path):
     assert 'stockfish_path = "C:/sf/sf.exe"' in p.read_text()
     with pytest.raises(config.ConfigError):
         config.write_template(p)
+
+
+def test_a_config_file_in_the_current_folder_is_not_read(tmp_path, monkeypatch):
+    """Review feedback: ./chesscoach.toml beside a downloaded PGN could set
+    stockfish_path to any program. Only --config reads a local file."""
+    from chesscoach import config
+    (tmp_path / "chesscoach.toml").write_text('stockfish_path = "evil.exe"\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(config, "user_config_path", lambda: tmp_path / "nope" / "config.toml")
+    assert config.find_config_file() is None
+    assert config.load_settings().stockfish_path != "evil.exe"
+    assert config.load_settings(str(tmp_path / "chesscoach.toml")).stockfish_path == "evil.exe"

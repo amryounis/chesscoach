@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Optional
+
+import chess
 
 from . import config
 from .summary import Claim, _get, _join, _n, phase_of
@@ -73,16 +76,57 @@ def _move_record(m) -> dict:
     return rec
 
 
+SCHEMA = 2      # 1: before 0.12 (no engine move); 2: adds san/uci/best/explanation
+
+
 def save(review, player_name: str = "", folder: Optional[Path] = None) -> Optional[Path]:
     """Store the review's record (a re-review of the same game replaces it)."""
     rec = record(review, player_name)
     if rec is None:
         return None
+    rec["v"] = SCHEMA
     folder = folder or history_dir()
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"{rec['id']}.json"
-    path.write_text(json.dumps(rec, indent=1), encoding="utf-8")
+    # Write a temporary file and swap it in, so a crash or a full disk can
+    # never leave half a record behind.
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(rec, indent=1), encoding="utf-8")
+    os.replace(tmp, path)
     return path
+
+
+def clean(rec) -> Optional[dict]:
+    """A stored record made safe to count, or None if it isn't a game
+    record at all. Old or hand-edited records lose only the parts that are
+    malformed (a move without a label, a theme this version doesn't know),
+    so one bad file can't stop the patterns, or a review, from finishing."""
+    if not isinstance(rec, dict) or not isinstance(rec.get("id"), str) \
+            or not isinstance(rec.get("moves"), list):
+        return None
+    out = dict(rec)
+    for k, default in (("color", "white"), ("white", "?"), ("black", "?"),
+                       ("date", "?"), ("result", "?")):
+        if not isinstance(out.get(k), str):
+            out[k] = default
+    if out["color"] not in ("white", "black"):
+        return None
+    moves = []
+    for m in rec["moves"]:
+        if not isinstance(m, dict) or not isinstance(m.get("label"), str) \
+                or not isinstance(m.get("move_label"), str) or not isinstance(m.get("ply"), int):
+            continue
+        m = dict(m)
+        try:
+            chess.Board(m.get("fen_before") or "")
+        except (ValueError, TypeError):
+            continue
+        m["themes"] = [t for t in (m.get("themes") or [])
+                       if isinstance(t, dict) and t.get("tag") in TAGS
+                       and isinstance(t.get("fact", ""), str)]
+        moves.append(m)
+    out["moves"] = moves
+    return out
 
 
 def load(folder: Optional[Path] = None) -> list:
@@ -90,12 +134,12 @@ def load(folder: Optional[Path] = None) -> list:
     out = []
     for p in sorted(folder.glob("*.json")) if folder.exists() else []:
         try:
-            rec = json.loads(p.read_text(encoding="utf-8"))
+            rec = clean(json.loads(p.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             continue
         # Only game records: anything else in the folder (0.12.0 kept
         # practice.json here) is not a game and must not break patterns.
-        if isinstance(rec, dict) and "id" in rec and isinstance(rec.get("moves"), list):
+        if rec is not None:
             out.append(rec)
     out.sort(key=lambda r: (r.get("date", ""), r["id"]))
     return out

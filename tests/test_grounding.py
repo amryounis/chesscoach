@@ -170,8 +170,10 @@ EXPECTED = {
                           ("passed pawn", "passed pawn")],
         "test-9-nxd4": [("threat", "removes the threat to the knight on c3")]},
     "_unchecked": {"homer-12-kxf7": [("defence", "removes its protection from the pawn on e7"),
-                                     ("bishop pair", "keeps the bishop pair")]},
-    "_grounded2": {},
+                                     ("bishop pair", "keeps the bishop pair")],
+                   # 0.13 file check: after 9.hxg6 fxg6 the g-file keeps two pawns
+                   "homer-8-bg4": [("file", "opens up the g-file")]},
+    "_grounded2": {"homer-9-dxc4": [("file", "open the g-file")]},     # 0.13 file check
     "qwen3_14b_2026-10-10_phase3b": {
         "homer-9-dxc4": [("defence", "protected the knight on f3")]},
     "qwen3_14b_2026-10-08_phase3": {
@@ -543,3 +545,49 @@ def test_move_defends_a_piece_named_without_its_square():
     fails = ground(text, [before] + played, mv, played=played, better=[])
     assert any(f.kind == "defence" and "f3" in f.correction for f in fails)
 
+
+
+# --- Gaps from the DeepSeek review (0.13) ------------------------------------
+
+def test_shelter_claim_names_the_black_king():
+    """'exposes the Black king by reducing the shield pawns' was not read
+    at all (the pattern wanted "Black's king")."""
+    import chess
+    from chesscoach.grounding import ground
+    b = chess.Board("rn1qk2r/pp2ppb1/2p3pp/7P/2pP4/2N1PN2/PP3PP1/R2QKB1R b KQkq - 0 9")
+    b.castling_rights = chess.BB_EMPTY
+    b.set_piece_at(chess.G8, chess.Piece(chess.KING, chess.BLACK))
+    b.remove_piece_at(chess.E8)
+    mv = b.parse_san("Qa5")
+    after = b.copy(); after.push(mv)
+    text = "**What happened**: The move exposes the Black king by reducing its shield pawns."
+    fails = ground(text, [b, after], mv, played=[after], better=[])
+    assert [f.kind for f in fails] == ["shelter"]
+
+
+def test_opens_the_file_needs_a_pawn_to_leave_it():
+    import chess
+    from chesscoach.grounding import ground
+    b = chess.Board()
+    for san in "e4 e5 Nf3".split():
+        b.push_san(san)
+    mv = b.parse_san("Nc6")
+    after = b.copy(); after.push(mv)
+    text = "**What happened**: The knight move opens the f-file."
+    assert [f.kind for f in ground(text, [b, after], mv, played=[after], better=[])] == ["file"]
+    b2 = chess.Board("4k3/5p2/6P1/8/8/8/8/4K3 b - - 0 1")
+    mv2 = b2.parse_san("fxg6")
+    a2 = b2.copy(); a2.push(mv2)
+    text2 = "**What happened**: Taking on g6 opens the f-file."
+    assert ground(text2, [b2, a2], mv2, played=[a2], better=[]) == []
+
+
+def test_fork_must_hit_the_pieces_it_names():
+    import chess
+    from chesscoach.grounding import _check_forks
+    # Knight on c7 forks the king on e8 and the rook on a8 (not the queen).
+    b = chess.Board("r2qk3/2N5/8/8/8/8/8/4K3 b - - 0 1")
+    assert _check_forks("The knight forks the king and rook.", [b]) == []
+    assert _check_forks("The knight forks the king and queen.", [b])[0].kind == "fork"
+    assert _check_forks("Nc7 forks the king on e8 and the rook on a8.", [b]) == []
+    assert _check_forks("Nc7 forks the queen on d8 and the rook on a8.", [b])

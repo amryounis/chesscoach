@@ -32,12 +32,22 @@ So chesscoach never asks them to. Each part does only what it is good at:
 
 The move labels (Excellent … Blunder), who played the move, the size of the
 advantage and the first sentence of each comment are all computed in code.
-Everything the model writes is then checked against the board: every
-piece it places on a square, every attack, defence, pin or fork it
-claims, and anything it says about material or legal moves. A false claim
-goes back to the model with the correction for one rewrite; if it is
-still false, the sentence is removed. The coach says less rather than
-something untrue.
+
+What the model writes is then checked against the board, as far as code
+can read it: a piece it places on a square, an attack or defence between
+named pieces, a pin, a fork and which pieces it hits, a king's pawn
+shelter, a file opened, material, and legal-move counts. A claim passes
+if it holds before or after the move or along the engine's line, so a
+consequence two moves later counts ("8...Bg4 ... opens the f-file" passes
+because of 9.hxg6 fxg6). A false claim goes back to the model with the
+correction for one rewrite; if it is still false, the sentence is removed.
+
+**What is not checked:** judgements code cannot parse, such as "a strong
+attack", "the initiative", "a weak square" or "passive", and any sentence
+whose wording the checker does not recognise. Those are the model's
+words. The coach says less rather than something false about the pieces;
+its strategic opinions still need a reader's eye. The app says this under
+every comment.
 
 ## Requirements
 
@@ -51,7 +61,7 @@ something untrue.
 ## Install
 
 ```
-git clone https://github.com/OWNER/chesscoach
+git clone https://github.com/amryounis/chesscoach
 cd chesscoach
 pip install -e ".[gui]"      # or just  pip install -e .  for the command line only
 ```

@@ -25,6 +25,20 @@ class EngineAnalysis:
     depth: int = 0
 
 
+def white_mate(score) -> int:
+    """Mate distance from White's view (+ White mates) for a mate score.
+
+    Stockfish reports a position that is already checkmate as "mate 0",
+    and python-chess's .mate() returns a bare 0 for both sides, so the
+    winner was lost: win_pct gave White 0% even when White had mated. A
+    delivered mate is +1 / -1 for the winner here, the convention the
+    review already uses for it ("mate in 1" for the move that mates)."""
+    m = score.mate()
+    if m == 0:
+        return 1 if score == chess.engine.MateGiven else -1
+    return m
+
+
 def run_stockfish(board: chess.Board, depth: Optional[int] = None,
                   multipv: Optional[int] = None, engine=None) -> EngineAnalysis:
     """Run Stockfish and return structured analysis."""
@@ -49,7 +63,7 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
             if i == 0:
                 result.depth = line_info.get("depth", depth)
                 if score.is_mate():
-                    result.score_mate = score.mate()
+                    result.score_mate = white_mate(score)
                 else:
                     result.score_cp = score.score()
                 result.best_move = board.san(pv[0]) if pv else ""
@@ -61,7 +75,7 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
                     temp.push(m)
                 result.best_line = san_line
             else:
-                sc = score.mate() if score.is_mate() else score.score()
+                sc = white_mate(score) if score.is_mate() else score.score()
                 temp = board.copy()
                 san_line = []
                 for m in pv[:6]:
@@ -69,7 +83,7 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
                     temp.push(m)
                 result.alt_lines.append((sc, san_line))
                 result.alt_scores.append(
-                    (None, score.mate()) if score.is_mate() else (score.score(), None))
+                    (None, white_mate(score)) if score.is_mate() else (score.score(), None))
     finally:
         if own:
             engine.quit()

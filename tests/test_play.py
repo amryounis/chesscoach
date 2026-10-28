@@ -93,3 +93,29 @@ def test_maia_preview_when_installed(monkeypatch):
     op = preview_opponent(900)
     assert op == {**op, "engine": "maia", "name": "Maia 900", "effective_elo": 900,
                   "clamped": False, "human_like": True}
+
+
+def test_takeback_as_black_keeps_the_engines_first_move(stockfish, monkeypatch):
+    """Review feedback: taking back before Black's first move undid White's
+    opening move, leaving White to move and the player (Black) stuck."""
+    monkeypatch.setattr(config, "settings",
+                        config.load_settings(stockfish_path=stockfish, maia_cmd="no-such-maia"))
+    with PlayGame(chess.BLACK, elo=1500) as g:
+        g.engine_move()
+        g.takeback()                                  # nothing of Black's to undo
+        assert len(g.board.move_stack) == 1 and g.board.turn == chess.BLACK
+        assert g.legal_dests()
+        g.player_move(next(iter(g.board.legal_moves)).uci())
+        g.engine_move()
+        g.takeback()                                  # undoes Black's move and the reply
+        assert len(g.board.move_stack) == 1 and g.board.turn == chess.BLACK
+
+
+def test_takeback_after_the_game_ends_on_your_move(game):
+    # 1.e4 f6 2.d4 g5 3.Qh5#: the game ends on the player's (White's) move
+    for uci in ("e2e4", "f7f6", "d2d4", "g7g5"):
+        game.board.push_uci(uci)
+    game.board.push_uci("d1h5")                       # checkmate by the player (White)
+    assert game.over
+    game.takeback()
+    assert game.board.turn == chess.WHITE and len(game.board.move_stack) == 4

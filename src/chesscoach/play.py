@@ -154,14 +154,20 @@ class PlayGame:
         return san
 
     def takeback(self) -> None:
-        """Undo the last move pair so it is the player's turn again."""
+        """Undo the player's last move (and the reply to it), so it is the
+        player's turn again. Never undoes the engine's opening move when the
+        player is Black: there is no move of the player's before it, and
+        undoing it left White to move with the player unable to move."""
         if self.resigned is not None:
             return
-        if self.board.move_stack and self.board.turn == self.player_color:
-            self.board.pop()          # opponent's reply
-        if self.board.move_stack and self.board.turn != self.player_color:
-            self.board.pop()          # player's move
-        # if the opponent moved first and that's all there is, keep it
+        # On the player's turn: the reply and the player's move. Otherwise
+        # (the game ended on the player's move): just that move.
+        n = 2 if self.board.turn == self.player_color else 1
+        first_own = 0 if self.player_color == chess.WHITE else 1   # plies before the player's first move
+        if len(self.board.move_stack) - n < first_own:
+            return
+        for _ in range(n):
+            self.board.pop()
 
     def resign(self) -> None:
         if not self.over:

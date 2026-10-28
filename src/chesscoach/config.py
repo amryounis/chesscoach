@@ -3,10 +3,12 @@ Settings: where the engines and book live, which model narrates.
 
 Resolution order (later wins):
   1. built-in defaults
-  2. config file (TOML) — first found of:
-       --config PATH, ./chesscoach.toml, the user config file
+  2. config file (TOML): --config PATH if given, else the user config file
        (Windows: %APPDATA%\\chesscoach\\config.toml,
-        elsewhere: ~/.config/chesscoach/config.toml)
+        elsewhere: ~/.config/chesscoach/config.toml).
+       A chesscoach.toml in the current folder is NOT read on its own: it
+       sets the engine paths, so one lying next to a downloaded PGN could
+       run any program. Use --config ./chesscoach.toml for a local one.
   3. environment variables  CHESSCOACH_<NAME>  (e.g. CHESSCOACH_STOCKFISH_PATH)
   4. command-line flags
 
@@ -47,7 +49,8 @@ class Settings:
     num_predict: int = 800            # max tokens per annotation
     keep_alive: str = "30m"           # keep the model loaded between calls
     num_ctx: int = 4096               # model context window (tokens)
-    comment_language: str = "en"      # annotated PGNs: "en", "de" or "both"
+    comment_language: str = "en"      # which comments to show from bilingual annotated PGNs
+                                      # (ChessBase en/de): "en", "de" or "both"
     prompt_notes: str = "events"      # what the coach is told a move does: "events" (7g) or "effects" (old)
     plans: bool = True                # explain quiet engine moves: idea, problem, solution
     keep_history: bool = True         # store each review's facts for patterns across games
@@ -81,10 +84,8 @@ def find_config_file(explicit: Optional[str] = None) -> Optional[Path]:
         if not p.exists():
             raise ConfigError(f"Config file not found: {p}")
         return p
-    for p in (Path.cwd() / "chesscoach.toml", user_config_path()):
-        if p.exists():
-            return p
-    return None
+    p = user_config_path()
+    return p if p.exists() else None
 
 
 def _coerce(name: str, value):

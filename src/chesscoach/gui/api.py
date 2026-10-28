@@ -25,6 +25,25 @@ from ..play import PlayGame, preview_opponent, random_color
 from ..review import Cancelled, review_game, write_markdown
 
 
+def log_error(where: str) -> None:
+    """The current exception's traceback, printed and appended to
+    chesscoach.log beside the config file: the windowed app
+    (chesscoach-app) has no console, so the log is where it can be found."""
+    import datetime
+    text = traceback.format_exc()
+    print(text, end="")
+    try:
+        path = config.user_config_path().parent / "chesscoach.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and path.stat().st_size > 1_000_000:
+            path.write_text("", encoding="utf-8")          # keep it small
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"--- {datetime.datetime.now().isoformat(timespec='seconds')} "
+                    f"{where}\n{text}")
+    except OSError:
+        pass
+
+
 def _safe(fn):
     """Turn exceptions into {"error": message} for the page."""
     def wrapper(*args, **kwargs):
@@ -33,8 +52,9 @@ def _safe(fn):
         except (config.ConfigError, ValueError, FileNotFoundError) as e:
             return {"error": str(e)}
         except Exception as e:  # unexpected: keep the details for debugging
-            traceback.print_exc()
-            return {"error": f"{type(e).__name__}: {e}"}
+            log_error(fn.__name__)
+            return {"error": f"{type(e).__name__}: {e} (details in chesscoach.log "
+                             "next to the config file)"}
     wrapper.__name__ = fn.__name__
     wrapper.__doc__ = fn.__doc__
     return wrapper
@@ -84,10 +104,13 @@ def _patterns_after(review) -> list:
     if not config.settings.keep_history:
         return []
     from .. import history
+    # Anything going wrong here costs the patterns, never the review: the
+    # review is finished and the player should see it.
     try:
         history.save(review, config.settings.player_name)
         return [c.to_dict() for c in history.patterns(history.load())]
-    except OSError:
+    except Exception:
+        log_error("patterns across games")
         return []
 
 
@@ -104,9 +127,21 @@ class Api:
         self._lock = threading.Lock()
         self._play: Optional[PlayGame] = None
         self._coach_lock = threading.Lock()
+        self._game_key = 0                    # changes with every game opened
         self._drills: dict = {}               # practice: id -> drill, from the last listing
         self._practice_sf = None
         self._practice_lock = threading.Lock()
+
+    def _reviewing(self) -> bool:
+        return bool(self._job and self._job.is_alive())
+
+    def _not_while_reviewing(self, what: str) -> None:
+        """A review reads the open game and the settings until it ends;
+        changing either under it put the result on the wrong game or mixed
+        depths. So they wait."""
+        if self._reviewing():
+            raise ValueError(f"A review is running. Stop it, or wait for it to finish, "
+                             f"before {what}.")
 
     # -- settings ----------------------------------------------------------
 
@@ -119,6 +154,7 @@ class Api:
 
     @_safe
     def save_settings(self, values: dict) -> dict:
+        self._not_while_reviewing("changing the settings")
         s = config.settings
         for f in fields(config.Settings):
             if f.name in values and f.name != "source":
@@ -131,6 +167,7 @@ class Api:
 
     @_safe
     def open_pgn_dialog(self) -> dict:
+        self._not_while_reviewing("opening another game")
         paths = self._window.create_file_dialog(
             _dialog_kind("OPEN"), file_types=("PGN files (*.pgn)", "All files (*.*)"))
         if not paths:
@@ -148,6 +185,7 @@ class Api:
 
     @_safe
     def load_pgn_text(self, text: str) -> dict:
+        self._not_while_reviewing("opening another game")
         from ..pgn_reader import game_list, read_games
         games = [g for g in read_games(text) if any(True for _ in g.mainline_moves())]
         if not games:
@@ -165,9 +203,12 @@ class Api:
         games = getattr(self, "_games", None) or []
         if not 0 <= int(index) < len(games):
             raise ValueError("No such game in this file.")
+        self._not_while_reviewing("switching games")
         self._game, self._review = games[int(index)], None
+        self._game_key += 1
         out = game_summary(self._game)
         out["index"] = int(index)
+        out["key"] = self._game_key
         return out
 
     # -- the coach on any position ------------------------------------------
@@ -218,7 +259,22 @@ class Api:
             raise ValueError("Type a question first.")
         board, history = self._position(ply)
         model = config.settings.model
-        return self._coach(lambda e: coach.ask(board, question[:300], model, e, history))
+        me = self._my_color()
+        return self._coach(lambda e: coach.ask(board, question[:300], model, e, history, me=me))
+
+    def _my_color(self) -> Optional[bool]:
+        """The player's colour in the open game: the reviewed side, else the
+        side with the player's name in the headers; None if unknown."""
+        side = self._review.side if self._review is not None else ""
+        if side in ("white", "black"):
+            return side == "white"
+        if self._game is None:
+            return None
+        name = (config.settings.player_name or "").strip().lower()
+        for color, key in ((chess.WHITE, "White"), (chess.BLACK, "Black")):
+            if name and self._game.headers.get(key, "").strip().lower() == name:
+                return color
+        return None
 
     # -- review ------------------------------------------------------------
 
@@ -234,7 +290,7 @@ class Api:
         self._cancel.clear()
         self._set_status(state="running", stage="engine", done=0, total=1,
                          message="Starting")
-        game = self._game
+        game, key = self._game, self._game_key
 
         def progress(stage, done, total, message):
             self._set_status(state="running", stage=stage, done=done,
@@ -244,14 +300,17 @@ class Api:
             try:
                 r = review_game(game, side, [config.settings.model], every_move,
                                 progress=progress, should_stop=self._cancel.is_set)
+                if self._game_key != key:             # cannot happen while switching is
+                    raise Cancelled()                  # blocked; never show it on another game
                 self._review = r
                 result = r.to_dict()
+                result["key"] = key
                 result["patterns"] = _patterns_after(r)
                 self._set_status(state="finished", result=result)
             except Cancelled:
                 self._set_status(state="cancelled", message="Review stopped.")
             except Exception as e:
-                traceback.print_exc()
+                log_error("review")
                 self._set_status(state="error", message=str(e))
 
         self._job = threading.Thread(target=run, daemon=True)
@@ -368,7 +427,8 @@ class Api:
         if not self._play:
             raise ValueError("Start a game first.")
         self._play.takeback()
-        return self._play_state(None)
+        reply = self._play.engine_move()          # never leave the board waiting on the engine
+        return self._play_state(reply)
 
     @_safe
     def resign(self) -> dict:

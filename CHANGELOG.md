@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.13.0 — unreleased
+
+From an outside review (DeepSeek) of 0.12.0. Every defect it named was
+reproduced first, then fixed with a test.
+
+- **Honest about checking.** The README promised that everything the
+  model writes is checked; the checker reads only the claim shapes it
+  knows. The README now says what is checked and what is not, and every
+  comment in the app says "Facts about the pieces were checked against
+  the board; judgements are the coach's opinion" (hover for the list).
+  Three gaps closed: the king-shelter check now reads "the Black king"
+  as well as "Black's king"; "opens the f-file" is checked (a pawn must
+  leave the file within two plies); "forks the king and queen" must find
+  a fork of those two kinds, and with squares named, two of them forked
+  by the same piece. Two old baseline comments ("opens up the g-file"
+  after 9.hxg6 fxg6) are now caught, correctly
+- **Take back as Black** before your first move undid the engine's
+  opening move and froze the board. It now never undoes the engine's
+  first move, and after any takeback the engine moves if it is its turn
+- **A review keeps its game.** Opening or switching games and saving
+  settings are refused while a review runs (the buttons are disabled),
+  and a result is only shown on the game it was started on
+- **History can't lose a review.** Records are versioned, written
+  atomically, and cleaned on reading (a malformed move or an unknown
+  theme is dropped, not fatal); anything failing in the patterns step
+  costs the patterns, never the finished review. Unexpected errors are
+  written to chesscoach.log next to the config file (the windowed app has
+  no console)
+- **Checkmate keeps its winner.** Stockfish reports a mated position as
+  "mate 0", which lost the side: White showed 0% after White had mated,
+  and the graph ended at 50%. It is now +1/-1 for the winner, the
+  convention the review already used for the mating move
+- **A model error is never the coach's comment.** Errors are stored
+  apart from comments (shown as "The coach could not write this
+  comment: ..."), and errors stored as comments by older reviews are not
+  practised as "The coach said in the review"
+- **"Is my bishop safe?"** finds the bishop: your side's when the app
+  knows it (the reviewed side, or your name), "White's"/"Black's" as
+  said; with several, the answer covers each
+- **A chesscoach.toml in the current folder is no longer read** unless
+  named with --config: it sets engine paths, so one next to a downloaded
+  PGN could run any program
+- Settings: "Comments in annotated games" is now "Show comments of
+  bilingual PGNs in", which is what it does. README and pyproject point
+  at github.com/amryounis/chesscoach
+- CI: Python 3.13, a Windows job (installs the GUI extra, imports the
+  window code, runs the tests that need no engine), and a wheel job
+  (installs the built wheel alone and checks the data files and the page)
+
 ## 0.12.2 — unreleased
 
 From using 0.12.1:

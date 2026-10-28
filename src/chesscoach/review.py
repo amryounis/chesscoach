@@ -53,7 +53,8 @@ class MoveReview:
     best_uci: str
     book: bool
     reason: str = ""              # why it is a critical moment ("" if not)
-    annotations: dict = field(default_factory=dict)   # model -> text
+    annotations: dict = field(default_factory=dict)   # model -> text (the coach's words only)
+    errors: dict = field(default_factory=dict)        # model -> why it wrote nothing
     issues: dict = field(default_factory=dict)        # model -> [str]
     stats: dict = field(default_factory=dict)         # model -> {secs, first_issues}
     key_facts: list = field(default_factory=list)     # what the coach was told matters
@@ -235,7 +236,12 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 r = narrate(model, prep)
                 if r["err"]:
                     check_ollama(model)     # Ollama went away mid-review: stop, say so
-                mv.annotations[model] = r["err"] or r["text"]
+                # An error is never stored as the comment: it would be shown,
+                # saved to the history and practised as the coach's words.
+                if r["err"]:
+                    mv.errors[model] = r["err"]
+                else:
+                    mv.annotations[model] = r["text"]
                 mv.issues[model] = r["issues"]
                 mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
                                    "removed": len(r.get("removed", []))}
@@ -302,7 +308,8 @@ def write_markdown(review: GameReview, path: str) -> None:
         for model in review.models:
             if len(review.models) > 1:
                 out.append(f"**{model}**")
-            out.append(mv.annotations.get(model, ""))
+            out.append(mv.annotations.get(model)
+                       or f"_(No comment: {mv.errors.get(model, 'the coach wrote nothing')})_")
             if mv.issues.get(model):
                 out.append("> Check: " + "; ".join(mv.issues[model]))
             out.append("")

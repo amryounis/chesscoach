@@ -48,10 +48,18 @@ def _get(obj, key, default=None):
 
 def explanation_of(mv) -> str:
     """The coach's comment on a move from the review (first model's), "" if none."""
+    # Since 0.13 errors are kept apart from the comments; reviews made
+    # before that stored "Failed to connect to Ollama..." as the comment.
     for text in (_get(mv, "annotations") or {}).values():
-        if text and not str(text).lower().startswith("error"):
+        if text and not looks_like_error(str(text)):
             return text
     return ""
+
+
+def looks_like_error(text: str) -> bool:
+    t = text.lower()
+    return (t.startswith("error") or "ollama" in t or "(is '" in t
+            or "connection" in t and "refused" in t or "not found" in t and "model" in t)
 
 
 def make_drill(mv, game: str, game_name: str = "") -> Optional[dict]:

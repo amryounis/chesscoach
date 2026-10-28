@@ -291,12 +291,38 @@ def _check_forks(s: str, boards: list) -> list:
     if not forks:
         return [Failure("fork", s.strip(), "there is no fork in this position "
                         "or along the engine's line")]
-    named = [chess.parse_square(m.group(2)) for m in REF_RE.finditer(s)]
-    if named and not any(set(named) & targets or sq in named
-                         for _, sq, targets in forks):
-        sqs = ", ".join(chess.square_name(x) for x in named)
-        return [Failure("fork", s.strip(), f"no piece forks anything on {sqs}")]
+    named = {chess.parse_square(m.group(2)) for m in REF_RE.finditer(s)}
+
+    def fits(sq, targets):
+        # The named targets must be forked together: with two or more named,
+        # at least two of them by the same piece ("forks the queen on d8 and
+        # the rook on h8" is false when the fork is queen and bishop).
+        nt = named - {sq}
+        hit = len(nt & set(targets))
+        return hit >= min(2, len(nt)) and (hit > 0 or sq in named)
+
+    if named and not any(fits(sq, targets) for _, sq, targets in forks):
+        sqs = ", ".join(chess.square_name(x) for x in sorted(named))
+        return [Failure("fork", s.strip(), f"no single piece forks the pieces on {sqs}")]
+    # "forks the king and queen", no squares: those two kinds, together.
+    k = _FORK_KINDS.search(s)
+    if k:
+        want = {_KIND[k.group(1).lower()], _KIND[k.group(2).lower()]}
+        if not any(want <= {b.piece_type_at(t) for t in targets} if len(want) == 2
+                   else sum(b.piece_type_at(t) in want for t in targets) >= 2
+                   for b, sq, targets in forks):
+            return [Failure("fork", s.strip(),
+                            f"no piece forks a {k.group(1).lower()} and a {k.group(2).lower()} "
+                            f"together here or along the engine's line")]
     return []
+
+
+_KIND = {"king": chess.KING, "queen": chess.QUEEN, "rook": chess.ROOK,
+         "bishop": chess.BISHOP, "knight": chess.KNIGHT, "pawn": chess.PAWN}
+_FORK_KINDS = re.compile(
+    r"\bfork\w*\s+(?:both\s+)?(?:the\s+|a\s+|an\s+)?(?:(?:white|black|enemy|opponent)'?s?\s+)?"
+    r"(king|queen|rook|bishop|knight)s?\s+(?:and|&)\s+(?:the\s+|a\s+|an\s+)?"
+    r"(king|queen|rook|bishop|knight)s?\b(?!\s+on\b)", re.I)
 
 
 _EQUAL = re.compile(r"material (?:is |remains |stays |looks )?(?:roughly |about )?"
@@ -705,8 +731,8 @@ def _check_gone_piece(s: str, moves: list) -> list:
 
 
 _SHELTER = re.compile(
-    r"\b(?:weaken|expos|damag|compromis|reduc|remov|strip)\w*\s+(?:the\s+)?(white|black)'s\s+king"
-    r"(?:'s)?(?:\s+(?:position|shelter|safety|pawn shelter|cover))?", re.I)
+    r"\b(?:weaken|expos|damag|compromis|reduc|remov|strip)\w*\s+(?:the\s+)?(white|black)(?:'s)?\s+king"
+    r"(?:'s)?(?:\s+(?:position|shelter|safety|pawn shelter|cover))?", re.I)   # "Black's king", "the Black king"
 
 
 def _shield(board: chess.Board, white: bool) -> int:
@@ -734,6 +760,36 @@ def _check_shelter(s: str, before: Optional[chess.Board], conseq: list,
             out.append(Failure("shelter", m.group(0),
                                f"{'White' if white else 'Black'}'s king keeps its pawn shelter "
                                f"after that move ({start} shield pawns throughout its line)"))
+    return out
+
+
+_OPENS_FILE = re.compile(
+    r"\b(?:open(?:s|ed|ing)?|half-open(?:s|ed|ing)?)\s+(?:up\s+)?the\s+([a-h])-file", re.I)
+
+
+def _file_pawns(board: chess.Board, f: int) -> int:
+    return sum(1 for sq in board.pieces(chess.PAWN, chess.WHITE) | board.pieces(chess.PAWN, chess.BLACK)
+               if chess.square_file(sq) == f)
+
+
+def _check_opens_file(s: str, before: Optional[chess.Board], move: Optional[chess.Move],
+                      conseq: list) -> list:
+    """'8...Bg4 ... opens the f-file' (a bishop move; f7 still on the
+    file): a file is opened when a pawn leaves it. The move itself must
+    take a pawn off that file (its own pawn moving off, or capturing one
+    there), or the engine's line right after it must, within two moves.
+    Further along the line it is no longer this move's doing."""
+    if before is None or move is None:
+        return []
+    out = []
+    for m in _OPENS_FILE.finditer(s):
+        f = ord(m.group(1).lower()) - ord("a")
+        start = _file_pawns(before, f)
+        soon = (conseq or [])[:3]                 # after the move, and two plies on
+        if not any(_file_pawns(b, f) < start for b in soon):
+            out.append(Failure("file", m.group(0),
+                               f"the {m.group(1).lower()}-file keeps its pawns after that move "
+                               f"({start} on it)"))
     return out
 
 
@@ -875,7 +931,9 @@ def ground(text: str, boards: list, move: Optional[chess.Move] = None,
                 continue
             found = check_sentence(s, boards, move, conseq)
             if played:
-                for f in _check_shelter(s, boards[0] if boards else None, played, better):
+                for f in (_check_shelter(s, boards[0] if boards else None, played, better)
+                          + _check_opens_file(s, boards[0] if boards else None, move,
+                                              conseq if "better" not in prefix.lower() else [])):
                     f.sentence = s.strip()
                     found.append(f)
             if move is not None and boards:

@@ -547,10 +547,11 @@ The answer: 3 to 6 plain sentences. Describe moves in words; you may repeat a mo
 
 def ask(board: chess.Board, question: str, model: str, engine,
         history: str = "", max_calls: int = MAX_TOOL_CALLS,
-        mode: Optional[str] = None) -> Answer:
-    """Ask the coach. mode "router" (default) or "agent"; see ask_routed."""
+        mode: Optional[str] = None, me: Optional[bool] = None) -> Answer:
+    """Ask the coach. mode "router" (default) or "agent"; see ask_routed.
+    `me`: the asker's colour, when known."""
     if (mode or config.settings.ask_mode) != "agent":
-        return ask_routed(board, question, model, engine, history)
+        return ask_routed(board, question, model, engine, history, me)
     return ask_agent(board, question, model, engine, history, max_calls)
 
 
@@ -649,7 +650,17 @@ def _expand(board: chess.Board, tok: str) -> tuple:
     return [], why
 
 
-def route_question(board: chess.Board, question: str) -> Route:
+_SAFETY_WORDS = re.compile(
+    r"\b(safe|attacked|hanging|en prise|defended|protected|undefended|loose|trapped|"
+    r"danger|threatened|in trouble|lost|can be taken|be captured)\b")
+_WHOSE_PIECE = re.compile(
+    r"\b(my|white's|black's|the|his|her|their|opponent's)\s+(king|queen|rook|bishop|knight|pawn)s?\b")
+
+
+def route_question(board: chess.Board, question: str,
+                   me: Optional[bool] = None) -> Route:
+    """`me`: the asker's colour when the app knows it (the reviewed side),
+    so "my bishop" can be found on the board."""
     r = Route(base=board.copy(stack=False))
     q = question.strip()
     rest = q
@@ -716,6 +727,30 @@ def route_question(board: chess.Board, question: str) -> Route:
             r.moves.append(mv)
         dest = {mv.to_square for mv in r.moves}
         r.squares = [sq for sq in r.squares if sq not in dest]
+    # 4b. "Is my bishop safe?": no square named, so find the piece. One
+    # such piece: its square; several: all of them, and the answer covers
+    # each. Whose: "my" is the asker's side when known; "White's"/"Black's"
+    # as said; otherwise both sides'.
+    if not r.moves and not r.squares and _SAFETY_WORDS.search(low):
+        p = _WHOSE_PIECE.search(low)
+        if p:
+            whose, pt = p.group(1), _PIECE_WORDS[p.group(2)]
+            if whose == "white's":
+                colors = [chess.WHITE]
+            elif whose == "black's":
+                colors = [chess.BLACK]
+            elif whose == "my" and me is not None:
+                colors = [me]
+            elif whose in ("his", "her", "their", "opponent's") and me is not None:
+                colors = [not me]
+            else:
+                colors = [chess.WHITE, chess.BLACK]
+                if whose == "my":
+                    r.notes.append("It is not known which side the asker plays; "
+                                   "the facts cover both sides' pieces of that kind.")
+            r.squares = sorted(sq for c in colors for sq in base.pieces(pt, c))
+            if not r.squares:
+                r.notes.append(f"There is no such {p.group(2)} on the board.")
     # 5. The kind of question.
     if r.line:
         r.kind = "line"
@@ -802,13 +837,13 @@ def _win(board: chess.Board, ea: EngineAnalysis, color: bool):
 
 
 def ask_routed(board: chess.Board, question: str, model: str, engine,
-               history: str = "") -> Answer:
+               history: str = "", me: Optional[bool] = None) -> Answer:
     t0 = time.time()
     ans = Answer()
     CALL_LOG.clear()
     tools = Tools(board, engine)
     try:
-        r = route_question(board, question)
+        r = route_question(board, question, me)
     except Exception as e:                           # a question code cannot read
         r = Route(base=board.copy(stack=False), notes=[f"could not read the question: {e}"])
     ans.route = r.kind
