@@ -295,6 +295,8 @@ select, input:not([type=radio]):not([type=range]) {
 .coach .checked.scope { font-size: 12px; cursor: help; }
 .coach .empty { color: var(--muted); font: 14px var(--ui); }
 .coach .live { font: 15px/1.5 var(--ui); margin: 0 0 6px; }
+.coach .tactics { font: 13px/1.5 var(--ui); color: var(--muted); margin: 2px 0 10px; }
+.coach .tactics b { color: var(--ink); font-weight: 600; }
 .coach .coach-error { color: var(--j-mistake); font: 13.5px var(--ui); }
 .coach button { font: 13px var(--ui); }
 .coach .compare { margin: 4px 0 12px; }

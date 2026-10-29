@@ -29,6 +29,19 @@ const JUDGMENT_TEXT = {
   Good: "Good move", Excellent: "Excellent", Book: "Opening theory",
 };
 const BAD = new Set(["Inaccuracy", "Mistake", "Blunder"]);
+// Tactical motifs (motifs.py), found by code in the engine's lines.
+const MOTIFS = { mate: "a forced mate", back_rank_mate: "a back-rank mate", double_check: "a double check",
+  fork: "a fork", pin: "a pin", skewer: "a skewer", discovered_attack: "a discovered attack",
+  hanging_piece: "a hanging piece", capturing_defender: "taking a defender", sacrifice: "a sacrifice",
+  promotion: "a promotion", advanced_pawn: "an advanced pawn" };
+function tacticsHtml(mv) {
+  const t = mv.tactics || {};
+  const say = (xs) => (xs || []).map((x) => MOTIFS[x] || x).join(", ");
+  const parts = [];
+  if ((t.allowed || []).length) parts.push(`<span><b>Allowed</b> ${esc(say(t.allowed))}</span>`);
+  if ((t.missed || []).length) parts.push(`<span><b>The engine had</b> ${esc(say(t.missed))}</span>`);
+  return parts.length ? `<p class="tactics" title="Tactical motifs found by code in the engine's lines">${parts.join(" · ")}</p>` : "";
+}
 // Said under every comment, so no one reads the model's opinions as verified.
 const CHECKED_NOTE = `<div class="checked scope" title="Checked: pieces on squares, attacks and defences between named pieces, pins, forks, king shelter, files opened, material, legal moves. Not checked: judgements such as strong, weak, active or the initiative, and wording the checker does not recognise.">Facts about the pieces were checked against the board; judgements are the coach's opinion.</div>`;
 
@@ -409,7 +422,7 @@ function renderCoach() {
   }
   if (text) {
     if (mv.reason && mv.reason !== "every-move mode") html += `<div class="why">Commented because: ${esc(mv.reason)}.</div>`;
-    html += renderAnnotation(text) + legendHtml(mv) + planHtml(mv);
+    html += renderAnnotation(text) + tacticsHtml(mv) + legendHtml(mv) + planHtml(mv);
     const removed = (Object.values(mv.stats || {})[0] || {}).removed || 0;
     if (removed) html += `<div class="checked" title="The coach's statements are checked against the board. A statement that was not true was taken out rather than shown.">${removed === 1 ? "One sentence was" : removed + " sentences were"} left out because ${removed === 1 ? "it was" : "they were"} not true on the board.</div>`;
     html += CHECKED_NOTE;

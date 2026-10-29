@@ -23,6 +23,8 @@ from .engine import EngineAnalysis, open_maia, run_maia, run_stockfish
 from .moments import moment_context, pick_critical
 from .narrator import check_ollama, narrate, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
+from .accuracy import game_accuracy, move_accuracy
+from .motifs import line_motifs
 from .opening import book_status, opening_notes, theory_exit
 from .report import print_scoreboard
 from .summary import summarize
@@ -73,6 +75,11 @@ class MoveReview:
     left_theory: dict = field(default_factory=dict)   # {alternatives, opening} on leaving theory
     mate_before: Optional[int] = None    # forced mate for the mover (+) or against (-), before
     mate_after: Optional[int] = None     # and after the move
+    best_line: list = field(default_factory=list)     # the engine's line from the position before (SAN)
+    best_cp: Optional[int] = None        # its score (White's view): the position's value
+    best_mate: Optional[int] = None
+    accuracy: Optional[float] = None     # this move's accuracy % (Lichess's formula)
+    tactics: dict = field(default_factory=dict)       # errors: {"allowed": [motif], "missed": [motif]}
 
 
 @dataclass
@@ -84,12 +91,27 @@ class GameReview:
     moves: list                   # [MoveReview], every ply
     seconds: float = 0.0
     summary: list = field(default_factory=list)   # [Claim dict], built from stored facts
+    accuracy: dict = field(default_factory=dict)  # {"white": %, "black": %}
 
     def moments(self) -> list:
         return [m for m in self.moves if m.reason]
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def _tactics(label: str, before: chess.Board, move: chess.Move, ea_before: EngineAnalysis,
+             after: chess.Board, ea_after: EngineAnalysis) -> dict:
+    """For an error: the motifs in what it allowed (the opponent's best line
+    after it) and in what it missed (the engine's line instead). Empty for
+    other moves."""
+    if label not in ("Inaccuracy", "Mistake", "Blunder"):
+        return {}
+    allowed = line_motifs(after, ea_after.best_line, ea_after.score_mate) \
+        if ea_after.best_line and not after.is_game_over() else []
+    missed = line_motifs(before, ea_before.best_line, ea_before.score_mate) \
+        if ea_before.best_line and ea_before.best_line[0] != before.san(move) else []
+    return {"allowed": allowed, "missed": missed} if allowed or missed else {}
 
 
 def _mate_for(score_mate: Optional[int], white: bool) -> Optional[int]:
@@ -211,7 +233,12 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 left_theory=openings[i].get("left_theory", {}),
                 mate_before=_mate_for(evals[i].score_mate, me_white),
                 mate_after=(1 if boards[i + 1].is_checkmate() else
-                            _mate_for(ea.score_mate, me_white))))
+                            _mate_for(ea.score_mate, me_white)),
+                best_line=list(evals[i].best_line[:8]), best_cp=evals[i].score_cp,
+                best_mate=evals[i].score_mate,
+                accuracy=(round(move_accuracy(w0, w1), 1)
+                          if w0 is not None and w1 is not None else None),
+                tactics=_tactics(labels[i], boards[i], m, evals[i], boards[i + 1], ea)))
 
         todo = sorted(picks)
         # One Stockfish for the engine-verified concepts of every moment.
@@ -260,6 +287,11 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         if concept_sf:
             concept_sf.quit()
 
+    review.accuracy = game_accuracy(
+        [100.0 if b.is_checkmate() and b.turn == chess.BLACK else
+         0.0 if b.is_checkmate() else win_pct(e.score_cp, e.score_mate, True)
+         for b, e in zip(boards, evals)],
+        white_first=boards[0].turn == chess.WHITE)
     review.summary = [c.to_dict() for c in summarize(review)]
     review.seconds = time.time() - t_start
     progress("done", 1, 1, "Review complete", {})

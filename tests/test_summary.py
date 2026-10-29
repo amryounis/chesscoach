@@ -208,3 +208,21 @@ def test_history_writes_are_atomic_and_versioned(tmp_path):
     path = history.save(rv, folder=tmp_path)
     assert json.loads(path.read_text())["v"] == history.SCHEMA
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_tactics_are_counted_across_games(tmp_path):
+    def rec(gid, tags):
+        return {"id": gid, "color": "white", "white": "Me", "black": "X", "date": f"2026.10.0{gid[-1]}",
+                "moves": [{"ply": 10, "move_label": "6. Nf3", "label": "Mistake",
+                           "fen_before": chess.STARTING_FEN, "themes": [],
+                           "tactics": {"allowed": tags, "missed": []}}]}
+    for r in (rec("g1", ["fork"]), rec("g2", ["fork", "pin"]), rec("g3", ["pin", "nonsense"])):
+        (tmp_path / f"{r['id']}.json").write_text(json.dumps(r))
+    recs = history.load(tmp_path)
+    assert recs[2]["moves"][0]["tactics"]["allowed"] == ["pin"]           # unknown tag dropped
+    claims = history.patterns(recs)
+    tac = [c for c in claims if c.kind == "pattern-tactics"]
+    assert len(tac) == 1 and tac[0].text == (
+        "Across your last three games, your errors allowed a fork 2 times in two games "
+        "and a pin 2 times in two games.")
+    assert history.verify_patterns(recs, claims) == []

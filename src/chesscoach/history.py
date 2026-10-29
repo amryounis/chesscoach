@@ -20,6 +20,7 @@ import chess
 
 from . import config
 from .summary import Claim, _get, _join, _n, phase_of
+from .motifs import MOTIFS
 from .themes import ERRORS, OUTCOMES, TAGS
 
 
@@ -58,6 +59,8 @@ def record(review, player_name: str = "") -> Optional[dict]:
         "id": game_id(review), "color": color,
         "white": h.get("White", "?"), "black": h.get("Black", "?"),
         "date": h.get("Date", "?"), "result": h.get("Result", "?"),
+        "accuracy": ((review.get("accuracy") if isinstance(review, dict)
+                      else getattr(review, "accuracy", None)) or {}).get(color),
         "moves": [_move_record(m) for m in mine],
     }
 
@@ -68,7 +71,8 @@ def _move_record(m) -> dict:
            "label": _get(m, "label"), "fen_before": _get(m, "fen_before"),
            "best_san": _get(m, "best_san"), "best_uci": _get(m, "best_uci"),
            "win_before": _get(m, "win_before"), "win_after": _get(m, "win_after"),
-           "themes": _get(m, "themes") or []}
+           "themes": _get(m, "themes") or [],
+           "tactics": _get(m, "tactics") or {}}
     if _get(m, "label") in ERRORS:
         # what the coach said, so the move can be practised later (practice.py)
         from .practice import explanation_of
@@ -124,6 +128,9 @@ def clean(rec) -> Optional[dict]:
         m["themes"] = [t for t in (m.get("themes") or [])
                        if isinstance(t, dict) and t.get("tag") in TAGS
                        and isinstance(t.get("fact", ""), str)]
+        tac = m.get("tactics") if isinstance(m.get("tactics"), dict) else {}
+        m["tactics"] = {k: [t for t in v if t in MOTIFS] for k, v in tac.items()
+                        if k in ("allowed", "missed") and isinstance(v, list)}
         moves.append(m)
     out["moves"] = moves
     return out
@@ -198,6 +205,26 @@ def patterns(records: list, last: int = 10) -> list:
             [f"{game_name(r)} {m['move_label']}: {t['fact']}" for r, m, t in items],
             tag=tag))
 
+    # Tactics across games (Lucas Chess's "statistics on themes"): which
+    # motifs your errors let in, and which you missed, in two games or more.
+    for kind, lead in (("allowed", "your errors allowed"), ("missed", "you missed")):
+        by_motif = {}
+        for r, m in errors:
+            for t in (m.get("tactics") or {}).get(kind, []):
+                by_motif.setdefault(t, []).append((r, m))
+        common = [t for t in by_motif if len({r["id"] for r, _ in by_motif[t]}) >= 2]
+        if not common:
+            continue
+        common.sort(key=lambda t: (-len(by_motif[t]), list(MOTIFS).index(t)))
+        parts = [f"{MOTIFS[t]} {_count(len(by_motif[t]), 'time')} in "
+                 f"{_n(len({r['id'] for r, _ in by_motif[t]}))} games" for t in common[:3]]
+        items = [(r, m, t) for t in common[:3] for r, m in by_motif[t]]
+        out.append(Claim(
+            f"Across your last {_n(n)} games, {lead} {_join(parts)}.",
+            "pattern-tactics", "", [ref(r, m) for r, m, _ in items],
+            [f"{game_name(r)} {m['move_label']}: {kind} {MOTIFS[t]}" for r, m, t in items],
+            tag=kind))
+
     if len(errors) >= 5:
         by_phase = {}
         for r, m in errors:
@@ -225,6 +252,9 @@ def verify_patterns(records: list, claims: list) -> list:
                 problems.append(f"{c['text']} — no stored move {p['move']}")
             elif m["label"] not in ERRORS:
                 problems.append(f"{c['text']} — {p['move']} is not an error")
+            elif c["kind"] == "pattern-tactics":
+                if not (m.get("tactics") or {}).get(c["tag"]):
+                    problems.append(f"{c['text']} — {p['move']} has no '{c['tag']}' tactics")
             elif c["tag"] and not any(t["tag"] == c["tag"] for t in m["themes"]):
                 problems.append(f"{c['text']} — {p['move']} has no '{c['tag']}' fact")
     return problems

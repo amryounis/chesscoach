@@ -16,6 +16,7 @@ from typing import Optional
 
 import chess
 
+from .motifs import MOTIFS
 from .themes import ERRORS, TAGS
 
 _WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight",
@@ -54,7 +55,7 @@ def _join(items: list) -> str:
 
 
 def _get(m, key):
-    return m.get(key) if isinstance(m, dict) else getattr(m, key)
+    return m.get(key) if isinstance(m, dict) else getattr(m, key, None)
 
 
 def phase_of(fen: str) -> str:
@@ -90,14 +91,17 @@ def summarize(review) -> list:
     """[Claim] for each annotated side. `review` is a GameReview or its dict."""
     side = _get(review, "side")
     moves = _get(review, "moves")
+    acc = (review.get("accuracy") if isinstance(review, dict)
+           else getattr(review, "accuracy", None)) or {}
     colors = ["white", "black"] if side == "both" else [side]
     out = []
     for color in colors:
-        out += _side_claims(moves, color, single=len(colors) == 1)
+        out += _side_claims(moves, color, single=len(colors) == 1, accuracy=acc.get(color))
     return out
 
 
-def _side_claims(moves: list, color: str, single: bool) -> list:
+def _side_claims(moves: list, color: str, single: bool,
+                 accuracy: Optional[float] = None) -> list:
     who, whose = _voice(color, single)
     mine = [m for m in moves if _get(m, "color") == color and not _get(m, "book")]
     errors = [m for m in mine if _get(m, "label") in ERRORS]
@@ -120,8 +124,10 @@ def _side_claims(moves: list, color: str, single: bool) -> list:
         losses = [max(0.0, _get(m, "win_before") - _get(m, "win_after")) for m in rated
                   if _get(m, "win_before") is not None and _get(m, "win_after") is not None]
         avg = sum(losses) / len(losses) if losses else 0.0
+        lead = (f"{whose.capitalize()} accuracy was {accuracy:.0f}% (Lichess's method). "
+                if accuracy is not None else "")
         out.append(Claim(
-            f"{who} played the engine's first choice in {len(agree)} of "
+            f"{lead}{who} played the engine's first choice in {len(agree)} of "
             f"{len(rated)} moves ({100 * len(agree) / len(rated):.0f}%); on average "
             f"a move cost {avg:.1f} points of winning chance.",
             "accuracy", color, [_get(m, "ply") for m in agree],
@@ -179,6 +185,28 @@ def _side_claims(moves: list, color: str, single: bool) -> list:
                          [f"{_get(m, 'move_label')}: {t['fact']}" for m, t in items],
                          tag=tag))
 
+    # 3b. Tactics: what the errors allowed and what they missed (motifs
+    #     found by code in the engine's lines; see motifs.py).
+    for kind, verb in (("allowed", "allowed"), ("missed", "missed")):
+        by_motif = {}
+        for m in errors:
+            for t in (_get(m, "tactics") or {}).get(kind, []):
+                if t in MOTIFS:
+                    by_motif.setdefault(t, []).append(m)
+        if not by_motif:
+            continue
+        top = sorted(by_motif, key=lambda t: (-len(by_motif[t]), list(MOTIFS).index(t)))[:3]
+        parts = [f"{MOTIFS[t]} ({_join([_get(m, 'move_label') for m in by_motif[t]])})"
+                 for t in top]
+        subject = (f"{whose.capitalize()} errors" if not single else "Your errors")
+        text = (f"{subject} allowed {_join(parts)}." if kind == "allowed" else
+                f"Instead of {subject.lower() if single else subject}, the engine had "
+                f"{_join(parts)}.")
+        plies = sorted({_get(m, "ply") for t in top for m in by_motif[t]})
+        out.append(Claim(text, "tactics", color, plies,
+                         [f"{_get(m, 'move_label')}: {verb} {MOTIFS[t]}" for t in top
+                          for m in by_motif[t]], tag=kind))
+
     # 4. Where the errors came.
     if len(errors) >= 3:
         by_phase = {p: [m for m in errors if phase_of(_get(m, "fen_before")) == p]
@@ -233,7 +261,17 @@ def verify(review) -> list:
                 for x in (_get(m, "win_before"), _get(m, "win_after")):
                     if _pct(x) not in c["text"]:
                         problems.append(f"{c['text']} — winning chance {_pct(x)} not stated")
+        if c["kind"] == "tactics":
+            for p in c["plies"]:
+                m = moves.get(p)
+                if m and not (_get(m, "tactics") or {}).get(c["tag"]):
+                    problems.append(f"{c['text']} — {_get(m, 'move_label')} has no "
+                                    f"'{c['tag']}' tactics stored")
         if c["kind"] == "accuracy":
+            acc = ((review.get("accuracy") if isinstance(review, dict)
+                    else getattr(review, "accuracy", None)) or {}).get(c["color"])
+            if acc is not None and f"accuracy was {acc:.0f}%" not in c["text"]:
+                problems.append(f"{c['text']} — stored accuracy is {acc:.0f}%")
             agree = [m for m in moves.values() if _get(m, "color") == c["color"]
                      and not _get(m, "book") and _get(m, "best_san")
                      and _get(m, "san") == _get(m, "best_san")]
