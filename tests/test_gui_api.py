@@ -121,3 +121,36 @@ def test_game_and_settings_are_locked_while_a_review_runs(api, monkeypatch):
         gate.set()
         api._job.join(5)
     assert "error" not in api.select_game(0)                  # free again afterwards
+
+
+def test_games_are_kept_and_reviews_come_back(api):
+    """Played games go to Played.pgn by themselves; a finished review is kept
+    whole, and opening that game again (from the library or the file)
+    brings the review back without running Stockfish."""
+    st = api.new_game("white", 1500)
+    api.play_move("e2e4")
+    st = api.resign()
+    assert st["over"] and st["saved_to"] == "Played.pgn"
+    games = api.library_list({})
+    assert games["total"] == 1 and games["games"][0]["result"] == "0-1"
+    api.new_game("white", 1500)                                # nothing played: not kept
+    assert api.library_list({})["total"] == 1
+
+    api.load_pgn_file(str(DATA / "homer_vs_fritz.pgn"))
+    assert "review" not in api.select_game(0)
+    api.start_review("black", False)
+    for _ in range(600):
+        st = api.review_status()
+        if st["state"] != "running":
+            break
+        time.sleep(0.1)
+    assert st["state"] == "finished" and st["result"]["saved_to"] == "Reviewed.pgn"
+    lib = api.library_list({"reviewed": True})
+    assert lib["total"] == 1 and lib["games"][0]["reviewed"]
+    opened = api.library_open(lib["games"][0]["id"])
+    assert opened["review"]["side"] == "black" and opened["review"]["moves"][15]["label"]
+    assert api._review is not None and api.save_report_dialog  # usable as a review again
+    again = api.load_pgn_file(str(DATA / "homer_vs_fritz.pgn"))
+    assert again["review"]["reviewed_at"]
+    ex = api.library_explore(["g1f3"], "", "")
+    assert ex["line"] == "1. Nf3" and ex["moves"][0]["san"] == "d5" and "g8" in ex["dests"]

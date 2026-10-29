@@ -114,8 +114,18 @@ chesscoach gui
   and below it the patterns across your reviewed games
   (`chesscoach patterns` on the command line). Every line can show the
   facts it rests on.
-- **Settings**: engine paths, model, your name and rating, saved to the user
-  config file.
+- **Games**: every game you play or review is kept as ordinary PGN files
+  (Played.pgn, Reviewed.pgn, and any file you add), searchable by player,
+  event or opening and sortable by column; a reviewed game opens with its
+  review. The **opening explorer** shows what was played in each position
+  of your games and how it scored, for you as White or as Black.
+- **Save PGN…** after a review: the game with ?!/?/?? marks, [%eval] on
+  every move, the coach's comments and the engine's better line as a
+  variation on every error, for ChessBase, Lichess, Lucas Chess or SCID.
+  Each side's accuracy (Lichess's method) and the tactical motifs each error
+  allowed or missed (fork, pin, skewer…) are in the review and the PGN.
+- **Settings**: engine paths, model, your name and rating, the games
+  folder, saved to the user config file.
 
 The board is [chessground](https://github.com/lichess-org/chessground)
 (Lichess's board), bundled so the app works offline.

@@ -54,6 +54,8 @@ class Settings:
     prompt_notes: str = "events"      # what the coach is told a move does: "events" (7g) or "effects" (old)
     plans: bool = True                # explain quiet engine moves: idea, problem, solution
     keep_history: bool = True         # store each review's facts for patterns across games
+    library_dir: str = ""             # your games (PGN files + index); "" = "games" beside the config
+    autosave: bool = True             # keep every played and reviewed game in the library
     ask_mode: str = "router"          # "router": code picks the facts; "agent": model calls tools
     grounding: bool = True            # verify the model's claims on the board
     concepts: bool = True             # engine-verified threats, piece roles, key facts

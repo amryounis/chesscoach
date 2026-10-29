@@ -15,6 +15,7 @@
     <button role="tab" id="tab-review" aria-selected="true" data-tab="review">Review</button>
     <button role="tab" id="tab-play" aria-selected="false" data-tab="play">Play</button>
     <button role="tab" id="tab-practice" aria-selected="false" data-tab="practice">Practice</button>
+    <button role="tab" id="tab-games" aria-selected="false" data-tab="games">Games</button>
   </nav>
   <button class="quiet" id="open-settings">Settings</button>
 </header>
@@ -134,6 +135,72 @@
     </div>
   </section>
 
+  <!-- Games: the library (PGN files + index) and the opening explorer -->
+  <section class="panel" id="panel-games" role="tabpanel" aria-labelledby="tab-games" hidden>
+    <div class="game-head">
+      <div>
+        <h1>Your games</h1>
+        <p class="sub">Every game you play or review is kept here, as ordinary PGN files any chess program opens.</p>
+        <p class="sub lib-path" id="lib-path"></p>
+      </div>
+      <button id="lib-add" title="Copy a PGN file into your games (the original stays where it is)">Add PGN file…</button>
+    </div>
+    <div class="viewtabs" id="lib-views" role="tablist">
+      <button role="tab" data-lview="list" aria-selected="true">Games</button>
+      <button role="tab" data-lview="explorer" aria-selected="false">Opening explorer</button>
+    </div>
+    <div class="lib-filters">
+      <select id="lib-file" aria-label="File"><option value="">All files</option></select>
+      <select id="lib-mine" aria-label="Whose games">
+        <option value="">Everyone's games</option>
+        <option value="any">My games</option>
+        <option value="white">Me as White</option>
+        <option value="black">Me as Black</option>
+      </select>
+      <span id="lib-list-filters">
+        <input id="lib-q" type="search" placeholder="Player, event or opening" aria-label="Search">
+        <select id="lib-result" aria-label="Result">
+          <option value="">Any result</option><option value="1-0">1-0</option>
+          <option value="0-1">0-1</option><option value="1/2-1/2">½-½</option><option value="*">Unfinished</option>
+        </select>
+        <label class="check"><input type="checkbox" id="lib-reviewed"> Reviewed</label>
+      </span>
+    </div>
+    <div id="lib-list">
+      <div class="lib-table-wrap">
+        <table class="lib-table games-table">
+          <colgroup><col style="width:23%"><col style="width:23%"><col style="width:9%"><col style="width:16%">
+            <col style="width:15%"><col style="width:9%"><col style="width:5%"></colgroup>
+          <thead><tr>
+            <th data-sort="white">White</th><th data-sort="black">Black</th><th data-sort="result">Result</th>
+            <th data-sort="date" class="sorted desc">Date</th><th data-sort="eco">Opening</th>
+            <th data-sort="plies" class="num" title="Moves">Mv</th><th title="Reviewed">✓</th>
+          </tr></thead>
+          <tbody id="lib-rows"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="lib-empty" hidden></p>
+      <div class="lib-actions">
+        <button class="primary" id="lib-open" disabled>Open</button>
+        <button class="quiet" id="lib-remove" disabled>Remove from file…</button>
+        <span class="sub" id="lib-count"></span>
+      </div>
+    </div>
+    <div id="lib-explorer" hidden>
+      <div class="ex-head">
+        <button class="quiet" id="ex-start" title="Back to the starting position">⏮</button>
+        <button class="quiet" id="ex-back" title="One move back">◀</button>
+        <span id="ex-line">Starting position</span>
+      </div>
+      <table class="lib-table ex-table">
+        <thead><tr><th>Move</th><th class="num">Games</th><th>White · Draw · Black</th><th class="num" id="ex-score-h">Score</th></tr></thead>
+        <tbody id="ex-rows"></tbody>
+      </table>
+      <p class="empty" id="ex-empty" hidden></p>
+      <p class="sub">From your games' first 15 moves. Click a move, or play one on the board.</p>
+    </div>
+  </section>
+
   <!-- Practice -->
   <section class="panel" id="panel-practice" role="tabpanel" aria-labelledby="tab-practice" hidden>
     <div class="game-head">
@@ -182,6 +249,8 @@
       <label>Your rating <input name="player_elo" type="number" min="400" max="3000" step="50"></label>
       <label>Engine depth <input name="depth" type="number" min="8" max="30"></label>
     </div>
+    <label>Games folder <input name="library_dir" placeholder="default: &ldquo;games&rdquo; next to the settings file"></label>
+    <label class="check"><input type="checkbox" name="autosave"> Keep every game I play or review in my games</label>
     <label>Show comments of bilingual PGNs in
       <select name="comment_language">
         <option value="en">English</option>

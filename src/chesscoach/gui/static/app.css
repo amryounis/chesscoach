@@ -509,3 +509,45 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
 /* version next to the name in the top bar */
 .brand .ver { font: 500 12px var(--ui); color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+
+/* ---- games: the library and the opening explorer */
+.lib-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lib-filters #lib-list-filters { display: contents; }
+.lib-filters #lib-list-filters[hidden] { display: none; }
+.lib-filters input[type=search] { flex: 1 1 180px; min-width: 0; font: 14px var(--ui); padding: 5px 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.lib-filters .check { font-size: 13px; color: var(--muted); display: inline-flex; gap: 5px; align-items: center; }
+.lib-table-wrap { overflow: auto; max-height: calc(100vh - 330px); min-height: 120px;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.lib-table { width: 100%; border-collapse: collapse; font: 13px/1.35 var(--ui); }
+.games-table { table-layout: fixed; }
+.lib-path { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; max-width: 52ch; }
+.lib-table th { position: sticky; top: 0; background: var(--bg); text-align: left; font-weight: 600;
+  color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.lib-table th[data-sort] { cursor: pointer; user-select: none; }
+.lib-table th.sorted { color: var(--ink); }
+.lib-table th.sorted::after { content: " ▲"; font-size: 9px; }
+.lib-table th.sorted.desc::after { content: " ▼"; }
+.lib-table td { padding: 5px 6px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-table td.op { color: var(--muted); }
+.lib-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.lib-table td.me { font-weight: 600; }
+.lib-table tbody tr { cursor: pointer; }
+.lib-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.lib-table tbody tr.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.lib-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+#panel-games .empty { color: var(--muted); font: 14px var(--ui); }
+.ex-head { display: flex; gap: 6px; align-items: center; margin: 4px 0 8px; }
+#ex-line { font: 15px var(--fig); }
+.ex-table td.mv-san { font: 600 15px var(--fig); }
+.wdl { display: flex; width: 170px; height: 16px; border-radius: 3px; overflow: hidden;
+  border: 1px solid var(--muted); font: 600 10px/16px var(--ui); }
+.wdl i { display: block; height: 100%; font-style: normal; text-align: center; overflow: hidden; }
+.wdl .w { background: #ffffff; color: #1d2a30; }
+.wdl .d { background: #9aa6ab; color: #ffffff; }
+.wdl .b { background: #1d2a30; color: #ffffff; }
+
+/* a checkbox line in the settings dialog */
+#settings label.check { flex-direction: row; display: flex; align-items: center; gap: 8px; }
+#settings label.check input { width: auto; }

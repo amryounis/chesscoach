@@ -134,6 +134,7 @@ class Api:
         self._play: Optional[PlayGame] = None
         self._coach_lock = threading.Lock()
         self._game_key = 0                    # changes with every game opened
+        self._play_saved = ("", 0, "")        # (id, moves, result) of the played game as last saved
         self._drills: dict = {}               # practice: id -> drill, from the last listing
         self._practice_sf = None
         self._practice_lock = threading.Lock()
@@ -215,6 +216,91 @@ class Api:
         out = game_summary(self._game)
         out["index"] = int(index)
         out["key"] = self._game_key
+        # A game reviewed before opens with its review: no need to run
+        # Stockfish again (Review again redoes it).
+        saved = self._restore_review(self._game)
+        if saved is not None:
+            out["review"] = saved
+        return out
+
+    def _restore_review(self, game) -> Optional[dict]:
+        from .. import library
+        from ..review import GameReview, MoveReview
+        try:
+            data = library.saved_review(game)
+        except Exception:
+            return None
+        if not data:
+            return None
+        try:
+            mf = {f.name for f in fields(MoveReview)}
+            gf = {f.name for f in fields(GameReview)}
+            moves = [MoveReview(**{k: v for k, v in m.items() if k in mf}) for m in data["moves"]]
+            self._review = GameReview(**{k: v for k, v in data.items() if k in gf and k != "moves"},
+                                      moves=moves)
+        except (TypeError, KeyError):
+            return None
+        return data
+
+    # -- the library: your games ---------------------------------------------
+
+    @_safe
+    def library_list(self, filters: Optional[dict] = None) -> dict:
+        from .. import library
+        f = filters or {}
+        out = library.query(text=f.get("text", ""), file=f.get("file", ""),
+                            result=f.get("result", ""), mine=f.get("mine", ""),
+                            reviewed=bool(f.get("reviewed")), sort=f.get("sort", "date"),
+                            desc=f.get("desc", True))
+        out["files"] = library.pgn_files()
+        out["folder"] = str(library.library_dir())
+        out["me"] = config.settings.player_name
+        return out
+
+    @_safe
+    def library_open(self, game_row: int) -> dict:
+        from .. import library
+        self._not_while_reviewing("opening another game")
+        game, name = library.load(int(game_row))
+        self._games, self._game_path = [game], str(library.library_dir() / name)
+        return self.select_game(0)
+
+    @_safe
+    def library_add_dialog(self) -> dict:
+        from .. import library
+        paths = self._window.create_file_dialog(
+            _dialog_kind("OPEN"), file_types=("PGN files (*.pgn)", "All files (*.*)"))
+        if not paths:
+            return {"cancelled": True}
+        name, n = library.add_file(paths[0] if not isinstance(paths, str) else paths)
+        return {"file": name, "games": n}
+
+    @_safe
+    def library_remove(self, game_row: int) -> dict:
+        from .. import library
+        library.remove_game(int(game_row))
+        return {"ok": True}
+
+    @_safe
+    def library_explore(self, line: Optional[list] = None, mine: str = "", file: str = "") -> dict:
+        """The opening explorer after `line` (UCI moves from the start)."""
+        from .. import library
+        b, sans = chess.Board(), []
+        for u in line or []:
+            m = chess.Move.from_uci(u)
+            if m not in b.legal_moves:
+                raise ValueError(f"Illegal move in the line: {u}")
+            sans.append(b.san(m))
+            b.push(m)
+        out = library.explore(b, mine=mine, file=file)
+        dests: dict = {}
+        for m in b.legal_moves:
+            dests.setdefault(chess.square_name(m.from_square), []).append(chess.square_name(m.to_square))
+        num = []
+        for i, s in enumerate(sans):
+            num.append(f"{i // 2 + 1}. {s}" if i % 2 == 0 else s)
+        out.update(fen=b.fen(), line=" ".join(num), turn="white" if b.turn else "black",
+                   dests=dests, me=config.settings.player_name, files=library.pgn_files())
         return out
 
     # -- the coach on any position ------------------------------------------
@@ -320,6 +406,13 @@ class Api:
                 result = r.to_dict()
                 result["key"] = key
                 result["patterns"] = _patterns_after(r)
+                if config.settings.autosave:
+                    from .. import library
+                    try:
+                        library.save_review(r)
+                        result["saved_to"] = library.REVIEWED
+                    except Exception:
+                        log_error("saving the review to the library")
                 self._set_status(state="finished", result=result)
             except Cancelled:
                 self._set_status(state="cancelled", message="Review stopped.")
@@ -439,7 +532,9 @@ class Api:
     @_safe
     def new_game(self, color: str = "white", elo: int = 1500) -> dict:
         if self._play:
+            self._autosave_play()               # an unfinished game is kept too ("*")
             self._play.close()
+        self._play_saved = ("", 0, "")
         c = {"white": chess.WHITE, "black": chess.BLACK}.get(color) or random_color()
         self._play = PlayGame(c, int(elo))
         reply = self._play.engine_move()          # engine opens if player is Black
@@ -490,8 +585,28 @@ class Api:
             f.write(self._play.pgn() + "\n")
         return {"saved": path}
 
+    def _autosave_play(self) -> str:
+        """Keep the played game in the library (Played.pgn) once it has a
+        move of the player's; again only if it changed since."""
+        g = self._play
+        if not (g and config.settings.autosave):
+            return ""
+        own = len(g.board.move_stack) - (0 if g.player_color == chess.WHITE else 1)
+        state = (len(g.board.move_stack), g.result())
+        if own < 1 or state == self._play_saved[1:]:
+            return ""
+        from .. import library
+        try:
+            gid = library.save_played(g.to_pgn_game(), replaces=self._play_saved[0])
+        except Exception:
+            log_error("saving the played game")
+            return ""
+        self._play_saved = (gid, *state)
+        return library.PLAYED
+
     def _play_state(self, reply: Optional[str], played: str = "") -> dict:
         g = self._play
+        saved = self._autosave_play() if g.over else ""
         b = g.board
         last = b.peek().uci() if b.move_stack else ""
         moves, tmp = [], chess.Board()
@@ -505,7 +620,7 @@ class Api:
                 "turn": "white" if b.turn == chess.WHITE else "black",
                 "dests": {} if g.over or b.turn != g.player_color else g.legal_dests(),
                 "check": b.is_check(), "over": g.over, "status": g.status(),
-                "result": g.result(), "opponent": g.engine_name,
+                "result": g.result(), "opponent": g.engine_name, "saved_to": saved,
                 "opponent_info": g.opponent,
                 "played": played, "reply": reply or ""}
 
@@ -524,5 +639,6 @@ class Api:
                 pass
             self._practice_sf = None
         if self._play:
+            self._autosave_play()
             self._play.close()
             self._play = None

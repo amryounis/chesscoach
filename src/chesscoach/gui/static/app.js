@@ -123,10 +123,12 @@ function showTab(name) {
   $("panel-review").hidden = name !== "review";
   $("panel-play").hidden = name !== "play";
   $("panel-practice").hidden = name !== "practice";
+  $("panel-games").hidden = name !== "games";
   $("nav").hidden = name !== "review";
   $("eval").classList.toggle("off", name !== "review");
   if (name === "review") renderReviewBoard();
   else if (name === "practice") openPractice();
+  else if (name === "games") { renderGamesBoard(); openGames(); }
   else {
     renderPlayBoard();
     if (!P.state) showOpponent();       // Maia may have been set up since
@@ -138,6 +140,27 @@ function showTab(name) {
 const R = { game: null, reviewed: false, cursor: -1, compare: false, polling: null,
             answers: {}, asking: false, node: null, view: "moves", games: [],
             running: false, follow: true, live: null };   // live: [cp, mate] per position while reviewing
+
+// A finished review onto the open game: a new one, or one kept from before.
+function applyReview(res) {
+  R.game.moves = res.moves;
+  R.game.summary = res.summary || [];
+  R.game.patterns = res.patterns || R.game.patterns || [];
+  R.game.models = res.models || [];
+  R.game.accuracy = res.accuracy || {};
+  R.reviewed = true;
+  X.loaded = null;                // the practice list follows the latest review
+  renderGraph();
+  // The coach's comments are now part of the game: read them in the
+  // Annotations pane, alongside the annotator's when the PGN had them.
+  $("viewtabs").hidden = !R.game.tree;
+  renderNotes();
+  if (R.game.tree) setView("notes");
+  $("save-report").hidden = false;
+  $("save-annotated").hidden = false;
+  if (res.side) $("review-side").value = res.side;
+  renderMoments();
+}
 
 function loadSummary(summary) {
   R.game = summary;
@@ -169,6 +192,12 @@ function loadSummary(summary) {
   renderReviewBoard();
   renderCoach();
   renderAsk();
+  if (summary.review) {               // reviewed before: show that review
+    applyReview(summary.review);
+    goTo(-1);
+    const when = (summary.review.reviewed_at || "").replace("T", " ").slice(0, 16);
+    toast(`Showing the review from ${when || "before"}. "Review game" redoes it.`, 5000);
+  }
 }
 
 // ---- a file with many games: pick one
@@ -891,21 +920,9 @@ async function pollReview() {
       toast("That review was for another game; it was not applied.", 5000);
       return;
     }
-    R.game.moves = res.moves;
-    R.game.summary = res.summary || [];
-    R.game.patterns = res.patterns || [];
-    R.game.models = res.models || [];
-    R.reviewed = true;
-    X.loaded = null;                // the practice list follows the latest review
-    renderGraph();
-    // The coach's comments are now part of the game: read them in the
-    // Annotations pane, alongside the annotator's when the PGN had them.
-    $("viewtabs").hidden = !R.game.tree;
-    renderNotes();
-    if (R.game.tree) setView("notes");
-    $("save-report").hidden = false;
-    $("save-annotated").hidden = false;
-    toast(`Review complete: ${res.moves.filter((m) => m.reason).length} critical moments.`);
+    applyReview(res);
+    const n = res.moves.filter((m) => m.reason).length;
+    toast(`Review complete: ${n} critical moments.${res.saved_to ? ` Kept in your games (${res.saved_to}).` : ""}`, 4500);
     goTo(-1);                       // open on the game summary
   } else {
     // stopped or failed: back to the game as it was, without the live graph
@@ -1048,6 +1065,7 @@ function applyPlayState(st) {
   setOrientation(st.orientation);
   renderPlayBoard();
   $("play-status").textContent = st.status;
+  if (st.saved_to) toast(`Game kept in your games (${st.saved_to}).`);
   opponentNote($("play-opponent"), st.opponent_info);
   fillMoveGrid($("play-moves"), st.moves, st.moves.length - 1, null, false);
   $("takeback").hidden = st.over;
@@ -1128,13 +1146,15 @@ $("review-played").addEventListener("click", async () => {
 // ---------------------------------------------------------------- settings
 
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
-                         "comment_language"];
+                         "comment_language", "library_dir"];
+const SETTINGS_CHECKS = ["autosave"];
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
   if (!s) return;
   settingsCache = s;
   const f = $("settings-form");
   for (const k of SETTINGS_FIELDS) f.elements[k].value = s[k] ?? "";
+  for (const k of SETTINGS_CHECKS) f.elements[k].checked = !!s[k];
   $("settings-file").textContent = `Saved to ${s.config_file}`;
   $("settings-error").hidden = true;
   $("settings").showModal();
@@ -1144,6 +1164,7 @@ $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target;
   const values = Object.fromEntries(SETTINGS_FIELDS.map((k) => [k, f.elements[k].value.trim()]));
+  for (const k of SETTINGS_CHECKS) values[k] = f.elements[k].checked;
   const res = await api().save_settings(values);
   if (res.error) {
     $("settings-error").textContent = res.error;
@@ -1317,6 +1338,172 @@ async function submitDrill(uci) {
   X.result = res;
   renderDrill();
   if (uci) board.set({ fen: d.fen });        // show the position, arrows carry the moves
+}
+
+// ---------------------------------------------------------------- games
+//
+// The library: ordinary PGN files (Played.pgn, Reviewed.pgn and any you
+// add) with an index. Double-click or Open puts a game in the Review tab
+// (with its review, if it was reviewed before). The explorer reads the
+// same games' openings.
+
+const G = { view: "list", sort: "date", desc: true, selected: null, rows: [], line: [], ex: null,
+            armed: false, timer: null };
+
+document.querySelectorAll("#lib-views button").forEach((b) => b.addEventListener("click", () => {
+  G.view = b.dataset.lview;
+  document.querySelectorAll("#lib-views button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+  openGames();
+}));
+for (const id of ["lib-file", "lib-mine", "lib-result", "lib-reviewed"])
+  $(id).addEventListener("change", () => openGames());
+$("lib-q").addEventListener("input", () => { clearTimeout(G.timer); G.timer = setTimeout(openGames, 250); });
+document.querySelectorAll(".lib-table:not(.ex-table) th[data-sort]").forEach((th) => th.addEventListener("click", () => {
+  G.desc = G.sort === th.dataset.sort ? !G.desc : th.dataset.sort === "date";
+  G.sort = th.dataset.sort;
+  document.querySelectorAll(".lib-table th[data-sort]").forEach((x) => x.classList.remove("sorted", "desc"));
+  th.classList.add("sorted");
+  if (G.desc) th.classList.add("desc");
+  openGames();
+}));
+$("lib-add").addEventListener("click", async () => {
+  const res = await call("library_add_dialog");
+  if (res && res.file) {
+    toast(`Added ${res.games} game${res.games === 1 ? "" : "s"} as ${res.file}.`);
+    $("lib-file").value = "";
+    openGames();
+  }
+});
+$("lib-open").addEventListener("click", () => G.selected !== null && openFromLibrary(G.selected));
+$("lib-remove").addEventListener("click", async () => {
+  if (G.selected === null) return;
+  // two clicks, no dialog: the first arms it, the second removes
+  if (!G.armed) {
+    G.armed = true;
+    $("lib-remove").textContent = "Click again to remove";
+    setTimeout(() => { G.armed = false; $("lib-remove").textContent = "Remove from file…"; }, 3000);
+    return;
+  }
+  G.armed = false;
+  $("lib-remove").textContent = "Remove from file…";
+  const res = await call("library_remove", G.selected);
+  if (res) { G.selected = null; toast("Removed."); openGames(); }
+});
+$("ex-start").addEventListener("click", () => { G.line = []; explore(); });
+$("ex-back").addEventListener("click", () => { G.line.pop(); explore(); });
+
+function openGames() {
+  $("lib-list").hidden = G.view !== "list";
+  $("lib-explorer").hidden = G.view !== "explorer";
+  $("lib-list-filters").hidden = G.view !== "list";
+  if (G.view === "explorer") return explore();
+  listGames();
+}
+
+async function listGames() {
+  const res = await call("library_list", {
+    text: $("lib-q").value, file: $("lib-file").value, mine: $("lib-mine").value,
+    result: $("lib-result").value, reviewed: $("lib-reviewed").checked, sort: G.sort, desc: G.desc });
+  if (!res) return;
+  fillFiles(res.files);
+  G.rows = res.games;
+  $("lib-path").textContent = `Folder: ${res.folder}`;
+  $("lib-path").title = res.folder;
+  const meName = (res.me || "").toLowerCase();
+  $("lib-rows").innerHTML = res.games.map((g) => {
+    const me = (n) => (meName && n.toLowerCase() === meName ? " me" : "");
+    const opening = g.eco || g.opening ? `${esc(g.eco)} ${esc(g.opening)}`.trim() : "";
+    return `<tr data-id="${g.id}" class="${g.id === G.selected ? "sel" : ""}" title="${esc(g.event)} · ${esc(g.file)}">`
+      + `<td class="${me(g.white)}">${esc(g.white)}</td><td class="${me(g.black)}">${esc(g.black)}</td>`
+      + `<td>${esc(g.result === "1/2-1/2" ? "½-½" : g.result)}</td><td>${esc(g.date.replace(/\.\?\?/g, ""))}</td>`
+      + `<td class="op" title="${opening}">${opening}</td><td class="num">${Math.ceil(g.plies / 2)}</td>`
+      + `<td>${g.reviewed ? "✓" : ""}</td></tr>`;
+  }).join("");
+  $("lib-rows").querySelectorAll("tr").forEach((tr) => {
+    tr.addEventListener("click", () => selectRow(Number(tr.dataset.id)));
+    tr.addEventListener("dblclick", () => openFromLibrary(Number(tr.dataset.id)));
+  });
+  const shown = res.games.length;
+  $("lib-count").textContent = res.total ? `${shown < res.total ? `${shown} of ` : ""}${res.total} game${res.total === 1 ? "" : "s"}` : "";
+  $("lib-empty").hidden = res.total > 0;
+  $("lib-empty").textContent = res.files.length
+    ? "No games match." : "No games yet. Play or review a game, or add a PGN file.";
+  selectRow(res.games.some((g) => g.id === G.selected) ? G.selected : null);
+}
+
+function fillFiles(files) {
+  const sel = $("lib-file"), cur = sel.value;
+  sel.innerHTML = `<option value="">All files</option>` + files.map((f) => `<option>${esc(f)}</option>`).join("");
+  sel.value = files.includes(cur) ? cur : "";
+}
+
+function selectRow(id) {
+  G.selected = id;
+  $("lib-rows").querySelectorAll("tr").forEach((tr) => tr.classList.toggle("sel", Number(tr.dataset.id) === id));
+  $("lib-open").disabled = id === null;
+  $("lib-remove").disabled = id === null;
+}
+
+async function openFromLibrary(id) {
+  const res = await call("library_open", id);
+  if (!res) return;
+  showTab("review");
+  loadSummary(res);
+}
+
+async function explore() {
+  const res = await call("library_explore", G.line, $("lib-mine").value, $("lib-file").value);
+  if (!res) { G.line.pop(); return; }
+  fillFiles(res.files || []);
+  G.ex = res;
+  $("ex-line").textContent = res.line || "Starting position";
+  $("ex-back").disabled = $("ex-start").disabled = !G.line.length;
+  const mine = $("lib-mine").value;
+  $("ex-score-h").textContent = mine === "white" || mine === "black" ? "Your score"
+    : `${res.turn === "white" ? "White" : "Black"}'s score`;
+  $("ex-rows").innerHTML = res.moves.map((m) => {
+    const t = m.white + m.draws + m.black || 1;
+    const seg = (cls, k) => {
+      const pct = Math.round(100 * k / t);
+      return k ? `<i class="${cls}" style="width:${100 * k / t}%">${pct >= 18 ? pct + "%" : ""}</i>` : "";
+    };
+    const bar = `<span class="wdl">${seg("w", m.white)}${seg("d", m.draws)}${seg("b", m.black)}</span>`;
+    return `<tr data-uci="${m.uci}"><td class="mv-san">${esc(figurine(m.san))}</td><td class="num">${m.games}</td>`
+      + `<td title="${m.white} · ${m.draws} · ${m.black}">${bar}</td><td class="num">${m.score === null ? "–" : m.score + "%"}</td></tr>`;
+  }).join("");
+  $("ex-rows").querySelectorAll("tr").forEach((tr) => tr.addEventListener("click", () => {
+    G.line.push(tr.dataset.uci);
+    explore();
+  }));
+  $("ex-empty").hidden = res.moves.length > 0;
+  $("ex-empty").textContent = res.games === 0 && !G.line.length
+    ? (mine ? "None of your games yet: set your name in Settings, as it appears in your PGNs." : "No games yet.")
+    : "No game in your library reached this position.";
+  renderGamesBoard();
+}
+
+function renderGamesBoard() {
+  if (tab !== "games") return;
+  renderPlayers();
+  setEval(50);
+  board.setAutoShapes([]);
+  if (G.view !== "explorer" || !G.ex) {
+    board.set({ fen: START, lastMove: undefined, check: false, movable: { color: undefined, dests: new Map() } });
+    return;
+  }
+  const last = G.line[G.line.length - 1];
+  board.set({
+    fen: G.ex.fen, turnColor: G.ex.turn, lastMove: last ? sqs(last) : undefined, check: false,
+    movable: { free: false, color: G.ex.turn, dests: new Map(Object.entries(G.ex.dests)), showDests: true,
+               events: { after: (o, d) => { G.line.push(o + d + (isPromotion(o, d) ? "q" : "")); explore(); } } },
+  });
+  // the most played moves as arrows
+  board.setAutoShapes(G.ex.moves.slice(0, 3).map((m, i) => ({ orig: m.uci.slice(0, 2), dest: m.uci.slice(2, 4), brush: i ? "played" : "defend" })));
+}
+
+function isPromotion(o, d) {
+  const p = board.state.pieces.get(d);
+  return p && p.role === "pawn" && (d[1] === "8" || d[1] === "1");
 }
 
 // ---------------------------------------------------------------- start

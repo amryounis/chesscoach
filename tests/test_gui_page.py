@@ -286,3 +286,27 @@ def test_the_board_follows_a_running_review(page):
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
     assert page.locator("#coach .live").count() == 0           # the summary replaces it
     assert page.errors == []
+
+
+def test_games_tab_lists_opens_and_explores(page):
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    page.click("#tab-games")
+    page.wait_for_selector("#lib-rows tr")
+    row = page.locator("#lib-rows tr").first
+    assert "Homer" in row.inner_text() and "✓" in row.inner_text()
+    row.dblclick()
+    page.wait_for_selector("#panel-review:not([hidden])")
+    page.wait_for_selector("#moments:not([hidden]) button")       # the kept review, at once
+    assert page.is_visible("#save-annotated")
+    page.click("#tab-games")
+    page.click("#lib-views [data-lview=explorer]")
+    page.wait_for_selector("#ex-rows tr")
+    first = page.inner_text("#ex-rows tr >> nth=0")
+    assert "1" in first                                          # games count
+    page.click("#ex-rows tr >> nth=0")
+    page.wait_for_function("document.getElementById('ex-line').textContent.startsWith('1.')")
+    page.click("#ex-back")
+    page.wait_for_function("document.getElementById('ex-line').textContent === 'Starting position'")
+    assert page.errors == []

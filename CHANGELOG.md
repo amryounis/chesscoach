@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.15.0 — unreleased
+
+Your games, standard PGN out, and two ideas from Lucas Chess.
+
+- **Your games (new Games tab).** A folder of ordinary PGN files any chess
+  program opens, with an index (SQLite) to search them:
+  - Played.pgn: every game you play is kept as it ends (or when you start
+    another before it ends, as "*"); taken back and played on, it is kept
+    once, in its last version
+  - Reviewed.pgn: every reviewed game as an annotated PGN; a re-review
+    replaces it
+  - Add PGN file… copies a file in (the original stays where it is)
+  - Search by player, event or opening; filter by file, result, your games
+    (as White / Black) and reviewed; sort by any column; Open (or double-
+    click) puts the game in Review; Remove takes one game out of its file
+  - Games without ECO/Opening headers are named from the openings table
+  - The index follows files edited elsewhere, and can be deleted: it is
+    rebuilt from the PGN files
+  - The folder and autosave are in Settings (the folder defaults to "games"
+    next to the settings file)
+- **A reviewed game opens with its review.** Every review is kept whole, so
+  opening that game again (from Your games or as a file) shows the review
+  at once, without running Stockfish; "Review game" redoes it
+- **Opening explorer** (Games tab): from your games' first 15 moves, the
+  moves played in each position, how often and how they scored
+  (White · Draw · Black bar), for everyone's games or yours as White or
+  Black ("Your score" from your side). Click a move or play one on the
+  board; the three most played are drawn as arrows
+- **Save PGN… after a review** (and `chesscoach review` writes it beside
+  the report): ?! / ? / ?? / ! as NAGs, [%eval] on every move, the coach's
+  comments, the engine's better line as a variation on every error, ECO /
+  Opening / Annotator headers, and the summary with accuracy as the game
+  comment
+- **Accuracy %** per side, by Lichess's published method (no Elo estimate
+  from one game: Lucas Chess users themselves find that one unreliable)
+- **Tactical motifs** (Lucas Chess tags them with Lichess's puzzle themes):
+  for every error, what it allowed (the opponent's line) and what the
+  engine had instead: fork, pin, skewer, discovered attack, double check,
+  hanging piece, taking a defender, sacrifice, promotion, advanced pawn,
+  mate, back-rank mate. Found by code, and only when the line shows the
+  motif paying off. Shown under the comment, in the summary, in the PGN,
+  and counted across your games ("your errors allowed a fork 3 times in
+  two games")
+
 ## 0.14.0 — unreleased
 
 - **The board follows a running review.** While Stockfish works, the board
