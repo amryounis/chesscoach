@@ -352,6 +352,23 @@ class Api:
         write_markdown(self._review, path)
         return {"saved": path}
 
+    @_safe
+    def save_annotated_pgn_dialog(self) -> dict:
+        """The reviewed game as an annotated PGN any chess program opens."""
+        from ..pgn_export import annotated_pgn
+        if self._review is None:
+            raise ValueError("Run a review first.")
+        base = os.path.splitext(os.path.basename(self._game_path or "game.pgn"))[0]
+        path = self._window.create_file_dialog(
+            _dialog_kind("SAVE"), save_filename=f"{base}_annotated.pgn",
+            file_types=("PGN files (*.pgn)", "All files (*.*)"))
+        if not path:
+            return {"cancelled": True}
+        path = path if isinstance(path, str) else path[0]
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(annotated_pgn(self._review))
+        return {"saved": path}
+
     def _set_status(self, **status):
         with self._lock:
             self._status = status

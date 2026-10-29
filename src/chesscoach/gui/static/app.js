@@ -159,6 +159,7 @@ function loadSummary(summary) {
   $("game-sub").textContent = bits.filter(Boolean).join(", ") + `. ${full} moves.`;
   $("review-controls").hidden = false;
   $("save-report").hidden = true;
+  $("save-annotated").hidden = true;
   $("moments").hidden = true;
   $("review-side").value = summary.side || guessSide(h);
   setOrientation(($("review-side").value === "black") ? "black" : "white");
@@ -903,6 +904,7 @@ async function pollReview() {
     renderNotes();
     if (R.game.tree) setView("notes");
     $("save-report").hidden = false;
+    $("save-annotated").hidden = false;
     toast(`Review complete: ${res.moves.filter((m) => m.reason).length} critical moments.`);
     goTo(-1);                       // open on the game summary
   } else {
@@ -956,6 +958,10 @@ function showLive(s) {
       + `<p class="empty">Its comment is checked against the board before you see it.</p>`;
   $("coach-scroll").scrollTop = 0;
 }
+$("save-annotated").addEventListener("click", async () => {
+  const res = await call("save_annotated_pgn_dialog");
+  if (res && res.saved) toast(`Saved ${res.saved}`);
+});
 $("save-report").addEventListener("click", async () => {
   const res = await call("save_report_dialog");
   if (res && res.saved) toast(`Saved ${res.saved}`);

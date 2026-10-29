@@ -42,6 +42,22 @@ def test_review_runs_in_background_and_returns_moves(api):
     assert moves[-1]["reason"] == "delivered checkmate" and moves[-1]["verdict"] == "checkmate"
     assert all(m["annotations"] for m in moments)
     assert all(len(m["best_uci"]) >= 4 for m in moves[:-1])
+    assert st["result"]["accuracy"]["black"] is not None
+    # Save PGN: the reviewed game, annotated, for any chess program
+    import chess.pgn, io
+
+    class SaveTo:
+        def create_file_dialog(self, kind, **kw):
+            return str(tmp_out)
+    tmp_out = DATA.parent / "_tmp_export.pgn"
+    api._window = SaveTo()
+    try:
+        assert api.save_annotated_pgn_dialog() == {"saved": str(tmp_out)}
+        g = chess.pgn.read_game(io.StringIO(tmp_out.read_text(encoding="utf-8")))
+        assert not g.errors and len(list(g.mainline_moves())) == 78
+        assert any(n.nags for n in g.mainline()) and g.headers["Annotator"].startswith("chesscoach")
+    finally:
+        tmp_out.unlink(missing_ok=True)
 
 
 def test_play_then_review_the_game(api):

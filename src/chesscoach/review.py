@@ -423,6 +423,11 @@ def annotate_game(pgn_path: str, side: str, models: list, verbose: bool,
 
     out = os.path.splitext(pgn_path)[0] + "_annotated.md"
     write_markdown(review, out)
+    from .pgn_export import annotated_pgn
+    pgn_out = os.path.splitext(pgn_path)[0] + "_annotated.pgn"
+    with open(pgn_out, "w", encoding="utf-8") as f:
+        f.write(annotated_pgn(review))
     print_scoreboard(rows)
     print(f"\nFull annotations written to: {out}")
+    print(f"Annotated PGN (for any chess program): {pgn_out}")
     return review
