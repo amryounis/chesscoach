@@ -6,4 +6,4 @@ python-chess turns positions into verified facts, and a local LLM
 (via Ollama) only narrates those facts in a coach's voice.
 """
 
-__version__ = "0.13.0"
+__version__ = "0.13.1"

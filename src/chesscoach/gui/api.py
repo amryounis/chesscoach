@@ -61,8 +61,14 @@ def _safe(fn):
 
 
 def _dialog_kind(kind: str):
-    """pywebview 6 uses FileDialog.OPEN/SAVE; 5.x used OPEN_DIALOG/SAVE_DIALOG."""
-    import webview
+    """pywebview 6 uses FileDialog.OPEN/SAVE; 5.x used OPEN_DIALOG/SAVE_DIALOG.
+    Without pywebview (the page in a test browser, with a stand-in window)
+    the kind's name is passed through: only a real window needs the
+    constant, and a real window means pywebview is there."""
+    try:
+        import webview
+    except ImportError:
+        return kind
     fd = getattr(webview, "FileDialog", None)
     if fd is not None:
         return getattr(fd, kind)

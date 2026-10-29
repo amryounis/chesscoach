@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.13.1 — unreleased
+
+From the first CI run (Actions had never run on this repository before):
+
+- The page's tests failed wherever pywebview isn't installed (CI installs
+  only the dev extra): "Open PGN" asked pywebview for its dialog constant
+  even with the test's stand-in window. Without pywebview the kind's name
+  is now passed through; a real window always has pywebview. Five browser
+  tests, three of them older than 0.12, had been failing unseen
+- A 0.13.0 test expected a config file named with --config to set the
+  Stockfish path, but CI sets CHESSCOACH_STOCKFISH_PATH, which rightly wins
+- CI: a "Run workflow" button, Ubuntu pinned to 24.04 (Stockfish 16, which
+  the engine-dependent expectations were written against), one failing
+  Python version no longer cancels the others, and the actions are on
+  their Node 24 versions
+
 ## 0.13.0 — unreleased
 
 From an outside review (DeepSeek) of 0.12.0. Every defect it named was
