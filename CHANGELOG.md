@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.14.0 — unreleased
+
+- **The board follows a running review.** While Stockfish works, the board
+  shows each position as it is analysed, with the eval bar, the move list
+  (and the Annotations pane) on that move, and the evaluation graph
+  drawing itself; the panel says "Stockfish is analysing 16.Nxa4: Black is
+  much better. Position 32 of 79". Then, while the coach writes, the board
+  goes to each critical moment ("The coach is writing about 5...c6, moment
+  1 of 8"). Clicking a move or using the arrow keys takes the board back;
+  "Follow" returns it to the analysis. The progress bar is wider and
+  easier to see. The review's progress callback now carries the position
+  and its score (a fifth argument, `info`)
+
 ## 0.13.1 — unreleased
 
 From the first CI run (Actions had never run on this repository before):

@@ -298,9 +298,17 @@ class Api:
                          message="Starting")
         game, key = self._game, self._game_key
 
-        def progress(stage, done, total, message):
-            self._set_status(state="running", stage=stage, done=done,
-                             total=total, message=message)
+        live: list = []                       # [cp, mate] per position analysed so far
+
+        def progress(stage, done, total, message, info=None):
+            info = info or {}
+            if stage == "engine" and "ply" in info:
+                live.append([info.get("cp"), info.get("mate")])
+            # The page follows along: the board shows the position being
+            # analysed (or the moment being commented), the graph fills in.
+            self._set_status(state="running", stage=stage, done=done, total=total,
+                             message=message, ply=info.get("ply"),
+                             verdict=info.get("verdict", ""), live=list(live))
 
         def run():
             try:

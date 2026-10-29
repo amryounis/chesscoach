@@ -28,7 +28,10 @@ from .report import print_scoreboard
 from .summary import summarize
 from .themes import move_themes
 
-# progress(stage, done, total, message); stages: "engine", "narrate", "done"
+# progress(stage, done, total, message, info); stages: "engine", "narrate", "done".
+# info (may be empty), so a viewer can follow along: "engine": {ply: the
+# position just analysed (0 = start), cp, mate, verdict}; "narrate": {ply:
+# the move being commented (0-based)}.
 Progress = Callable[[str, int, int, str], None]
 
 
@@ -138,12 +141,17 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         for i, b in enumerate(boards):
             if stop():
                 raise Cancelled()
-            evals.append(run_stockfish(b, engine=sf))
-            progress("engine", i + 1, len(boards), "Analysing positions")
+            ea = run_stockfish(b, engine=sf)
+            evals.append(ea)
+            verdict = ("checkmate" if b.is_checkmate() else
+                       "stalemate" if b.is_stalemate() else
+                       eval_phrase(ea.score_cp, ea.score_mate)[0])
+            progress("engine", i + 1, len(boards), "Analysing positions",
+                     {"ply": i, "cp": ea.score_cp, "mate": ea.score_mate, "verdict": verdict})
     finally:
         sf.quit()
     if warm.is_alive():
-        progress("engine", len(boards), len(boards), f"Loading {models[0]}")
+        progress("engine", len(boards), len(boards), f"Loading {models[0]}", {})
         warm.join()
 
     labels = [compute_assessment(evals[i].score_cp, evals[i + 1].score_cp,
@@ -213,7 +221,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
             if stop():
                 raise Cancelled()
             mv = review.moves[i]
-            progress("narrate", k, len(todo), f"Writing comment on {mv.move_label}")
+            progress("narrate", k, len(todo), f"Writing comment on {mv.move_label}", {"ply": i})
             maia = run_maia(boards[i], engine=maia_engine) if maia_engine else None
             note, prefix, focus = moment_context(i, picks[i], boards, moves, labels, book,
                                                 theory=theory)
@@ -245,7 +253,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 mv.issues[model] = r["issues"]
                 mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
                                    "removed": len(r.get("removed", []))}
-        progress("narrate", len(todo), len(todo), "Done")
+        progress("narrate", len(todo), len(todo), "Done", {})
     finally:
         if maia_engine:
             maia_engine.quit()
@@ -254,7 +262,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
 
     review.summary = [c.to_dict() for c in summarize(review)]
     review.seconds = time.time() - t_start
-    progress("done", 1, 1, "Review complete")
+    progress("done", 1, 1, "Review complete", {})
     return review
 
 
@@ -339,7 +347,7 @@ def annotate_game(pgn_path: str, side: str, models: list, verbose: bool,
 
     t0 = [time.time()]
 
-    def progress(stage, done, total, message):
+    def progress(stage, done, total, message, info=None):
         if stage == "engine":
             print(f"\r  {done}/{total}", end="", flush=True)
             if done == total and message.startswith("Analysing"):

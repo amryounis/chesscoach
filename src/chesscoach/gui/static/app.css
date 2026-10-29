@@ -204,8 +204,8 @@ select, input:not([type=radio]):not([type=range]) {
   padding: 5px 8px;
 }
 
-.progress { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); }
-.bar { flex: 0 0 160px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.progress { display: flex; gap: 12px; align-items: center; font-size: 13.5px; color: var(--ink); }
+.bar { flex: 1 1 200px; max-width: 320px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
 
 /* critical moments: the shortcuts a reader actually wants */
@@ -294,6 +294,7 @@ select, input:not([type=radio]):not([type=range]) {
 .coach .checked { color: var(--muted); font: 12.5px var(--ui); margin: 4px 0 10px; }
 .coach .checked.scope { font-size: 12px; cursor: help; }
 .coach .empty { color: var(--muted); font: 14px var(--ui); }
+.coach .live { font: 15px/1.5 var(--ui); margin: 0 0 6px; }
 .coach .coach-error { color: var(--j-mistake); font: 13.5px var(--ui); }
 .coach button { font: 13px var(--ui); }
 .coach .compare { margin: 4px 0 12px; }

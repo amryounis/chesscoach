@@ -265,3 +265,24 @@ def test_review_fills_the_annotations_and_keeps_comments_visible(page):
     page.mouse.up()
     assert page.locator("#movelist").bounding_box()["height"] > h0 + 40
     assert page.errors == []
+
+
+def test_the_board_follows_a_running_review(page):
+    """While Stockfish works the board shows the position being analysed,
+    the move list and graph follow, and the coach panel says what is on."""
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_function(
+        "document.querySelector('#coach .live') && document.querySelector('#movelist .mv.current')",
+        timeout=60000)
+    assert "Stockfish is analysing" in page.inner_text("#coach") or \
+        "The coach is writing" in page.inner_text("#coach")
+    page.wait_for_selector("#evalgraph:not([hidden]) .ln", timeout=60000)
+    # Taking over the board stops following; Follow brings it back.
+    page.keyboard.press("Home")
+    assert page.is_visible("#follow-review")
+    page.click("#follow-review")
+    assert not page.is_visible("#follow-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    assert page.locator("#coach .live").count() == 0           # the summary replaces it
+    assert page.errors == []

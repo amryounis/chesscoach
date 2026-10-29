@@ -123,7 +123,8 @@ function showTab(name) {
 // ---------------------------------------------------------------- review
 
 const R = { game: null, reviewed: false, cursor: -1, compare: false, polling: null,
-            answers: {}, asking: false, node: null, view: "moves", games: [] };
+            answers: {}, asking: false, node: null, view: "moves", games: [],
+            running: false, follow: true, live: null };   // live: [cp, mate] per position while reviewing
 
 function loadSummary(summary) {
   R.game = summary;
@@ -289,6 +290,10 @@ function renderMoveList() {
 
 function goTo(i) {
   if (!R.game) return;
+  if (R.running && R.follow) {            // the player took over the board
+    R.follow = false;
+    $("follow-review").hidden = false;
+  }
   R.cursor = Math.max(-1, Math.min(R.game.moves.length - 1, i));
   R.node = null;
   R.compare = false;
@@ -546,6 +551,8 @@ document.querySelectorAll("#viewtabs button").forEach((b) => b.addEventListener(
 
 function evalSeries() {
   if (!R.game) return null;
+  if (R.running && R.live && R.live.length > 1)
+    return { src: "live", vals: R.game.moves.map((_, i) => (R.live[i + 1] ? winPctWhite(R.live[i + 1][0], R.live[i + 1][1]) : null)) };
   if (R.reviewed) return { src: "review", vals: R.game.moves.map((m) => winPctWhite(m.score_cp, m.score_mate)) };
   const evp = R.game.tree && R.game.tree.evp;
   if (evp && evp.length > 1) return { src: "annotator", vals: R.game.moves.map((_, i) => (evp[i + 1] === undefined || evp[i + 1] === null ? null : winPctWhite(evp[i + 1], null))) };
@@ -576,7 +583,7 @@ function renderGraph() {
   const ticks = R.reviewed ? R.game.moves.map((m, i) => (m.reason && BAD.has(m.label)
     ? `<line class="tick j-${m.label}" x1="${x(i).toFixed(1)}" y1="${H - 9}" x2="${x(i).toFixed(1)}" y2="${H}"/>` : "")).join("") : "";
   el.hidden = false;
-  el.innerHTML = `<div class="g-head"><span>${s.src === "review" ? "Evaluation (Stockfish, this review)" : "Evaluation (the annotator's engine)"}</span><span class="g-tip" id="g-tip"></span></div>`
+  el.innerHTML = `<div class="g-head"><span>${s.src === "review" ? "Evaluation (Stockfish, this review)" : s.src === "live" ? "Evaluation (Stockfish, analysing…)" : "Evaluation (the annotator's engine)"}</span><span class="g-tip" id="g-tip"></span></div>`
     + `<div class="g-frame"><div class="g-axis"><span>White</span><span>Black</span></div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="White's winning chance move by move">`
     + `<line class="mid" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>`
     + ticks + `<path class="ln" d="${path}"/>`
@@ -837,6 +844,9 @@ async function startReview() {
   const res = await call("start_review", $("review-side").value, false);
   if (!res) return;
   lockForReview(true);
+  R.running = true; R.follow = true; R.live = []; R.liveShown = null;
+  $("follow-review").hidden = true;
+  $("coach").innerHTML = `<p class="empty">Stockfish is starting…</p>`;
   $("progress").hidden = false;
   $("progress-fill").style.width = "0%";
   $("progress-text").textContent = "Starting";
@@ -853,10 +863,13 @@ async function pollReview() {
     $("progress-fill").style.width = `${pct}%`;
     $("progress-text").textContent = s.stage === "engine" && s.message.startsWith("Analysing")
       ? `Analysing positions ${s.done} of ${s.total}` : s.message;
+    showLive(s);
     return;
   }
   clearInterval(R.polling);
   lockForReview(false);
+  R.running = false;
+  $("follow-review").hidden = true;
   $("progress").hidden = true;
   if (s.state === "finished") {
     const res = s.result;
@@ -879,14 +892,57 @@ async function pollReview() {
     $("save-report").hidden = false;
     toast(`Review complete: ${res.moves.filter((m) => m.reason).length} critical moments.`);
     goTo(-1);                       // open on the game summary
-  } else if (s.state === "error") {
-    toast(s.message, 6000);
-  } else if (s.state === "cancelled") {
-    toast("Review stopped.");
+  } else {
+    // stopped or failed: back to the game as it was, without the live graph
+    R.live = null;
+    renderGraph();
+    goTo(R.cursor);
+    if (s.state === "error") toast(s.message, 6000);
+    else if (s.state === "cancelled") toast("Review stopped.");
   }
 }
 
 $("cancel-review").addEventListener("click", () => api().cancel_review());
+$("follow-review").addEventListener("click", () => {
+  R.follow = true;
+  R.liveShown = null;
+  $("follow-review").hidden = true;
+});
+
+// While a review runs, the board follows it: each position as Stockfish
+// analyses it (eval bar, move list and graph filling in), then each critical
+// moment while the coach writes about it. Clicking a move takes the board
+// back; "Follow" returns it to the analysis.
+function showLive(s) {
+  if (s.live && s.live.length !== (R.live || []).length) {
+    R.live = s.live;
+    renderGraph();
+  }
+  if (!R.follow || s.ply === null || s.ply === undefined || !R.game) return;
+  const pos = s.stage === "engine" ? s.ply : s.ply + 1;          // position index, 0 = start
+  const key = `${s.stage}:${pos}`;
+  if (R.liveShown === key) return;
+  R.liveShown = key;
+  const mv = pos > 0 ? R.game.moves[pos - 1] : null;
+  R.cursor = pos - 1;
+  renderMoveList();
+  markNotes();                       // the Annotations pane follows too
+  markGraph();
+  if (tab === "review") {
+    board.set({ fen: mv ? mv.fen_after : R.game.start_fen, lastMove: mv ? sqs(mv.uci) : undefined,
+                check: mv ? isCheck(mv.san) : false, movable: { color: undefined, dests: new Map() } });
+    board.setAutoShapes([]);
+    const sc = s.stage === "engine" ? R.live[pos] : null;
+    if (sc) setEval(winPctWhite(sc[0], sc[1]));
+  }
+  const where = mv ? figurine(mv.move_label) : "the starting position";
+  $("coach").innerHTML = s.stage === "engine"
+    ? `<p class="live">Stockfish is analysing <b>${esc(where)}</b>${s.verdict ? `: ${esc(s.verdict)}` : ""}.</p>`
+      + `<p class="empty">Position ${s.done} of ${s.total}. Next, the coach writes about the moments that decided the game.</p>`
+    : `<p class="live">The coach is writing about <b>${esc(where)}</b> (moment ${s.done + 1} of ${s.total}).</p>`
+      + `<p class="empty">Its comment is checked against the board before you see it.</p>`;
+  $("coach-scroll").scrollTop = 0;
+}
 $("save-report").addEventListener("click", async () => {
   const res = await call("save_report_dialog");
   if (res && res.saved) toast(`Saved ${res.saved}`);
