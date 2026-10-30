@@ -43,6 +43,7 @@ class Settings:
     player_name: str = "Player"       # your name in saved games
     model: str = "qwen3:14b"          # Ollama model that narrates
     depth: int = 18                   # Stockfish search depth
+    max_seconds: float = 10.0         # cap per position: stop there even if the depth isn't reached
     multipv: int = 3                  # lines analysed per position
     book_path: str = ""               # Polyglot opening book (.bin)
     temperature: float = 0.3          # lower = less invention

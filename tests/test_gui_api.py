@@ -43,6 +43,8 @@ def test_review_runs_in_background_and_returns_moves(api):
     assert all(m["annotations"] for m in moments)
     assert all(len(m["best_uci"]) >= 4 for m in moves[:-1])
     assert st["result"]["accuracy"]["black"] is not None
+    log = (config.user_config_path().parent / "chesscoach.log").read_text(encoding="utf-8")
+    assert "review timing" in log and "engine:" in log and "comments:" in log
     # Save PGN: the reviewed game, annotated, for any chess program
     import chess.pgn, io
 

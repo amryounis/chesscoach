@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.15.1 — unreleased
+
+From reviewing Abasov - Dotzer in 0.15.0:
+
+- **The wrong king turned red.** While the board followed a review, a check
+  lit up White's king whoever was in check (50.Bf4+ showed the h4 king):
+  the board was told "check" but not who was to move. It is now told
+  which king, everywhere a move is shown
+- **A review could sit on one position for minutes with no sign of life.**
+  - Stockfish now stops at the depth or after "Most seconds per position"
+    (Settings, default 10), whichever comes first. Most positions reach the
+    depth in well under a second; a few endgames explode at high depth
+    (here 51.Kg5 took 24 s at depth 30 with Stockfish 17.1)
+  - The board shows each position as its search starts, not after, and
+    the progress line counts the seconds once a step takes more than four
+    ("Analysing position 101 of 102 · 37s")
+  - The steps between the analysis and the comments, which said nothing
+    before, are named: loading the model, starting Maia, finding the
+    critical moments
+  - Every review writes where its time went to chesscoach.log (next to the
+    settings file), with any position that took over 3 seconds, so a slow
+    review on your machine can be traced
+
 ## 0.15.0 — unreleased
 
 Your games, standard PGN out, and two ideas from Lucas Chess.

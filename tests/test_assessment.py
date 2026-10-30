@@ -53,3 +53,18 @@ def test_a_delivered_mate_keeps_its_winner(stockfish):
         fools.push_san(san)
     ea = run_stockfish(fools)
     assert ea.score_mate == -1 and win_pct(ea.score_cp, ea.score_mate, False) == 100.0
+
+
+@pytest.mark.engine
+def test_no_position_takes_longer_than_the_cap(stockfish, monkeypatch):
+    """A depth the engine can't reach quickly stops at max_seconds, so one
+    hard position can't stall a review for minutes."""
+    import time
+    import chess
+    from chesscoach import config
+    from chesscoach.engine import run_stockfish
+    monkeypatch.setattr(config, "settings",
+                        config.load_settings(stockfish_path=stockfish, depth=60, max_seconds=0.5))
+    t = time.time()
+    ea = run_stockfish(chess.Board("r1bq1rk1/pp2bppp/2n1pn2/2pp4/3P4/2PBPN2/PP1N1PPP/R1BQ1RK1 w - - 0 8"))
+    assert time.time() - t < 3 and ea.best_move and ea.depth < 60

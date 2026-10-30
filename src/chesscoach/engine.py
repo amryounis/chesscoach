@@ -53,7 +53,11 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
     if own:
         engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
     try:
-        info = engine.analyse(board, chess.engine.Limit(depth=depth),
+        # Depth, but never more than max_seconds on one position: a few
+        # endgames explode at high depth, and one position must not stall
+        # a whole review (or make Stop wait for minutes).
+        cap = config.settings.max_seconds
+        info = engine.analyse(board, chess.engine.Limit(depth=depth, time=cap if cap and cap > 0 else None),
                               multipv=multipv)
 
         for i, line_info in enumerate(info):

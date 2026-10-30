@@ -310,3 +310,41 @@ def test_games_tab_lists_opens_and_explores(page):
     page.click("#ex-back")
     page.wait_for_function("document.getElementById('ex-line').textContent === 'Starting position'")
     assert page.errors == []
+
+
+
+def test_live_review_marks_the_king_in_check(page, monkeypatch):
+    """While a review followed 12.gxf7+ (White checks), the board lit up
+    White's king: it was told 'a check' but not whose. And a slow position
+    shows how long it has been on it."""
+    import threading
+    from chesscoach.gui import api as api_mod
+    hold = threading.Event()
+
+    def stuck_review(game, side, models, every_move, progress=None, should_stop=None, **kw):
+        progress("engine", 22, 79, "Analysing positions", {"ply": 23, "searching": True})
+        hold.wait(30)
+        raise api_mod.Cancelled()
+
+    monkeypatch.setattr(api_mod, "review_game", stuck_review)
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_function("document.querySelector('#coach .live') && "
+                           "document.querySelector('#coach .live').textContent.includes('gxf7')")
+    box = page.locator("#board").bounding_box()
+    sq = box["width"] / 8
+    page.wait_for_selector("cg-board square.check")
+    r = page.locator("cg-board square.check").bounding_box()
+    file, rank_from_top = round((r["x"] - box["x"]) / sq), round((r["y"] - box["y"]) / sq)
+    # the review is of Black (Homer): the board is from Black's side, so e8 is at
+    # file index 3 (h..a), row 7 from the top
+    king = "e8"
+    flipped = page.evaluate("document.querySelector('.cg-wrap').classList.contains('orientation-black')")
+    want = (7 - 4, 7) if flipped else (4, 0)
+    assert (file, rank_from_top) == want, (file, rank_from_top, flipped, king)
+    page.wait_for_function("document.getElementById('progress-text').textContent.includes('s')"
+                           " && /· \\d+s/.test(document.getElementById('progress-text').textContent)",
+                           timeout=10000)
+    hold.set()
+    page.click("#cancel-review")
+    assert page.errors == []

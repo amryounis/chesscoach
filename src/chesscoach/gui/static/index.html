@@ -249,6 +249,7 @@
       <label>Your rating <input name="player_elo" type="number" min="400" max="3000" step="50"></label>
       <label>Engine depth <input name="depth" type="number" min="8" max="30"></label>
     </div>
+    <label>Most seconds per position <input name="max_seconds" type="number" min="1" max="120" step="1" title="Stockfish stops at the engine depth or after this many seconds, whichever comes first"></label>
     <label>Games folder <input name="library_dir" placeholder="default: &ldquo;games&rdquo; next to the settings file"></label>
     <label class="check"><input type="checkbox" name="autosave"> Keep every game I play or review in my games</label>
     <label>Show comments of bilingual PGNs in

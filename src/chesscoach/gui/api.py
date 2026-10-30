@@ -29,19 +29,10 @@ def log_error(where: str) -> None:
     """The current exception's traceback, printed and appended to
     chesscoach.log beside the config file: the windowed app
     (chesscoach-app) has no console, so the log is where it can be found."""
-    import datetime
+    from ..logfile import append
     text = traceback.format_exc()
     print(text, end="")
-    try:
-        path = config.user_config_path().parent / "chesscoach.log"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists() and path.stat().st_size > 1_000_000:
-            path.write_text("", encoding="utf-8")          # keep it small
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(f"--- {datetime.datetime.now().isoformat(timespec='seconds')} "
-                    f"{where}\n{text}")
-    except OSError:
-        pass
+    append(where, text)
 
 
 def _safe(fn):
@@ -388,13 +379,14 @@ class Api:
 
         def progress(stage, done, total, message, info=None):
             info = info or {}
-            if stage == "engine" and "ply" in info:
+            if stage == "engine" and "verdict" in info:          # a finished position
                 live.append([info.get("cp"), info.get("mate")])
             # The page follows along: the board shows the position being
             # analysed (or the moment being commented), the graph fills in.
             self._set_status(state="running", stage=stage, done=done, total=total,
                              message=message, ply=info.get("ply"),
-                             verdict=info.get("verdict", ""), live=list(live))
+                             verdict=info.get("verdict", ""), searching=bool(info.get("searching")),
+                             live=list(live))
 
         def run():
             try:

@@ -69,7 +69,9 @@ def search(engine, board: chess.Board, depth: Optional[int] = None,
         roots = [m for m in b.legal_moves if m != exclude]
         if not roots:
             return Search(None, None, [])
-    info = engine.analyse(b, chess.engine.Limit(depth=depth or config.settings.concept_depth),
+    cap = config.settings.max_seconds
+    info = engine.analyse(b, chess.engine.Limit(depth=depth or config.settings.concept_depth,
+                                                time=cap if cap and cap > 0 else None),
                           root_moves=roots)
     score = info["score"].white()
     return Search(None if score.is_mate() else score.score(),

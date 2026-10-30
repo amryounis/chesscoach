@@ -54,6 +54,10 @@ function winPctWhite(cp, mate) {
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const sqs = (uci) => [uci.slice(0, 2), uci.slice(2, 4)];
 const isCheck = (san) => /[+#]$/.test(san || "");
+const other = (c) => (c === "white" ? "black" : "white");
+// The king in check after a move: the opponent's. Given as a colour, the
+// board highlights that king whatever side it thinks is to move.
+const checkedSide = (mv) => (mv && isCheck(mv.san) ? other(mv.color) : false);
 
 function toast(text, ms = 3200) {
   const t = $("toast");
@@ -251,7 +255,8 @@ function renderReviewBoard() {
     // a move in one of the annotator's variations
     const n = treeNode(R.node);
     board.set({ fen: n.fen, lastMove: n.uci ? sqs(n.uci) : undefined,
-                turnColor: n.fen.split(" ")[1] === "w" ? "white" : "black", check: isCheck(n.san) });
+                turnColor: n.fen.split(" ")[1] === "w" ? "white" : "black",
+                check: isCheck(n.san) ? (n.fen.split(" ")[1] === "w" ? "white" : "black") : false });
     board.setAutoShapes(noteShapes(n));
     setEval(50);
     return;
@@ -275,7 +280,7 @@ function renderReviewBoard() {
       fen: mv ? mv.fen_after : R.game.start_fen,
       lastMove: mv ? sqs(mv.uci) : undefined,
       turnColor: mv ? (mv.color === "white" ? "black" : "white") : "white",
-      check: mv ? isCheck(mv.san) : false,
+      check: checkedSide(mv),
     });
     // A threat the move ignored still stands after it: show it there too.
     const shapes = threat && mv.threat.ignored
@@ -902,10 +907,16 @@ async function pollReview() {
   if (s.state === "running") {
     // engine analysis is the first ~40% of the bar, comments the rest
     const frac = s.total ? s.done / s.total : 0;
-    const pct = s.stage === "engine" ? frac * 40 : 40 + frac * 60;
+    const pct = s.stage === "engine" ? frac * 40 : s.stage === "prepare" ? 40 : 40 + frac * 60;
     $("progress-fill").style.width = `${pct}%`;
-    $("progress-text").textContent = s.stage === "engine" && s.message.startsWith("Analysing")
-      ? `Analysing positions ${s.done} of ${s.total}` : s.message;
+    // How long this one step has taken, once it is more than a few seconds:
+    // a slow step then reads as slow, not as a hang.
+    const step = `${s.stage}:${s.done}:${s.ply}:${s.message}`;
+    if (R.step !== step) { R.step = step; R.stepSince = Date.now(); }
+    const secs = Math.round((Date.now() - R.stepSince) / 1000);
+    const took = secs >= 4 ? ` · ${secs}s` : "";
+    $("progress-text").textContent = (s.stage === "engine" && s.message.startsWith("Analysing")
+      ? `Analysing position ${Math.min(s.done + (s.searching ? 1 : 0), s.total)} of ${s.total}` : s.message) + took;
     showLive(s);
     return;
   }
@@ -950,9 +961,15 @@ function showLive(s) {
     R.live = s.live;
     renderGraph();
   }
+  if (s.stage === "prepare") {
+    $("coach").innerHTML = `<p class="live">${esc(s.message)}…</p>`
+      + `<p class="empty">Stockfish has analysed every position. Next, the coach writes about the moments that decided the game.</p>`;
+    R.liveShown = null;
+    return;
+  }
   if (!R.follow || s.ply === null || s.ply === undefined || !R.game) return;
   const pos = s.stage === "engine" ? s.ply : s.ply + 1;          // position index, 0 = start
-  const key = `${s.stage}:${pos}`;
+  const key = `${s.stage}:${pos}:${s.searching ? "s" : "d"}`;
   if (R.liveShown === key) return;
   R.liveShown = key;
   const mv = pos > 0 ? R.game.moves[pos - 1] : null;
@@ -962,15 +979,16 @@ function showLive(s) {
   markGraph();
   if (tab === "review") {
     board.set({ fen: mv ? mv.fen_after : R.game.start_fen, lastMove: mv ? sqs(mv.uci) : undefined,
-                check: mv ? isCheck(mv.san) : false, movable: { color: undefined, dests: new Map() } });
+                turnColor: mv ? other(mv.color) : "white",
+                check: mv ? checkedSide(mv) : false, movable: { color: undefined, dests: new Map() } });
     board.setAutoShapes([]);
-    const sc = s.stage === "engine" ? R.live[pos] : null;
+    const sc = s.stage === "engine" && !s.searching ? R.live[pos] : null;
     if (sc) setEval(winPctWhite(sc[0], sc[1]));
   }
   const where = mv ? figurine(mv.move_label) : "the starting position";
   $("coach").innerHTML = s.stage === "engine"
-    ? `<p class="live">Stockfish is analysing <b>${esc(where)}</b>${s.verdict ? `: ${esc(s.verdict)}` : ""}.</p>`
-      + `<p class="empty">Position ${s.done} of ${s.total}. Next, the coach writes about the moments that decided the game.</p>`
+    ? `<p class="live">Stockfish is analysing <b>${esc(where)}</b>${!s.searching && s.verdict ? `: ${esc(s.verdict)}` : "…"}</p>`
+      + `<p class="empty">Position ${Math.min(s.done + (s.searching ? 1 : 0), s.total)} of ${s.total}. Next, the coach writes about the moments that decided the game.</p>`
     : `<p class="live">The coach is writing about <b>${esc(where)}</b> (moment ${s.done + 1} of ${s.total}).</p>`
       + `<p class="empty">Its comment is checked against the board before you see it.</p>`;
   $("coach-scroll").scrollTop = 0;
@@ -1146,7 +1164,7 @@ $("review-played").addEventListener("click", async () => {
 // ---------------------------------------------------------------- settings
 
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
-                         "comment_language", "library_dir"];
+                         "comment_language", "library_dir", "max_seconds"];
 const SETTINGS_CHECKS = ["autosave"];
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");

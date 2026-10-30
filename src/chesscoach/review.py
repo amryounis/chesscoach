@@ -100,6 +100,20 @@ class GameReview:
         return asdict(self)
 
 
+def _log_timing(game, n_positions: int, n_moments: int, total: float, timing: dict) -> None:
+    """One entry per review in chesscoach.log: where the time went, and any
+    position that took over 3 seconds."""
+    from .logfile import append
+    h = game.headers
+    lines = [f"{h.get('White', '?')} - {h.get('Black', '?')}: {n_positions} positions, "
+             f"{n_moments} moments, {total:.0f}s; depth {config.settings.depth}, "
+             f"cap {config.settings.max_seconds}s per position"]
+    lines += [f"  {k}: {v}s" for k, v in timing.items() if k != "slow"]
+    for i, secs, depth, fen in timing["slow"]:
+        lines.append(f"  slow position {i}: {secs}s (depth {depth}) {fen}")
+    append("review timing", "\n".join(lines))
+
+
 def _tactics(label: str, before: chess.Board, move: chess.Move, ea_before: EngineAnalysis,
              after: chess.Board, ea_after: EngineAnalysis) -> dict:
     """For an error: the motifs in what it allowed (the opponent's best line
@@ -158,12 +172,20 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
     warm.start()
 
     evals: list = []
+    timing = {"slow": []}                     # written to chesscoach.log at the end
+    t_engine = time.time()
     sf = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
     try:
         for i, b in enumerate(boards):
             if stop():
                 raise Cancelled()
+            # Say which position is being searched before searching it, so
+            # a slow one shows on the board as itself.
+            progress("engine", i, len(boards), "Analysing positions", {"ply": i, "searching": True})
+            t_pos = time.time()
             ea = run_stockfish(b, engine=sf)
+            if time.time() - t_pos > 3:
+                timing["slow"].append((i, round(time.time() - t_pos, 1), ea.depth, b.fen()))
             evals.append(ea)
             verdict = ("checkmate" if b.is_checkmate() else
                        "stalemate" if b.is_stalemate() else
@@ -172,9 +194,12 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                      {"ply": i, "cp": ea.score_cp, "mate": ea.score_mate, "verdict": verdict})
     finally:
         sf.quit()
+    timing["engine"] = round(time.time() - t_engine, 1)
     if warm.is_alive():
-        progress("engine", len(boards), len(boards), f"Loading {models[0]}", {})
+        t = time.time()
+        progress("prepare", 0, 1, f"Loading {models[0]} into memory (the first time takes a while)", {})
         warm.join()
+        timing["model load wait"] = round(time.time() - t, 1)
 
     labels = [compute_assessment(evals[i].score_cp, evals[i + 1].score_cp,
                                  evals[i].score_mate, evals[i + 1].score_mate,
@@ -187,7 +212,10 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
 
     want = {"white": [chess.WHITE], "black": [chess.BLACK],
             "both": [chess.WHITE, chess.BLACK]}[side]
+    t = time.time()
+    progress("prepare", 0, 1, "Starting Maia", {})
     maia_engine = open_maia()
+    timing["maia start"] = round(time.time() - t, 1)
     concept_sf = None
     review = GameReview(headers=dict(game.headers), side=side, models=list(models),
                         start_fen=boards[0].fen(), moves=[])
@@ -196,8 +224,11 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
             picks = {i: "every-move mode" for i in range(len(moves))
                      if boards[i].turn in want and not book[i]}
         else:
+            progress("prepare", 0, 1, "Finding the critical moments", {})
+            t = time.time()
             picks = pick_critical(boards, moves, evals, labels, book, want,
                                   maia_engine, theory=theory)
+            timing["critical moments"] = round(time.time() - t, 1)
 
         for i, m in enumerate(moves):
             b = boards[i]
@@ -241,6 +272,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 tactics=_tactics(labels[i], boards[i], m, evals[i], boards[i + 1], ea)))
 
         todo = sorted(picks)
+        t_narrate = time.time()
         # One Stockfish for the engine-verified concepts of every moment.
         concept_sf = (chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
                       if config.settings.concepts and todo else None)
@@ -281,6 +313,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
                                    "removed": len(r.get("removed", []))}
         progress("narrate", len(todo), len(todo), "Done", {})
+        timing["comments"] = round(time.time() - t_narrate, 1)
     finally:
         if maia_engine:
             maia_engine.quit()
@@ -294,6 +327,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         white_first=boards[0].turn == chess.WHITE)
     review.summary = [c.to_dict() for c in summarize(review)]
     review.seconds = time.time() - t_start
+    _log_timing(game, len(boards), len(review.moments()), review.seconds, timing)
     progress("done", 1, 1, "Review complete", {})
     return review
 
