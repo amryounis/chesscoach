@@ -141,6 +141,33 @@ chesscoach gui
 The board is [chessground](https://github.com/lichess-org/chessground)
 (Lichess's board), bundled so the app works offline.
 
+## Study an opening book (once, overnight)
+
+Coaches tell young players not to memorise opening lines but to understand
+the ideas behind them. `chesscoach book study` walks a Polyglot opening
+book (the one in Settings, or a file you give) and has the coach explain the
+idea of every popular move: what it develops, which central squares it
+takes, what it prepares, how it fits the opening's typical plan and the
+book's main answers. Every comment is built from facts code works out and
+goes through the board check. The opening explorer (Games tab) then shows,
+in each position, the book's moves with how often they are played,
+Stockfish's verdict, the idea of each move (hover it), and your own record
+with it.
+
+```
+chesscoach book study --dry-run         # how many moves, and roughly how long
+chesscoach book study                   # run it; Ctrl+C to stop, run again to go on
+chesscoach book show "e4 e5 Nf3"        # what the study says about a position
+```
+
+A full book has far more positions than a local model can comment on, so
+the study follows only the lines that are played: a move the book gives at
+least 5% of a position (`--min-share`), a line while it stays above 0.2% of
+games (`--min-line`), up to 20 half-moves (`--plies`), each position once.
+With a typical book that is about 500 positions and 750 moves, a few hours
+with qwen3:14b on a 12 GB GPU. Raise or lower the limits to taste; what is
+written is kept.
+
 ## Use from the command line
 
 ```

@@ -590,3 +590,12 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .st-table tr.em th, .st-table tr.em td { font-weight: 700; }
 .st-table .sub { color: var(--muted); font-size: 11.5px; }
 .st-table .zero { color: var(--muted); opacity: .6; }
+
+/* the opening study in the explorer */
+.ex-about p { margin: 0 0 6px; font: 14px/1.5 var(--book); }
+.ex-about .why { padding-left: 10px; border-left: 3px solid var(--accent); }
+.ex-about .k { display: block; font: 600 11.5px var(--ui); color: var(--accent); }
+.ex-about code { font-size: 12.5px; }
+.ex-table td.verdict { color: var(--muted); font-size: 12px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.ex-table tr.inbook td.mv-san { color: var(--ink); }
+.ex-table .has-idea { font-size: 9px; color: var(--accent); vertical-align: middle; }

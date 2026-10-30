@@ -372,3 +372,21 @@ def test_analysis_table_and_move_counts(page):
     page.wait_for_function("document.querySelector('#analysis tr.cur')")
     assert "6. h4" in page.inner_text("#coach .move")
     assert page.errors == []
+
+
+def test_explorer_shows_the_books_moves_and_their_ideas(page, tmp_path):
+    from chesscoach import book_study as bs
+    from test_book_study import LINES, write_book
+    book = write_book(tmp_path / "b.bin", LINES)
+    bs.run(book, "m", plies=2, min_line=0.01, depth=6,
+           llm=lambda model, msgs, system=None: ("Grabs the centre and frees a bishop.", None))
+    page.click("#tab-games")
+    page.click("#lib-views [data-lview=explorer]")
+    page.wait_for_selector("#ex-rows tr.inbook")
+    first = page.locator("#ex-rows tr").first
+    assert first.inner_text().startswith("e4") and "%" in first.inner_text()
+    assert first.get_attribute("title") == "Grabs the centre and frees a bishop."
+    first.click()
+    page.wait_for_selector("#ex-about .why")
+    assert "The idea of e4" in page.inner_text("#ex-about") and "Grabs the centre" in page.inner_text("#ex-about")
+    assert page.errors == []

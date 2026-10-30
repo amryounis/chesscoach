@@ -293,6 +293,26 @@ class Api:
             sans.append(b.san(m))
             b.push(m)
         out = library.explore(b, mine=mine, file=file)
+        # the opening study (chesscoach book study): the book's moves here,
+        # and the idea of the move that led here
+        from .. import book_study
+        from ..opening import name_at
+        try:
+            out["book"] = book_study.at(b)
+            prev = chess.Board()
+            for u in (line or [])[:-1]:
+                prev.push(chess.Move.from_uci(u))
+            out["why"] = book_study.idea(prev, chess.Move.from_uci(line[-1])) if line else ""
+            out["study"] = book_study.summary()
+        except Exception:
+            log_error("reading the opening study")
+            out["book"], out["why"], out["study"] = None, "", {"ideas": 0}
+        named = None
+        tmp = chess.Board()
+        for u in line or []:
+            tmp.push(chess.Move.from_uci(u))
+            named = name_at(tmp) or named
+        out["opening"] = {"eco": named[0], "name": named[1]} if named else None
         dests: dict = {}
         for m in b.legal_moves:
             dests.setdefault(chess.square_name(m.from_square), []).append(chess.square_name(m.to_square))

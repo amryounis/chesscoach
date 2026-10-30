@@ -87,11 +87,88 @@ def build_parser() -> argparse.ArgumentParser:
                     help="show the stored facts behind each pattern")
     _common(pt)
 
+    bk = sub.add_parser("book", help="study an opening book: the idea of every popular move")
+    bsub = bk.add_subparsers(dest="book_command", required=True)
+    st = bsub.add_parser("study", help="walk the book once, explaining every popular move "
+                                       "(resumable; run it overnight)")
+    st.add_argument("bookfile", nargs="?", default="",
+                    help="Polyglot .bin book (default: book_path from the settings)")
+    st.add_argument("--plies", type=int, default=20, help="how deep, in half-moves (default 20)")
+    st.add_argument("--min-share", type=float, default=0.05,
+                    help="follow a move only if the book plays it this often here (default 0.05)")
+    st.add_argument("--min-line", type=float, default=0.002,
+                    help="follow a line only while it stays this common overall (default 0.002)")
+    st.add_argument("--max-moves", type=int, default=4, help="at most this many moves per position")
+    st.add_argument("--study-depth", type=int, default=16, help="Stockfish depth (default 16)")
+    st.add_argument("--secs", type=float, default=15.0,
+                    help="seconds per comment on your machine, for the estimate (default 15)")
+    st.add_argument("--dry-run", action="store_true",
+                    help="only say how many moves and roughly how long")
+    st.add_argument("--redo", action="store_true", help="write again the ideas already written")
+    _common(st)
+    sh = bsub.add_parser("show", help="what the study says about a position")
+    sh.add_argument("moves", nargs="?", default="", help='moves from the start, e.g. "e4 e5 Nf3"')
+    _common(sh)
+
     c = sub.add_parser("config", help="show settings, or create a config file")
     c.add_argument("--init", action="store_true",
                    help="write a commented config file to the user config folder")
     _common(c)
     return ap
+
+
+def _hm(hours: float) -> str:
+    h, m = int(hours), int(round((hours - int(hours)) * 60))
+    return f"{h}h{m:02d}" if h else f"{m} min"
+
+
+def _book(args, model: str) -> int:
+    import chess
+    from . import book_study as bs
+    if args.book_command == "show":
+        b = chess.Board()
+        for san in args.moves.split():
+            b.push_san(san)
+        st = bs.at(b)
+        if st is None:
+            print("Not in the study. Run `chesscoach book study` first (or play fewer moves).")
+            return 1
+        print(f"{st['eco']} {st['name']}".strip() or "(no opening name)",
+              f"· Stockfish: {st['verdict']}" if st["verdict"] else "")
+        for m in st["moves"]:
+            print(f"\n{m['san']}  {round(100 * m['share'])}% of the book"
+                  + (f" · after it: {m['verdict']}" if m["verdict"] else ""))
+            if m["idea"]:
+                print(f"  {m['idea']}")
+        return 0
+    book = args.bookfile or config.settings.book_path
+    p = bs.plan(book, args.plies, args.min_share, args.min_line, args.max_moves)
+    est = bs.estimate(p, secs_per_comment=args.secs)
+    done = bs.summary()
+    print(f"Book: {book}")
+    print(f"{est['positions']} positions, {est['moves']} moves to explain "
+          f"(depth {args.plies} half-moves, a move followed when the book plays it "
+          f"{round(100 * args.min_share)}%+ and its line stays above {args.min_line:.1%}).")
+    print("Moves per half-move: " + ", ".join(f"{k + 1}: {v}" for k, v in est["by_ply"].items()))
+    print(f"Roughly {_hm(est['hours'])} at {args.secs:.0f} s per comment"
+          + (f"; {done['ideas']} ideas already written are kept." if done["ideas"] else "."))
+    if args.dry_run:
+        return 0
+    print("Stop with Ctrl+C at any time; run the same command again to continue.\n")
+
+    def progress(done, total, what, left):
+        print(f"[{done:>4}/{total}] {what:<60} ~{_hm(left / 3600)} left", flush=True)
+    try:
+        res = bs.run(book, model, args.plies, args.min_share, args.min_line, args.max_moves,
+                     depth=args.study_depth, redo=args.redo, progress=progress)
+    except KeyboardInterrupt:
+        print("\nStopped. What was written is kept; run the same command to continue.")
+        return 0
+    s = bs.summary()
+    print(f"\nDone: {res['written']} ideas written this run; the study holds {s['ideas']} of "
+          f"{s['moves']} moves. See them in the app's opening explorer, or "
+          f"`chesscoach book show \"e4 e5\"`.")
+    return 0
 
 
 def main(argv=None) -> int:
@@ -162,6 +239,8 @@ def main(argv=None) -> int:
                 print("\nCould not trace: " + "; ".join(problems))
                 return 1
             return 0
+        if args.command == "book":
+            return _book(args, models[0])
         if args.command == "eval":
             from .evaluate import main_eval
             return main_eval(args, args.models or [])

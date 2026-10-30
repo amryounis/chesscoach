@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.17.0 — unreleased
+
+- **Opening study** (`chesscoach book study`): an opening book walked once,
+  and the idea of every popular move explained by the coach, so the
+  explorer teaches ideas, not lines. For each move the coach gets facts
+  from code: the opening it reaches and that opening's idea; development,
+  central squares gained, diagonals opened, castling, pieces attacked or
+  defended (an "attacked" pawn the book leaves en prise is not called a
+  threat when Stockfish says the move is sound); how often the book plays
+  it, the other book moves and the book's main answers, with their names;
+  Stockfish's verdict and first choice. The comment goes through the board
+  check (one rewrite, then a false sentence is removed) and rules of its
+  own: only the moves in the facts, no numbers, no "winning".
+  The walk is bounded by share, line frequency and depth; `--dry-run` says
+  how many moves and how long (performance.bin with the defaults: 486
+  positions, 746 moves, about 3½ hours at 15 s a comment); it is resumable
+  and keeps what is written. `chesscoach book show "e4 e5"` prints a
+  position's moves and ideas
+- **The opening explorer** shows the study: the opening's name and
+  Stockfish's verdict, the idea of the move just played, and for each move
+  the book's share, Stockfish's verdict after it, its idea (hover), and
+  your games with it. Without a study it says how to make one
+
 ## 0.16.1 — unreleased
 
 From DeepSeek's review of 0.15.0; every point was checked against the code

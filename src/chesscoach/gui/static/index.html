@@ -194,12 +194,15 @@
         <button class="quiet" id="ex-back" title="One move back">◀</button>
         <span id="ex-line">Starting position</span>
       </div>
+      <div class="ex-about" id="ex-about"></div>
       <table class="lib-table ex-table">
-        <thead><tr><th>Move</th><th class="num">Games</th><th>White · Draw · Black</th><th class="num" id="ex-score-h">Score</th></tr></thead>
+        <thead><tr><th>Move</th><th class="num" title="How often the opening book plays it here">Book</th>
+          <th title="Stockfish after the move">Engine</th><th class="num" title="Your games">Games</th>
+          <th>White · Draw · Black</th><th class="num" id="ex-score-h">Score</th></tr></thead>
         <tbody id="ex-rows"></tbody>
       </table>
       <p class="empty" id="ex-empty" hidden></p>
-      <p class="sub">From your games' first 15 moves. Click a move, or play one on the board.</p>
+      <p class="sub" id="ex-foot">Click a move, or play one on the board. Hover a book move for its idea.</p>
     </div>
   </section>
 
