@@ -22,6 +22,8 @@
   --j-inaccuracy: #b98a00;
   --j-mistake: #d06a1f;
   --j-blunder: #c2362b;
+  --j-brilliant: #13807f;
+  --j-interesting: #3f6fc4;
 
   --ui: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --book: Cambria, "Iowan Old Style", Georgia, "Times New Roman", serif;
@@ -50,6 +52,8 @@
     --j-inaccuracy: #e0b23a;
     --j-mistake: #ee8a45;
     --j-blunder: #ef6a5e;
+    --j-brilliant: #4fc7c4;
+    --j-interesting: #8fb0ef;
     color-scheme: dark;
   }
 }
@@ -551,3 +555,38 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 /* a checkbox line in the settings dialog */
 #settings label.check { flex-direction: row; display: flex; align-items: center; gap: 8px; }
 #settings label.check input { width: auto; }
+
+/* ---- the analysis table and the move-type counts (after Lucas Chess) */
+.analysis { max-height: var(--list-h, 20vh); min-height: 60px; overflow-y: auto; }
+.an-head { display: flex; gap: 4px; margin: 0 0 6px; position: sticky; top: 0; background: var(--bg); padding-bottom: 4px; z-index: 1; }
+.an-head button { font: 12px var(--ui); padding: 2px 9px; border-radius: 10px; }
+.an-head button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.an-table { width: 100%; border-collapse: collapse; font: 13px/1.3 var(--ui); }
+.an-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 3px 5px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 30px; background: var(--bg); }
+.an-table td { padding: 3px 5px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); white-space: nowrap; }
+.an-table td.m { font: 14px var(--fig); }
+.an-table td.m b { margin-left: 2px; }
+.an-table td.bm { font: 13px var(--fig); color: var(--muted); }
+.an-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.an-table tbody tr { cursor: pointer; }
+.an-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.an-table tbody tr.cur { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.wdl.sm { width: 120px; height: 13px; font: 600 9px/13px var(--ui); }
+.m.brilliant b, tr.brilliant b, tr.brilliant th { color: var(--j-brilliant); }
+.m.good b, tr.good b, tr.good th { color: var(--j-excellent); }
+.m.interesting b, tr.interesting b, tr.interesting th { color: var(--j-interesting); }
+.m.inacc b, tr.inacc th { color: var(--j-inaccuracy); }
+.m.mistake b, tr.mistake th { color: var(--j-mistake); }
+.m.blunder b, tr.blunder th { color: var(--j-blunder); }
+.m.book { color: var(--j-book); }
+.stats { display: flex; flex-wrap: wrap; gap: 14px; margin: 4px 0 10px; }
+.st-table { border-collapse: collapse; font: 13px/1.35 var(--ui); }
+.st-table th, .st-table td { padding: 2px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.st-table th { text-align: left; font-weight: 500; white-space: nowrap; }
+.st-table td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-table tr.hd th { color: var(--muted); font-weight: 600; text-align: right; }
+.st-table tr.hd th:first-child { text-align: left; }
+.st-table tr.em th, .st-table tr.em td { font-weight: 700; }
+.st-table .sub { color: var(--muted); font-size: 11.5px; }
+.st-table .zero { color: var(--muted); opacity: .6; }

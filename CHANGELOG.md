@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.16.0 — unreleased
+
+Two of Lucas Chess's analysis views, kept to what can be checked:
+
+- **Analysis (a third view beside Moves and Annotations, after a review):**
+  every move with the engine's best move, the pawns lost against it, its
+  accuracy, and Stockfish's own win / draw / loss estimate for the side
+  that moved (UCI_ShowWDL); all moves, White's or Black's; click a row to
+  go to the move. The W/D/L is Stockfish's model of engine-against-engine
+  play (a two-pawn edge reads as a near-certain win), and the column says so
+- **Move types per side** at the top of the game summary, as in Lucas
+  Chess: accuracy, best-move share, and counts of !! brilliant, ! good, !?
+  interesting, best, acceptable, ?! ? ?? and book moves; then accuracy and
+  best-move share in the opening, middlegame and endgame. The marks are
+  defined by rules (classify.py): ! is the only good move (the next best
+  keeps 20+ points less winning chance) that a club player wouldn't play
+  by instinct; !! is such a move that is also a sacrifice the line pays
+  off; !? is a sacrifice that keeps the evaluation without being the
+  engine's first choice; both need a game still to decide (10-90%). The
+  marks show on the moves and go into the PGN as $3 / $1 / $5
+- Not taken from Lucas Chess: the Elo performance (a match-the-engine
+  score: 7 moves against Monkey earn "3293") and the indexes (domination,
+  complexity, narrowness...: hand-tuned formulas over piece counts and
+  mobility, with nothing a player can act on)
+
 ## 0.15.1 — unreleased
 
 From reviewing Abasov - Dotzer in 0.15.0:

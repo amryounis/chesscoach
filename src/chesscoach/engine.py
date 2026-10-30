@@ -23,6 +23,7 @@ class EngineAnalysis:
     alt_lines: list = field(default_factory=list)  # list of (score, [moves])
     alt_scores: list = field(default_factory=list)  # list of (cp, mate), same order
     depth: int = 0
+    wdl: Optional[tuple] = None         # (win, draw, loss) per mille, White's view (UCI_ShowWDL)
 
 
 def white_mate(score) -> int:
@@ -53,6 +54,10 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
     if own:
         engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
     try:
+        # Win/draw/loss from Stockfish's own model, where the engine has it
+        if "UCI_ShowWDL" in engine.options and not getattr(engine, "_cc_wdl", False):
+            engine.configure({"UCI_ShowWDL": True})
+            engine._cc_wdl = True
         # Depth, but never more than max_seconds on one position: a few
         # endgames explode at high depth, and one position must not stall
         # a whole review (or make Stop wait for minutes).
@@ -71,6 +76,10 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
                 else:
                     result.score_cp = score.score()
                 result.best_move = board.san(pv[0]) if pv else ""
+                w = line_info.get("wdl")
+                if w is not None:
+                    ww = w.white()
+                    result.wdl = (ww.wins, ww.draws, ww.losses)
                 # push moves to get SAN for the full line
                 temp = board.copy()
                 san_line = []

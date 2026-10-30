@@ -348,3 +348,22 @@ def test_live_review_marks_the_king_in_check(page, monkeypatch):
     hold.set()
     page.click("#cancel-review")
     assert page.errors == []
+
+
+def test_analysis_table_and_move_counts(page):
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    # the counts per side, at the top of the game summary
+    st = page.inner_text("#summary .st-table")
+    assert "Accuracy" in st and "Best moves" in st and "Acceptable" in st
+    page.click("#view-table")
+    page.wait_for_selector("#analysis:not([hidden]) tbody tr")
+    assert page.locator("#analysis tbody tr").count() == 78
+    page.click("#analysis .an-head [data-side=white]")
+    assert page.locator("#analysis tbody tr").count() == 39
+    assert page.locator("#analysis .wdl.sm").count() >= 30          # Stockfish's W/D/L
+    page.click("#analysis tbody tr >> nth=5")                          # 6. h4
+    page.wait_for_function("document.querySelector('#analysis tr.cur')")
+    assert "6. h4" in page.inner_text("#coach .move")
+    assert page.errors == []

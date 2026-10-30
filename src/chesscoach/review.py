@@ -24,6 +24,7 @@ from .moments import moment_context, pick_critical
 from .narrator import check_ollama, narrate, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
 from .accuracy import game_accuracy, move_accuracy
+from .classify import classify, stats as move_stats
 from .motifs import line_motifs
 from .opening import book_status, opening_notes, theory_exit
 from .report import print_scoreboard
@@ -79,6 +80,9 @@ class MoveReview:
     best_cp: Optional[int] = None        # its score (White's view): the position's value
     best_mate: Optional[int] = None
     accuracy: Optional[float] = None     # this move's accuracy % (Lichess's formula)
+    cp_loss: Optional[int] = None        # centipawns lost against the engine's move (None with mates)
+    wdl: Optional[list] = None           # [win, draw, loss] % for the mover after the move (Stockfish)
+    mark: str = ""                       # !! ! !? best ok ?! ? ?? book (classify.py)
     tactics: dict = field(default_factory=dict)       # errors: {"allowed": [motif], "missed": [motif]}
 
 
@@ -92,6 +96,7 @@ class GameReview:
     seconds: float = 0.0
     summary: list = field(default_factory=list)   # [Claim dict], built from stored facts
     accuracy: dict = field(default_factory=dict)  # {"white": %, "black": %}
+    stats: dict = field(default_factory=dict)     # per side: counts per mark, best %, by phase
 
     def moments(self) -> list:
         return [m for m in self.moves if m.reason]
@@ -112,6 +117,21 @@ def _log_timing(game, n_positions: int, n_moments: int, total: float, timing: di
     for i, secs, depth, fen in timing["slow"]:
         lines.append(f"  slow position {i}: {secs}s (depth {depth}) {fen}")
     append("review timing", "\n".join(lines))
+
+
+def _wdl_for(after: chess.Board, ea: EngineAnalysis, white: bool) -> Optional[list]:
+    """[win, draw, loss] % for the side that just moved."""
+    if after.is_checkmate():
+        return [100.0, 0.0, 0.0]
+    if after.is_game_over():
+        return [0.0, 100.0, 0.0]
+    if not ea.wdl:
+        return None
+    w, d, lo = ea.wdl
+    if not white:
+        w, lo = lo, w
+    t = (w + d + lo) or 1
+    return [round(100 * w / t, 1), round(100 * d / t, 1), round(100 * lo / t, 1)]
 
 
 def _tactics(label: str, before: chess.Board, move: chess.Move, ea_before: EngineAnalysis,
@@ -201,11 +221,12 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         warm.join()
         timing["model load wait"] = round(time.time() - t, 1)
 
-    labels = [compute_assessment(evals[i].score_cp, evals[i + 1].score_cp,
-                                 evals[i].score_mate, evals[i + 1].score_mate,
-                                 boards[i].turn == chess.WHITE,
-                                 delivered_mate=boards[i + 1].is_checkmate())[0]
-              for i in range(len(moves))]
+    assessed = [compute_assessment(evals[i].score_cp, evals[i + 1].score_cp,
+                                   evals[i].score_mate, evals[i + 1].score_mate,
+                                   boards[i].turn == chess.WHITE,
+                                   delivered_mate=boards[i + 1].is_checkmate())
+                for i in range(len(moves))]
+    labels = [a[0] for a in assessed]
     book = book_status(config.settings.book_path, boards, moves)
     openings = opening_notes(boards, moves, book, config.settings.book_path)
     theory = theory_exit(boards, moves, book)
@@ -269,7 +290,10 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 best_mate=evals[i].score_mate,
                 accuracy=(round(move_accuracy(w0, w1), 1)
                           if w0 is not None and w1 is not None else None),
-                tactics=_tactics(labels[i], boards[i], m, evals[i], boards[i + 1], ea)))
+                tactics=_tactics(labels[i], boards[i], m, evals[i], boards[i + 1], ea),
+                cp_loss=assessed[i][1],
+                wdl=_wdl_for(boards[i + 1], ea, me_white),
+                mark=classify(b, m, labels[i], book[i], evals[i], ea, maia_engine)))
 
         todo = sorted(picks)
         t_narrate = time.time()
@@ -325,6 +349,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
          0.0 if b.is_checkmate() else win_pct(e.score_cp, e.score_mate, True)
          for b, e in zip(boards, evals)],
         white_first=boards[0].turn == chess.WHITE)
+    review.stats = move_stats(review.moves)
     review.summary = [c.to_dict() for c in summarize(review)]
     review.seconds = time.time() - t_start
     _log_timing(game, len(boards), len(review.moments()), review.seconds, timing)

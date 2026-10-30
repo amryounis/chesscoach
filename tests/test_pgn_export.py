@@ -20,7 +20,7 @@ def _review():
                                                    "**Nf3** develops {fast}."},
                                    "tactics": {"allowed": ["fork"], "missed": []}}),
             ("Nc6", "Good", {}),
-            ("Bc4", "Good", {}),
+            ("Bc4", "Good", {"mark": "!?"}),
             ("Nf6", "Blunder", {"reason": "blunder", "best_line": ["g6"], "best_cp": -20,
                                 "annotations": {}}),
             ("Qxf7#", "Excellent", {"reason": "delivered checkmate"})]):
@@ -44,6 +44,7 @@ def test_export_reads_back_with_marks_evals_and_variations():
     main = list(g.mainline())
     assert main[2].nags == {chess.pgn.NAG_DUBIOUS_MOVE} and main[5].nags == {chess.pgn.NAG_BLUNDER}
     assert main[6].nags == {chess.pgn.NAG_GOOD_MOVE}                     # the mate
+    assert main[4].nags == {chess.pgn.NAG_SPECULATIVE_MOVE}              # !? from classify
     assert main[2].eval() is not None and main[6].eval() is None        # none after mate
     assert "The queen comes out early. Better was: Nf3 develops (fast)." in main[2].comment
     assert "Allowed a fork." in main[2].comment

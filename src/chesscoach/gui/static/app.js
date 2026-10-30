@@ -16,6 +16,7 @@ const figurineText = (text) => text.replace(
 const PRAISE = new Set(["found the only good move", "punished the opponent's mistake",
                         "delivered checkmate"]);
 function markOf(mv) {
+  if (["!!", "!", "!?", "?!", "?", "??"].includes(mv.mark)) return mv.mark;
   switch (mv.label) {
     case "Blunder": return "??";
     case "Mistake": return "?";
@@ -152,12 +153,14 @@ function applyReview(res) {
   R.game.patterns = res.patterns || R.game.patterns || [];
   R.game.models = res.models || [];
   R.game.accuracy = res.accuracy || {};
+  R.game.stats = res.stats || {};
   R.reviewed = true;
   X.loaded = null;                // the practice list follows the latest review
   renderGraph();
   // The coach's comments are now part of the game: read them in the
   // Annotations pane, alongside the annotator's when the PGN had them.
   $("viewtabs").hidden = !R.game.tree;
+  $("view-table").hidden = false;
   renderNotes();
   if (R.game.tree) setView("notes");
   $("save-report").hidden = false;
@@ -177,6 +180,7 @@ function loadSummary(summary) {
   renderGamePick(summary.index || 0);
   const tree = summary.tree;
   $("viewtabs").hidden = !(tree && tree.annotated);   // shown for every reviewed game too
+  $("view-table").hidden = true;
   setView(tree && tree.annotated ? "notes" : "moves");
   $("ask").hidden = false;
   const h = summary.headers;
@@ -348,6 +352,7 @@ function goTo(i) {
   R.facts = null;                    // set again by the move's facts panel
   renderMoveList();
   markNotes();
+  markAnalysis();
   renderReviewBoard();
   renderCoach();
   renderMoments();
@@ -589,7 +594,54 @@ function setView(v) {
   document.querySelectorAll("#viewtabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === v)));
   $("movelist").hidden = v !== "moves";
   $("annotations").hidden = v !== "notes";
+  $("analysis").hidden = v !== "table";
   markNotes();
+  if (v === "table") renderAnalysis();
+}
+
+// ---- the analysis table (Lucas Chess's "All moves"): every move against
+// Stockfish: its best move, what was lost, accuracy, and Stockfish's own
+// win / draw / loss estimate for the side that moved.
+
+const MARK_CLASS = { "!!": "brilliant", "!": "good", "!?": "interesting", "best": "best", "ok": "ok",
+                     "?!": "inacc", "?": "mistake", "??": "blunder", "book": "book" };
+R.tableSide = "all";
+
+function renderAnalysis() {
+  const el = $("analysis");
+  if (!R.reviewed || !R.game) { el.innerHTML = ""; return; }
+  const chip = (v, t) => `<button data-side="${v}" class="${R.tableSide === v ? "on" : ""}">${t}</button>`;
+  let html = `<div class="an-head">${chip("all", "All moves")}${chip("white", "White")}${chip("black", "Black")}</div>`;
+  html += `<table class="an-table"><thead><tr><th>Move</th><th>Best</th><th class="num" title="Pawns lost against the best move">Loss</th>`
+    + `<th class="num">Acc.</th><th title="Stockfish's own win / draw / loss estimate for the side that moved, after the move. It models engine-against-engine play: a two-pawn edge reads as a near-certain win. For club play the winning chance (the graph, the accuracy) is the human measure.">SF win · draw · loss</th></tr></thead><tbody>`;
+  for (const mv of R.game.moves) {
+    if (R.tableSide !== "all" && mv.color !== R.tableSide) continue;
+    const mark = markOf(mv);
+    const cls = MARK_CLASS[mv.mark] || "";
+    const best = mv.mark === "book" ? "" : (mv.best_san && mv.best_san !== mv.san ? figurine(mv.best_san) : "=");
+    const loss = mv.cp_loss ? (mv.cp_loss / 100).toFixed(2) : "";
+    const w = mv.wdl;
+    const wdl = w ? `<span class="wdl sm" title="win ${w[0]}% · draw ${w[1]}% · loss ${w[2]}%">`
+      + [["w", w[0]], ["d", w[1]], ["b", w[2]]].map(([c, x]) => x ? `<i class="${c}" style="width:${x}%">${x >= 22 ? Math.round(x) : ""}</i>` : "").join("")
+      + `</span>` : "";
+    html += `<tr data-ply="${mv.ply}" class="${mv.ply === R.cursor ? "cur" : ""}">`
+      + `<td class="m ${cls}">${esc(figurine(mv.move_label))}<b>${esc(mark)}</b></td><td class="bm">${esc(best)}</td>`
+      + `<td class="num">${loss}</td><td class="num">${mv.accuracy === null || mv.accuracy === undefined || mv.mark === "book" ? "" : Math.round(mv.accuracy)}</td>`
+      + `<td>${wdl}</td></tr>`;
+  }
+  el.innerHTML = html + `</tbody></table>`;
+  el.querySelectorAll(".an-head button").forEach((b) => b.addEventListener("click", () => { R.tableSide = b.dataset.side; renderAnalysis(); }));
+  el.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => goTo(Number(tr.dataset.ply))));
+  const cur = el.querySelector("tr.cur");
+  if (cur) cur.scrollIntoView({ block: "nearest" });
+}
+
+function markAnalysis() {
+  const el = $("analysis");
+  if (el.hidden) return;
+  el.querySelectorAll("tr.cur").forEach((tr) => tr.classList.remove("cur"));
+  const tr = el.querySelector(`tr[data-ply="${R.cursor}"]`);
+  if (tr) { tr.classList.add("cur"); tr.scrollIntoView({ block: "nearest" }); }
 }
 document.querySelectorAll("#viewtabs button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 
@@ -798,11 +850,41 @@ function claimHtml(c, linkMoves) {
   return `<li>${text}${facts ? `<details><summary>Facts behind this</summary><ul>${facts}</ul></details>` : ""}</li>`;
 }
 
+// Lucas Chess's Summary: how each side's moves were classed, and accuracy
+// and best moves by phase.
+const MARK_ROWS = [["!!", "Brilliant"], ["!", "Good"], ["!?", "Interesting"], ["best", "Best"],
+                   ["ok", "Acceptable"], ["?!", "Inaccuracies"], ["?", "Mistakes"], ["??", "Blunders"],
+                   ["book", "Book"]];
+function statsHtml() {
+  const st = R.game.stats;
+  if (!st || !st.white) return "";
+  const acc = R.game.accuracy || {};
+  const pct = (x) => (x === null || x === undefined ? "–" : `${Math.round(x)}%`);
+  let rows = `<tr class="hd"><th></th><th>White</th><th>Black</th></tr>`;
+  rows += `<tr class="em"><th>Accuracy</th><td>${pct(acc.white)}</td><td>${pct(acc.black)}</td></tr>`;
+  rows += `<tr><th>Best moves</th><td>${pct(st.white.best_pct)}</td><td>${pct(st.black.best_pct)}</td></tr>`;
+  for (const [k, t] of MARK_ROWS) {
+    const a = st.white.counts[k] || 0, b = st.black.counts[k] || 0;
+    if (!a && !b && ["!!", "!", "!?", "book"].includes(k)) continue;     // praise only when earned
+    const n = (x) => (x ? x : `<span class="zero">0</span>`);
+    rows += `<tr class="${MARK_CLASS[k]}"><th>${["best", "ok", "book"].includes(k) ? "" : `<b>${esc(k)}</b> `}${t}</th><td>${n(a)}</td><td>${n(b)}</td></tr>`;
+  }
+  let ph = `<tr class="hd"><th>By phase</th><th>White</th><th>Black</th></tr>`;
+  for (const p of ["opening", "middlegame", "endgame"]) {
+    const w = st.white.phases[p], b = st.black.phases[p];
+    if (!w.moves && !b.moves) continue;
+    const cell = (x) => (x.moves ? `${pct(x.accuracy)} <span class="sub">· best ${pct(x.best_pct)} · ${x.moves}</span>` : "–");
+    ph += `<tr><th>${p[0].toUpperCase() + p.slice(1)}</th><td>${cell(w)}</td><td>${cell(b)}</td></tr>`;
+  }
+  return `<div class="stats"><table class="st-table">${rows}</table>`
+    + `<table class="st-table phase" title="Accuracy · share of the engine's first choice · moves">${ph}</table></div>`;
+}
+
 function renderSummary() {
   const sum = R.game.summary || [];
   const pats = R.game.patterns || [];
   if (!sum.length && !pats.length) return "";
-  let html = `<section class="summary" id="summary"><h3>Game summary</h3><ul>`;
+  let html = `<section class="summary" id="summary"><h3>Game summary</h3>${statsHtml()}<ul>`;
   html += sum.map((c) => claimHtml(c, true)).join("") + `</ul>`;
   if (pats.length) {
     html += `<h3>Across your reviewed games</h3><ul>` + pats.map((c) => claimHtml(c, false)).join("") + `</ul>`;
@@ -1205,7 +1287,7 @@ $("settings-form").addEventListener("submit", async (e) => {
   try { const v = Number(localStorage.getItem("listH")); if (v > 40) set(v); } catch (e) { /* storage off */ }
   bar.addEventListener("mousedown", (ev) => {
     ev.preventDefault();
-    const pane = !$("annotations").hidden ? $("annotations") : $("movelist");
+    const pane = !$("annotations").hidden ? $("annotations") : !$("analysis").hidden ? $("analysis") : $("movelist");
     const top = pane.getBoundingClientRect().top;
     bar.classList.add("drag");
     const move = (e) => set(Math.max(60, Math.min(window.innerHeight * 0.7, e.clientY - top)));

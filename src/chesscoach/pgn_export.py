@@ -26,6 +26,8 @@ from .motifs import MOTIFS
 
 NAG_FOR = {"Inaccuracy": chess.pgn.NAG_DUBIOUS_MOVE, "Mistake": chess.pgn.NAG_MISTAKE,
            "Blunder": chess.pgn.NAG_BLUNDER}
+MARK_NAG = {"!!": chess.pgn.NAG_BRILLIANT_MOVE, "!": chess.pgn.NAG_GOOD_MOVE,
+            "!?": chess.pgn.NAG_SPECULATIVE_MOVE}
 PRAISE = {"found the only good move", "punished the opponent's mistake", "delivered checkmate"}
 ERRORS = set(NAG_FOR)
 
@@ -106,7 +108,10 @@ def annotated_game(review) -> chess.pgn.Game:
         node = parent.add_variation(move)
         board.push(move)
         label, reason = _g(mv, "label", ""), _g(mv, "reason", "")
-        if label in NAG_FOR:
+        mark = _g(mv, "mark", "")
+        if mark in MARK_NAG:                       # !! ! !? from classify.py
+            node.nags.add(MARK_NAG[mark])
+        elif label in NAG_FOR:
             node.nags.add(NAG_FOR[label])
         elif reason in PRAISE:
             node.nags.add(chess.pgn.NAG_GOOD_MOVE)
