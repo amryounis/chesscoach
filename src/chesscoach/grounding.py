@@ -735,6 +735,22 @@ _SHELTER = re.compile(
     r"(?:'s)?(?:\s+(?:position|shelter|safety|pawn shelter|cover))?", re.I)   # "Black's king", "the Black king"
 
 
+# "allows White to open the h-file", "will weaken", "after hxg6 ...": a
+# consequence along the line. Without these words, "opens the f-file" or
+# "reduces the shield pawns" says the move itself did it, and is checked on
+# the position right after the move (review feedback: 8...Bg4 "opens the
+# f-file" passed because 9.hxg6 fxg6 opened it).
+_HEDGE = re.compile(
+    r"\b(?:allow\w*|let\w*|lead\w*\s+to|will|would|could|can|may|might|threat\w*|after|then|"
+    r"eventually|later|prepar\w*|invit\w*|enabl\w*|giv\w*\s+\w+\s+the\s+chance|leav\w*\s+\w+\s+open\s+to|"
+    r"risk\w*|so\s+that|once)\b", re.I)
+
+
+def _causal(s: str) -> bool:
+    """Does the sentence say the move itself did it (no hedge)?"""
+    return _HEDGE.search(s) is None
+
+
 def _shield(board: chess.Board, white: bool) -> int:
     from .features import extract_features
     f = extract_features(board)
@@ -752,9 +768,19 @@ def _check_shelter(s: str, before: Optional[chess.Board], conseq: list,
     if before is None or not conseq or not re.search(r"shield|shelter|pawn cover", s, re.I):
         return []
     out = []
+    causal = _causal(s)
     for m in _SHELTER.finditer(s):
         white = m.group(1).lower() == "white"
         start = _shield(before, white)
+        if causal:
+            # the move itself: the shelter right after it, against before it
+            if _shield(conseq[0], white) < start:
+                continue
+            out.append(Failure("shelter", m.group(0),
+                               f"{'White' if white else 'Black'}'s king has the same pawn shelter "
+                               f"right after that move ({start} shield pawns); anything later "
+                               f"is the doing of later moves"))
+            continue
         best = max([_shield(b, white) for b in better or []] + [start])
         if not any(_shield(b, white) < best for b in conseq):
             out.append(Failure("shelter", m.group(0),
@@ -782,14 +808,17 @@ def _check_opens_file(s: str, before: Optional[chess.Board], move: Optional[ches
     if before is None or move is None:
         return []
     out = []
+    causal = _causal(s)
     for m in _OPENS_FILE.finditer(s):
         f = ord(m.group(1).lower()) - ord("a")
         start = _file_pawns(before, f)
-        soon = (conseq or [])[:3]                 # after the move, and two plies on
+        # "opens the f-file": the move itself; "allows ... to open": the line, two plies on
+        soon = (conseq or [])[:1] if causal else (conseq or [])[:3]
         if not any(_file_pawns(b, f) < start for b in soon):
             out.append(Failure("file", m.group(0),
                                f"the {m.group(1).lower()}-file keeps its pawns after that move "
-                               f"({start} on it)"))
+                               f"({start} on it)" + ("; a later move opens it" if causal and any(
+                                   _file_pawns(b, f) < start for b in (conseq or [])[:3]) else "")))
     return out
 
 

@@ -159,3 +159,23 @@ def test_games_are_kept_and_reviews_come_back(api):
     assert again["review"]["reviewed_at"]
     ex = api.library_explore(["g1f3"], "", "")
     assert ex["line"] == "1. Nf3" and ex["moves"][0]["san"] == "d5" and "g8" in ex["dests"]
+
+
+def test_library_open_resets_the_picker_and_bad_reviews_are_ignored(api):
+    """Review feedback: the picker kept the previous file's games, and a
+    malformed kept review stopped the game from opening."""
+    from chesscoach import library
+    assert len(api.load_pgn_file(str(DATA / "abasov_annotated.pgn"))["games"]) == 25
+    library.add_file(str(DATA / "homer_vs_fritz.pgn"))
+    row = api.library_list({"text": "Homer"})["games"][0]
+    opened = api.library_open(row["id"])
+    assert opened["games"] == [] and "error" not in opened
+    import chess.pgn
+    with open(DATA / "homer_vs_fritz.pgn", encoding="utf-8") as f:
+        gid = library.game_id(chess.pgn.read_game(f))
+    rdir = library.library_dir() / "reviews"
+    rdir.mkdir(parents=True, exist_ok=True)
+    for junk in ('{"moves": ["x", 1]}', '[1, 2]', '{"moves": [{"ply": "a"}]}'):
+        (rdir / f"{gid}.json").write_text(junk)
+        out = api.library_open(row["id"])
+        assert "error" not in out and "review" not in out

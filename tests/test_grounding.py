@@ -161,19 +161,26 @@ def test_true_or_unparsed_claims_pass(text):
 
 # --- Every pipeline annotation from the 5 October runs (needs Stockfish) ---
 
+# 0.16.1: "9...dxc4 weakens Black's king position by reducing the number of
+# shield pawns" is said of the move itself, and dxc4 leaves the e8 king's
+# pawns as they were (the review that pointed it out: DeepSeek, 0.15.0).
+DXC4_SHELTER = ("shelter", "weakens Black's king position")
 EXPECTED = {
     # file suffix -> key id -> failed claims; every other text must pass
     "": {"homer-12-kxf7": [("defence", "removes its protection from the pawn on e7"),
-                           ("bishop pair", "keeps the bishop pair")]},
+                           ("bishop pair", "keeps the bishop pair")],
+         "homer-9-dxc4": [DXC4_SHELTER]},
     "_grounded": {
         "homer-12-kxf7": [("passed pawn", "passed pawn on the f-file"),
                           ("passed pawn", "passed pawn")],
-        "test-9-nxd4": [("threat", "removes the threat to the knight on c3")]},
+        "test-9-nxd4": [("threat", "removes the threat to the knight on c3")],
+        "homer-9-dxc4": [DXC4_SHELTER]},
     "_unchecked": {"homer-12-kxf7": [("defence", "removes its protection from the pawn on e7"),
                                      ("bishop pair", "keeps the bishop pair")],
                    # 0.13 file check: after 9.hxg6 fxg6 the g-file keeps two pawns
-                   "homer-8-bg4": [("file", "opens up the g-file")]},
-    "_grounded2": {"homer-9-dxc4": [("file", "open the g-file")]},     # 0.13 file check
+                   "homer-8-bg4": [("file", "opens up the g-file")],
+                   "homer-9-dxc4": [DXC4_SHELTER]},
+    "_grounded2": {"homer-9-dxc4": [DXC4_SHELTER, ("file", "open the g-file")]},
     "qwen3_14b_2026-10-10_phase3b": {
         "homer-9-dxc4": [("defence", "protected the knight on f3")]},
     "qwen3_14b_2026-10-08_phase3": {
@@ -270,7 +277,9 @@ def test_full_review_of_the_fritz_game(stockfish):
                         played=p["played_boards"], better=p["better_boards"])
             if fs:
                 found[title.split(" — ")[0]] = sorted({f.kind for f in fs})
-    assert found == {"12...Kxf7": ["doubled pawn"]}
+    # 0.16.1: 8...Bg4 "opening up the f-file" is said of the bishop move;
+    # the f-file opens only after 9.hxg6 fxg6.
+    assert found == {"12...Kxf7": ["doubled pawn"], "8...Bg4": ["file"]}
 
 
 def test_structure_claims():
@@ -345,11 +354,21 @@ def test_bishop_pair_claims():
 FIVE_RUNS = {
     # 25 annotations each (five per key). Reading them found false claims
     # the check then missed; it must now flag exactly those and nothing else.
+    # 0.16.1: "8...Bg4 weakens/exposes Black's king by reducing the shield
+    # pawns": said of the bishop move, which moves no pawn.
     "qwen3_14b_2026-10-10_phase3c": {
+        ("homer-8-bg4", 1): [("shelter", "exposes Black's king")],
+        ("homer-8-bg4", 4): [("shelter", "weakens Black's king position")],
+        ("homer-8-bg4", 5): [("shelter", "weakens Black's king position")],
         ("homer-9-dxc4", 5): [("undefended", "leaves the pawn on g6 undefended")],
         ("homer-12-kxf7", 4): [("doubled pawn", "doubled pawns on the c-file")],
         ("test-9-nxd4", 2): [("bishop pair", "preserving the bishop pair")]},
     "qwen3_14b_2026-10-11_phase3d": {
+        ("homer-8-bg4", 1): [("shelter", "exposes Black's king")],
+        ("homer-8-bg4", 2): [("shelter", "weakens Black's king position")],
+        ("homer-8-bg4", 3): [("shelter", "weakens Black's king position")],
+        ("homer-8-bg4", 4): [("shelter", "weakens Black's king position")],
+        ("homer-8-bg4", 5): [("shelter", "weakens Black's king position")],
         ("homer-12-kxf7", 2): [("bishop pair", "maintain the bishop pair")],
         ("homer-12-kxf7", 3): [("bishop pair", "keeps the bishop pair")],
         ("test-9-nxd4", 3): [("captured", "Black's pawn on d4")]},
@@ -591,3 +610,19 @@ def test_fork_must_hit_the_pieces_it_names():
     assert _check_forks("The knight forks the king and queen.", [b])[0].kind == "fork"
     assert _check_forks("Nc7 forks the king on e8 and the rook on a8.", [b]) == []
     assert _check_forks("Nc7 forks the queen on d8 and the rook on a8.", [b])
+
+
+def test_the_move_gets_credit_only_for_what_it_did():
+    """Review feedback: '8...Bg4 opens the f-file' passed because 9.hxg6 fxg6
+    opened it two plies later. Said of the move, it is checked right after
+    the move; 'allows White to open' is checked along the line."""
+    import chess
+    from chesscoach.grounding import _check_opens_file
+    b = chess.Board("rnbqk2r/pp2pp2/2p2bpp/3p3P/2PP4/2N2N2/PP2PPP1/R2QKB1R b KQkq - 0 8")
+    mv = b.parse_san("Bg4")
+    line = []
+    x = b.copy(); x.push(mv); line.append(x.copy())
+    for san in ("e3", "gxh5"):
+        x.push_san(san); line.append(x.copy())
+    assert _check_opens_file("The move opens the g-file.", b, mv, line)          # it was gxh5, later
+    assert _check_opens_file("The move allows Black to open the g-file.", b, mv, line) == []

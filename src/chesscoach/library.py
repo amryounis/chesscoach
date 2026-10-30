@@ -14,6 +14,10 @@ Your games: a folder of ordinary PGN files, with an index to search them.
 The PGN files are the data; the index can always be deleted and rebuilt.
 The first 30 plies of every game also go into a positions table, which is
 what the opening explorer reads.
+
+One game, one row: a game that is in several files (played, then reviewed;
+or a file added twice) is listed and counted once. The copy shown is the
+one in Reviewed.pgn if there is one, else the first indexed.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import json
 import os
 import shutil
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -35,7 +40,20 @@ from . import config
 
 PLAYED, REVIEWED = "Played.pgn", "Reviewed.pgn"
 EXPLORER_PLIES = 30
-SCHEMA = 1
+SCHEMA = 2
+# The app reads the index while a review thread writes to the library:
+# one at a time.
+_LOCK = threading.RLock()
+
+
+def _locked(fn):
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        with _LOCK:
+            return fn(*a, **kw)
+    return wrapper
 
 
 def library_dir() -> Path:
@@ -59,10 +77,12 @@ def _connect(folder: Path) -> sqlite3.Connection:
     if v != SCHEMA:
         con.executescript("""
             DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS games; DROP TABLE IF EXISTS positions;
+            DROP TABLE IF EXISTS reviews;
             CREATE TABLE files (name TEXT PRIMARY KEY, mtime REAL, size INTEGER);
             CREATE TABLE games (id INTEGER PRIMARY KEY, file TEXT, offset INTEGER, number INTEGER,
                 white TEXT, black TEXT, white_elo TEXT, black_elo TEXT, result TEXT, date TEXT,
-                event TEXT, eco TEXT, opening TEXT, plies INTEGER, gid TEXT);
+                event TEXT, eco TEXT, opening TEXT, plies INTEGER, gid TEXT, canon INTEGER DEFAULT 1);
+            CREATE TABLE reviews (gid TEXT PRIMARY KEY);
             CREATE INDEX games_file ON games(file);
             CREATE INDEX games_gid ON games(gid);
             CREATE TABLE positions (epd TEXT, uci TEXT, san TEXT, game INTEGER, ply INTEGER);
@@ -137,7 +157,11 @@ def _opening_of(board: chess.Board, moves: list) -> tuple:
 
 def refresh(folder: Optional[Path] = None) -> sqlite3.Connection:
     """Bring the index in step with the files; return the connection."""
-    folder = folder or library_dir()
+    with _LOCK:
+        return _refresh(folder or library_dir())
+
+
+def _refresh(folder: Path) -> sqlite3.Connection:
     con = _connect(folder)
     on_disk = set(pgn_files(folder))
     known = {r["name"]: r for r in con.execute("SELECT * FROM files")}
@@ -150,6 +174,16 @@ def refresh(folder: Optional[Path] = None) -> sqlite3.Connection:
         k = known.get(name)
         if k is None or k["mtime"] != st.st_mtime or k["size"] != st.st_size:
             _index_file(con, folder, name)
+    # which games have a full review kept
+    rdir = folder / "reviews"
+    con.execute("DELETE FROM reviews")
+    if rdir.exists():
+        con.executemany("INSERT OR IGNORE INTO reviews VALUES (?)",
+                        [(p.stem,) for p in rdir.glob("*.json")])
+    # one row per game: the Reviewed.pgn copy if any, else the first indexed
+    con.execute(f"""UPDATE games SET canon = (id = (
+        SELECT g2.id FROM games g2 WHERE g2.gid = games.gid
+        ORDER BY (g2.file = '{REVIEWED}') DESC, g2.id LIMIT 1))""")
     con.commit()
     return con
 
@@ -167,10 +201,17 @@ def query(text: str = "", file: str = "", result: str = "", mine: str = "",
     text: in either player, the event or the opening; mine: "white" /
     "black" / "any" for games where your name (Settings) has that colour."""
     folder = folder or library_dir()
-    con = refresh(folder)
+    with _LOCK:
+        return _query(folder, text, file, result, mine, reviewed, sort, desc, limit)
+
+
+def _query(folder, text, file, result, mine, reviewed, sort, desc, limit) -> dict:
+    con = _refresh(folder)
     where, args = [], []
     if file:
-        where.append("file = ?"); args.append(file)
+        where.append("file = ?"); args.append(file)          # that file's own games, all of them
+    else:
+        where.append("canon = 1")                            # each game once
     if text:
         like = f"%{text.strip()}%"
         where.append("(white LIKE ? OR black LIKE ? OR event LIKE ? OR opening LIKE ? OR eco LIKE ?)")
@@ -185,21 +226,23 @@ def query(text: str = "", file: str = "", result: str = "", mine: str = "",
             where.append("black = ? COLLATE NOCASE"); args.append(name)
         else:
             where.append("(white = ? COLLATE NOCASE OR black = ? COLLATE NOCASE)"); args += [name, name]
-    reviewed_ids = {p.stem for p in (folder / "reviews").glob("*.json")} if (folder / "reviews").exists() else set()
     if reviewed:
-        if not reviewed_ids:
-            return {"games": [], "total": 0}
-        where.append(f"gid IN ({','.join('?' * len(reviewed_ids))})"); args += sorted(reviewed_ids)
+        where.append("gid IN (SELECT gid FROM reviews)")
     sql_where = (" WHERE " + " AND ".join(where)) if where else ""
-    total = con.execute(f"SELECT COUNT(*) FROM games{sql_where}", args).fetchone()[0]
-    col = SORTS.get(sort, "date")
-    rows = con.execute(f"SELECT * FROM games{sql_where} ORDER BY {col} {'DESC' if desc else 'ASC'}, "
-                       f"id {'DESC' if desc else 'ASC'} LIMIT ?", args + [int(limit)]).fetchall()
-    con.close()
-    games = [dict(r) | {"reviewed": r["gid"] in reviewed_ids} for r in rows]
+    try:
+        total = con.execute(f"SELECT COUNT(*) FROM games{sql_where}", args).fetchone()[0]
+        col = SORTS.get(sort, "date")
+        rows = con.execute(
+            f"SELECT games.*, (gid IN (SELECT gid FROM reviews)) AS reviewed FROM games{sql_where} "
+            f"ORDER BY {col} {'DESC' if desc else 'ASC'}, id {'DESC' if desc else 'ASC'} LIMIT ?",
+            args + [int(limit)]).fetchall()
+    finally:
+        con.close()
+    games = [dict(r) | {"reviewed": bool(r["reviewed"])} for r in rows]
     return {"games": games, "total": total}
 
 
+@_locked
 def load(game_row: int, folder: Optional[Path] = None) -> tuple:
     """(game, file name) for an index row id."""
     folder = folder or library_dir()
@@ -233,6 +276,7 @@ def _games_in(path: Path) -> list:
     return out
 
 
+@_locked
 def append_game(game: chess.pgn.Game, name: str = PLAYED, folder: Optional[Path] = None) -> Path:
     folder = folder or library_dir()
     folder.mkdir(parents=True, exist_ok=True)
@@ -242,6 +286,7 @@ def append_game(game: chess.pgn.Game, name: str = PLAYED, folder: Optional[Path]
     return path
 
 
+@_locked
 def save_played(game: chess.pgn.Game, replaces: str = "",
                 folder: Optional[Path] = None) -> str:
     """Keep a played game in Played.pgn. `replaces`: the id this same game
@@ -261,6 +306,7 @@ def save_played(game: chess.pgn.Game, replaces: str = "",
     return gid
 
 
+@_locked
 def save_review(review, game: Optional[chess.pgn.Game] = None,
                 folder: Optional[Path] = None) -> Path:
     """The review in full (reviews/<id>.json) and as an annotated PGN in
@@ -275,7 +321,7 @@ def save_review(review, game: Optional[chess.pgn.Game] = None,
     _write_atomic(folder / "reviews" / f"{gid}.json", json.dumps(data))
     path = folder / REVIEWED
     kept = [g for g in _games_in(path) if game_id(g) != gid]
-    kept.append(annotated_game(review))
+    kept.append(annotated_game(review, game))
     _write_atomic(path, "".join(str(g) + "\n\n" for g in kept))
     return path
 
@@ -289,6 +335,7 @@ def saved_review(game: chess.pgn.Game, folder: Optional[Path] = None) -> Optiona
         return None
 
 
+@_locked
 def add_file(src: str, folder: Optional[Path] = None) -> tuple:
     """Copy a PGN file into the library (the original is left alone).
     Returns (file name, number of games)."""
@@ -310,30 +357,40 @@ def add_file(src: str, folder: Optional[Path] = None) -> tuple:
     return name, n
 
 
-def remove_game(game_row: int, folder: Optional[Path] = None) -> None:
-    """Take one game out of its file (the file is rewritten without it)."""
+@_locked
+def remove_game(game_row: int, folder: Optional[Path] = None) -> int:
+    """Take a game out of the library: every copy of it (the list shows
+    each game once, so removing one copy would only bring another back),
+    and its kept review. Returns how many files it was taken out of."""
     folder = folder or library_dir()
     con = refresh(folder)
-    r = con.execute("SELECT file, number FROM games WHERE id = ?", (int(game_row),)).fetchone()
+    r = con.execute("SELECT gid FROM games WHERE id = ?", (int(game_row),)).fetchone()
+    copies = con.execute("SELECT file, number FROM games WHERE gid = ?", (r["gid"],)).fetchall() if r else []
     con.close()
     if r is None:
         raise ValueError("That game is no longer in the library.")
-    path = folder / r["file"]
-    text = path.read_text(encoding="utf-8", errors="replace")
-    games, n = [], 0
-    f = io.StringIO(text)
-    while (g := chess.pgn.read_game(f)) is not None:
-        if not list(g.mainline_moves()) and not g.headers.get("White"):
-            continue
-        n += 1
-        if n != r["number"]:
-            games.append(g)
-    _write_atomic(path, "".join(str(g) + "\n\n" for g in games))
+    by_file = {}
+    for c in copies:
+        by_file.setdefault(c["file"], set()).add(c["number"])
+    for name, numbers in by_file.items():
+        path = folder / name
+        games, n = [], 0
+        f = io.StringIO(path.read_text(encoding="utf-8", errors="replace"))
+        while (g := chess.pgn.read_game(f)) is not None:
+            if not list(g.mainline_moves()) and not g.headers.get("White"):
+                continue
+            n += 1
+            if n not in numbers:
+                games.append(g)
+        _write_atomic(path, "".join(str(g) + "\n\n" for g in games))
+    (folder / "reviews" / f"{r['gid']}.json").unlink(missing_ok=True)
     refresh(folder).close()
+    return len(by_file)
 
 
 # --- the opening explorer ------------------------------------------------------
 
+@_locked
 def explore(board: chess.Board, mine: str = "", file: str = "",
             folder: Optional[Path] = None) -> dict:
     """What was played from this position in the library's games:
@@ -351,6 +408,8 @@ def explore(board: chess.Board, mine: str = "", file: str = "",
         where.append(col); args += [name] * col.count("?")
     if file:
         where.append("g.file = ?"); args.append(file)
+    else:
+        where.append("g.canon = 1")                          # each game counted once
     rows = con.execute(
         "SELECT p.uci, p.san, g.result, COUNT(*) AS n FROM positions p JOIN games g ON g.id = p.game "
         f"WHERE {' AND '.join(where)} GROUP BY p.uci, g.result", args).fetchall()

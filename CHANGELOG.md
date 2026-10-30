@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.16.1 — unreleased
+
+From DeepSeek's review of 0.15.0; every point was checked against the code
+first.
+
+- **One game, one row.** A game played and then reviewed was in Played.pgn
+  and Reviewed.pgn, listed twice in Your games and counted twice by the
+  opening explorer (a file added twice did the same). The list and the
+  explorer now show each game once (the Reviewed.pgn copy when there is
+  one); filtering by one file still shows all of that file. Remove takes
+  out every copy and the kept review
+- The "Reviewed" filter no longer leaks a database connection, or fails
+  with very many reviews (it joins a reviews table instead of listing ids);
+  the app and a running review no longer touch the index at the same time
+- **The checker credits the move only with what it did.** "8...Bg4 opens
+  the f-file" passed because 9.hxg6 fxg6 opened it later. A sentence that
+  says the move itself opens a file or reduces the king's shield pawns is
+  now checked on the position right after the move; "allows White to
+  open", "will", "after ..." are still checked along the line. Eleven
+  old baseline comments are now caught for exactly this ("9...dxc4 weakens
+  Black's king position by reducing the number of shield pawns"). The
+  README's example (that same false 8...Bg4 sentence) is replaced by a real,
+  correct one, and the README, the package table and the config file no
+  longer say every claim is checked
+- **Saved PGNs keep the game's own notes.** Reviewed.pgn and Save PGN start
+  from the game as opened, with its comments, marks and variations, and add
+  the coach's after them, marked "Coach:" (the summary "Coach summary:").
+  Exporting again replaces the coach's earlier notes instead of stacking
+  them, and an engine line the annotator already gave is not added twice
+- Reopening a reviewed game no longer shows each coach comment twice (once
+  from the review, once from the PGN)
+- The engine's better line in the PGN carries the evaluation of the
+  position after its first move (a mate is one move nearer), not before
+- The summary said "Instead of your errors, the engine had a fork (3. Qh5)";
+  it now says "You missed a fork (3. Qh5)"
+- Opening a game from Your games clears the game picker left from a
+  multi-game file; a kept review that can't be read is ignored instead of
+  stopping the game from opening, and old reviews' stored Ollama errors are
+  moved out of the comments
+- Practice progress is written whole and swapped in, and bad entries in
+  the file are skipped instead of losing the rest
+
 ## 0.16.0 — unreleased
 
 Two of Lucas Chess's analysis views, kept to what can be checked:

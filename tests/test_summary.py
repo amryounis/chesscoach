@@ -226,3 +226,15 @@ def test_tactics_are_counted_across_games(tmp_path):
         "Across your last three games, your errors allowed a fork 2 times in two games "
         "and a pin 2 times in two games.")
     assert history.verify_patterns(recs, claims) == []
+
+
+def test_missed_tactics_read_as_a_sentence():
+    """Review feedback: 'Instead of your errors, the engine had a fork (3. Qh5).'"""
+    from chesscoach.summary import summarize
+    mv = {"ply": 4, "move_label": "3. Qh5", "color": "white", "label": "Mistake", "book": False,
+          "san": "Qh5", "best_san": "Nf3", "fen_before": chess.STARTING_FEN, "win_before": 50,
+          "win_after": 30, "themes": [], "tactics": {"missed": ["fork"]}, "reason": "mistake"}
+    texts = [c.text for c in summarize({"side": "white", "moves": [mv]}) if c.kind == "tactics"]
+    assert texts == ["You missed a fork (3. Qh5)."]
+    both = [c.text for c in summarize({"side": "both", "moves": [mv]}) if c.kind == "tactics"]
+    assert both == ["White missed a fork (3. Qh5)."]

@@ -31,11 +31,11 @@ from .report import print_scoreboard
 from .summary import summarize
 from .themes import move_themes
 
-# progress(stage, done, total, message, info); stages: "engine", "narrate", "done".
+# progress(stage, done, total, message, info); stages: "engine", "prepare", "narrate", "done".
 # info (may be empty), so a viewer can follow along: "engine": {ply: the
 # position just analysed (0 = start), cp, mate, verdict}; "narrate": {ply:
 # the move being commented (0-based)}.
-Progress = Callable[[str, int, int, str], None]
+Progress = Callable[[str, int, int, str, dict], None]
 
 
 class Cancelled(Exception):
@@ -485,7 +485,7 @@ def annotate_game(pgn_path: str, side: str, models: list, verbose: bool,
     from .pgn_export import annotated_pgn
     pgn_out = os.path.splitext(pgn_path)[0] + "_annotated.pgn"
     with open(pgn_out, "w", encoding="utf-8") as f:
-        f.write(annotated_pgn(review))
+        f.write(annotated_pgn(review, game))
     print_scoreboard(rows)
     print(f"\nFull annotations written to: {out}")
     print(f"Annotated PGN (for any chess program): {pgn_out}")

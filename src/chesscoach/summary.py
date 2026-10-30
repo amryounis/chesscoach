@@ -198,10 +198,11 @@ def _side_claims(moves: list, color: str, single: bool,
         top = sorted(by_motif, key=lambda t: (-len(by_motif[t]), list(MOTIFS).index(t)))[:3]
         parts = [f"{MOTIFS[t]} ({_join([_get(m, 'move_label') for m in by_motif[t]])})"
                  for t in top]
-        subject = (f"{whose.capitalize()} errors" if not single else "Your errors")
-        text = (f"{subject} allowed {_join(parts)}." if kind == "allowed" else
-                f"Instead of {subject.lower() if single else subject}, the engine had "
-                f"{_join(parts)}.")
+        if kind == "allowed":
+            subject = f"{whose.capitalize()} errors" if not single else "Your errors"
+            text = f"{subject} allowed {_join(parts)}."
+        else:
+            text = f"{who} missed {_join(parts)}."          # "You missed a fork (3. Qh5)."
         plies = sorted({_get(m, "ply") for t in top for m in by_motif[t]})
         out.append(Claim(text, "tactics", color, plies,
                          [f"{_get(m, 'move_label')}: {verb} {MOTIFS[t]}" for t in top

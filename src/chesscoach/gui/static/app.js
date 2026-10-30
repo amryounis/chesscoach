@@ -494,8 +494,21 @@ function noteShapes(n) {
     .concat(n.circles.map((c) => ({ orig: c.square, brush: BRUSH[c.color] || "green" })));
 }
 
+// A PGN saved by chesscoach marks its own notes "Coach:" / "Coach summary:".
+// With the review open those notes are shown from the review itself, so
+// the copies in the PGN are left out (else every comment shows twice).
+function withoutCoach(t) {
+  if (!R.reviewed || !t) return t;
+  for (const mark of ["Coach summary:", "Coach:"]) {
+    const i = t.indexOf(mark);
+    if (i >= 0) t = t.slice(0, i);
+  }
+  return t.trim();
+}
+
 function commentText(c) {
   if (!c) return "";
+  c = { en: withoutCoach(c.en || ""), de: withoutCoach(c.de || "") };
   const lang = (settingsCache && settingsCache.comment_language) || "en";
   const en = c.en || "", de = c.de || "";
   if (lang === "both") return [en, de].filter(Boolean).map((t, i) => i ? `<span class="de">${esc(figurineText(t))}</span>` : esc(figurineText(t))).join(" ");

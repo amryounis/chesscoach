@@ -217,19 +217,26 @@ class Api:
     def _restore_review(self, game) -> Optional[dict]:
         from .. import library
         from ..review import GameReview, MoveReview
+        from ..practice import looks_like_error
+        # A kept review that can't be read is ignored: the game still opens.
         try:
             data = library.saved_review(game)
-        except Exception:
-            return None
-        if not data:
-            return None
-        try:
+            if not isinstance(data, dict) or not isinstance(data.get("moves"), list) \
+                    or not all(isinstance(m, dict) for m in data["moves"]):
+                return None
             mf = {f.name for f in fields(MoveReview)}
             gf = {f.name for f in fields(GameReview)}
+            for m in data["moves"]:
+                # reviews from before 0.13 stored an Ollama error as the comment
+                ann = m.get("annotations") if isinstance(m.get("annotations"), dict) else {}
+                for model, text in list(ann.items()):
+                    if isinstance(text, str) and looks_like_error(text):
+                        m.setdefault("errors", {})[model] = ann.pop(model)
             moves = [MoveReview(**{k: v for k, v in m.items() if k in mf}) for m in data["moves"]]
             self._review = GameReview(**{k: v for k, v in data.items() if k in gf and k != "moves"},
                                       moves=moves)
-        except (TypeError, KeyError):
+        except Exception:
+            log_error("restoring a kept review")
             return None
         return data
 
@@ -254,7 +261,9 @@ class Api:
         self._not_while_reviewing("opening another game")
         game, name = library.load(int(game_row))
         self._games, self._game_path = [game], str(library.library_dir() / name)
-        return self.select_game(0)
+        out = self.select_game(0)
+        out["games"] = []                    # one game: no picker left over from a file opened before
+        return out
 
     @_safe
     def library_add_dialog(self) -> dict:
@@ -401,7 +410,7 @@ class Api:
                 if config.settings.autosave:
                     from .. import library
                     try:
-                        library.save_review(r)
+                        library.save_review(r, game)
                         result["saved_to"] = library.REVIEWED
                     except Exception:
                         log_error("saving the review to the library")
@@ -451,7 +460,7 @@ class Api:
             return {"cancelled": True}
         path = path if isinstance(path, str) else path[0]
         with open(path, "w", encoding="utf-8") as f:
-            f.write(annotated_pgn(self._review))
+            f.write(annotated_pgn(self._review, self._game))
         return {"saved": path}
 
     def _set_status(self, **status):

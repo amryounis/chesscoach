@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -127,9 +128,14 @@ def progress_path() -> Path:
 def load_progress(path: Optional[Path] = None) -> dict:
     path = path or progress_path()
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+    # keep only well-formed entries: one bad line must not lose the rest
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, dict)
+            and isinstance(v.get("tries", 0), int) and isinstance(v.get("solved", 0), int)}
 
 
 def record_attempt(drill_id: str, verdict: str, path: Optional[Path] = None) -> dict:
@@ -143,7 +149,9 @@ def record_attempt(drill_id: str, verdict: str, path: Optional[Path] = None) -> 
     p["last_verdict"] = verdict
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(prog, indent=1), encoding="utf-8")
+        tmp = path.with_suffix(".json.tmp")       # written whole, then swapped in
+        tmp.write_text(json.dumps(prog, indent=1), encoding="utf-8")
+        os.replace(tmp, path)
     except OSError:
         pass
     return p

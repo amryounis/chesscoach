@@ -30,8 +30,8 @@ def test_add_query_load_and_explore(lib):
     name, n = library.add_file(str(DATA / "abasov_annotated.pgn"))
     assert (name, n) == ("abasov_annotated.pgn", 25)
     assert library.add_file(str(DATA / "abasov_annotated.pgn"))[0] == "abasov_annotated (2).pgn"
-    q = library.query(text="Caruana")
-    assert q["total"] == 2 and all("Caruana" in g["black"] for g in q["games"])
+    q = library.query(text="Caruana")                        # added twice, listed once
+    assert q["total"] == 1 and all("Caruana" in g["black"] for g in q["games"])
     game, f = library.load(q["games"][0]["id"])
     assert f.startswith("abasov") and "Caruana" in game.headers["Black"]
     ex = library.explore(chess.Board(), file="abasov_annotated.pgn")
@@ -104,3 +104,43 @@ def test_explorer_scores_from_your_side(lib):
     ex = library.explore(b, mine="white")                    # Black to move, still your score
     assert {m["san"]: m["score"] for m in ex["moves"]} == {"e5": 100, "c5": 0}
     assert library.explore(chess.Board(), mine="black")["moves"][0]["san"] == "d4"
+
+
+def test_a_game_played_then_reviewed_is_one_game(lib):
+    """Review feedback (0.15.0): it was listed twice and counted twice by
+    the explorer (Played.pgn and Reviewed.pgn)."""
+    from chesscoach.review import GameReview, MoveReview
+    g = _game("e4 e5 Nf3", result="1-0")
+    library.save_played(g)
+    b, moves = chess.Board(), []
+    for i, s in enumerate("e4 e5 Nf3".split()):
+        m = b.parse_san(s)
+        moves.append(MoveReview(ply=i, move_label=s, san=s, uci=m.uci(),
+                                color="white" if b.turn else "black", fen_before=b.fen(),
+                                fen_after="", label="Good", score_cp=20, score_mate=None,
+                                verdict="", best_san=s, best_uci=m.uci(), book=False))
+        b.push(m)
+    library.save_review(GameReview(headers=dict(g.headers), side="white", models=["m"],
+                                   start_fen=chess.STARTING_FEN, moves=moves), g)
+    q = library.query()
+    assert q["total"] == 1 and q["games"][0]["file"] == library.REVIEWED and q["games"][0]["reviewed"]
+    assert library.query(file=library.PLAYED)["total"] == 1          # the file itself still has it
+    assert library.explore(chess.Board())["moves"] == [
+        {"uci": "e2e4", "san": "e4", "games": 1, "white": 1, "draws": 0, "black": 0, "score": 100}]
+    # removing it takes out every copy, and its review
+    assert library.remove_game(q["games"][0]["id"]) == 2
+    assert library.query()["total"] == 0 and library.saved_review(g) is None
+
+
+def test_reviewed_filter_with_no_reviews(lib):
+    library.save_played(_game("e4"))
+    for _ in range(3):
+        assert library.query(reviewed=True) == {"games": [], "total": 0}
+    assert library.query()["total"] == 1
+
+
+def test_a_file_added_twice_lists_each_game_once(lib):
+    library.add_file(str(DATA / "homer_vs_fritz.pgn"))
+    library.add_file(str(DATA / "homer_vs_fritz.pgn"))
+    assert library.query()["total"] == 1
+    assert library.explore(chess.Board())["games"] == 1

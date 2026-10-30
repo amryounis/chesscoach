@@ -173,13 +173,14 @@ num_ctx = 4096
 ask_mode = "router"
 
 # Store the facts of each review (labels, winning chances, what each error
-# got wrong) in a "history" folder next to this file, for patterns across
-# your games: `chesscoach patterns`.
+# got wrong) in a "history" folder in your user config folder (next to the
+# default config file), for patterns across your games: `chesscoach patterns`.
 keep_history = true
 
-# Check every claim the model makes about the board (attacks, defences,
-# pins, forks, material, pieces on squares). A claim that fails gets one
-# retry; if it still fails, its sentence is removed.
+# Check the claims the model makes about the board that code can parse
+# (pieces on squares, attacks, defences, pins, forks, king shelter, files,
+# material). A claim that fails gets one retry; if it still fails, its
+# sentence is removed. Judgements ("strong", "active") are not checked.
 grounding = true
 
 # Engine-verified concepts for each commented moment: real threats (what

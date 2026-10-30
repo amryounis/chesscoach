@@ -5,16 +5,27 @@ book does: few comments, on the moments that matter, in plain language.
 
 Everything runs on your own machine. No internet, no accounts.
 
-![Reviewing a game: the coach's comment on 8...Bg4, with the better move shown on the board](docs/review.png)
+![Reviewing a game: a critical moment, with the better move shown on the board](docs/review.png)
+
+A comment from a real review (qwen3:14b, Homer vs Fritz), unedited:
 
 ```
-### 8...Bg4 — Inaccuracy
-What happened: Black moves the bishop from c8 to g4. The move exposes the
-Black king by reducing the number of shield pawns and opens the f-file,
-which weakens the king's position.
-Better was: Moving the pawn from g6 to g5 would have preserved two shield
-pawns around the king and kept the f-file closed.
+### 11...bxc4 — Excellent (punished the opponent's mistake)
+What happened: Black captures White's bishop on c4 with the pawn from b5.
+This move exploits White's previous mistake by capturing the bishop on c4,
+which was already under attack and left undefended. It removes a key White
+piece and strengthens Black's position by creating a clear threat against
+the White pawn on g6, which is now hanging and vulnerable.
+What now: White will likely capture Black's pawn on f7 with the pawn from
+g6, giving check. Black should respond by moving the king to f8, which is
+the only safe square, and then prepare to defend against White's queen
+moving to c2.
 ```
+
+(Earlier versions of this README showed 8...Bg4 "opens the f-file". The
+f-file opens two moves later, after 9.hxg6 fxg6, and the checker let it
+through. It now checks what a sentence says the move itself did on the
+position right after the move.)
 
 ## The idea: the language model only narrates
 
@@ -193,7 +204,7 @@ Package layout (`src/chesscoach/`):
 | `facts` | Tier 1 facts: named material, castling, undefended pieces, legal moves, following a line |
 | `features` / `tactics` | positional and tactical facts; comparing two lines |
 | `prompts` / `narrator` | prompt building, LLM calls, output check and retry |
-| `grounding` | verifies every claim in the model's text on the board |
+| `grounding` | checks the claims it can parse (pieces, attacks, pins, forks, shelter, files, material) on the board; judgements are not checked |
 | `concepts` | engine-verified threats, piece roles, equal moves, ranked key facts |
 | `coach` | "Explain this position", and the "Ask the coach" agent with its fact tools |
 | `opening` / `moments` | book detection, choosing what to comment on |
@@ -201,13 +212,19 @@ Package layout (`src/chesscoach/`):
 | `play` | training games against Maia (or limited Stockfish) |
 | `gui` | desktop app: `api.py` (Python side), `static/` (page), `app.py` (window) |
 | `evaluate` | answer-key harness (`chesscoach eval`) |
+| `accuracy` / `motifs` / `classify` | accuracy %, tactical motifs in engine lines, !! ! !? and the counts |
+| `library` | your games: PGN files with an index, saved reviews, the opening explorer |
+| `pgn_export` | the reviewed game as an annotated PGN |
+| `practice` | your mistakes as exercises |
+| `history` / `summary` | patterns across games; the game summary |
+| `logfile` | chesscoach.log: errors and review timings |
 | `cli` | the `chesscoach` command |
 
 ## Roadmap
 
 Done: game review with critical moments, opening-book skipping, labels
 from win probability, a facts layer with engine-verified threats and piece
-roles, a grounding check on everything the model writes, an answer-key
+roles, a board check on the claims code can parse, an answer-key
 harness, "Explain this position" and "Ask the coach", and the desktop app
 with review and play against Maia.
 

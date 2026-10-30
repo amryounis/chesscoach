@@ -119,3 +119,14 @@ def test_a_model_error_is_never_the_coachs_explanation():
         assert practice.explanation_of({"annotations": {"m": err}}) == ""
         assert practice.make_drill(_move(annotations={"m": err}), "g")["explanation"] == ""
     assert practice.explanation_of(_move()).startswith("**What happened**")
+
+
+def test_progress_file_survives_bad_entries(tmp_path):
+    import json
+    path = tmp_path / "practice.json"
+    path.write_text(json.dumps({"a": {"tries": 1, "solved": 1}, "b": "junk", "c": {"tries": "x"}}))
+    assert list(practice.load_progress(path)) == ["a"]
+    path.write_text("[1, 2]")
+    assert practice.load_progress(path) == {}
+    practice.record_attempt("d", "best", path)
+    assert practice.load_progress(path)["d"]["solved"] == 1 and not list(tmp_path.glob("*.tmp"))

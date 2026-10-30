@@ -300,6 +300,11 @@ def test_games_tab_lists_opens_and_explores(page):
     page.wait_for_selector("#panel-review:not([hidden])")
     page.wait_for_selector("#moments:not([hidden]) button")       # the kept review, at once
     assert page.is_visible("#save-annotated")
+    # the coach's notes come from the review; the PGN's copies are not shown again
+    page.click("#viewtabs [data-view=notes]")
+    notes = page.inner_text("#annotations")
+    assert "Coach:" not in notes and "Coach summary:" not in notes
+    assert notes.count("A reason.") == page.locator("#annotations .cmt.coach").count()
     page.click("#tab-games")
     page.click("#lib-views [data-lview=explorer]")
     page.wait_for_selector("#ex-rows tr")

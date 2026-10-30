@@ -71,23 +71,72 @@ def _score_text(cp: Optional[int], mate: Optional[int]) -> str:
     return "" if cp is None else f"{cp / 100:+.2f}"
 
 
-def annotated_game(review) -> chess.pgn.Game:
-    """`review`: a GameReview or its dict."""
+COACH = "Coach:"           # starts the coach's part of a comment, so a reader can tell
+SUMMARY = "Coach summary:" # it from the annotator's (and the app doesn't show it twice)
+
+
+def _after_first(mate: Optional[int], cp: Optional[int], mover_white: bool) -> tuple:
+    """The score after the first move of the engine's line, from the score
+    before it. Centipawns: the same (it is the line's value). Mate: one
+    move fewer when the side moving is the one mating; unchanged when it
+    is the one being mated."""
+    if mate is None:
+        return None, cp
+    mating_white = mate > 0
+    if mating_white == mover_white:
+        left = abs(mate) - 1
+        return (None, None) if left <= 0 else ((left if mating_white else -left), None)
+    return mate, None
+
+
+def _strip_coach(game: chess.pgn.Game) -> None:
+    """Take out what an earlier export by chesscoach added: the parts of
+    comments from "Coach:" on, the summary, and the engine's variations."""
+    def own_part(c: str) -> str:
+        for mark in (SUMMARY, COACH):
+            i = c.find(mark)
+            if i >= 0:
+                c = c[:i]
+        return c.strip()
+    game.comment = own_part(game.comment)
+    for node in game.mainline():
+        node.comment = own_part(node.comment)
+        parent = node.parent
+        for v in list(parent.variations[1:]):
+            if v.comment.strip().startswith(f"{COACH} Stockfish"):
+                parent.remove_variation(v)
+
+
+def annotated_game(review, source: Optional[chess.pgn.Game] = None) -> chess.pgn.Game:
+    """`review`: a GameReview or its dict. `source`: the game as it was
+    opened; its own comments, NAGs and variations are kept and the coach's
+    are added after them (marked "Coach:")."""
+    import io
     headers = dict(_g(review, "headers") or {})
-    game = chess.pgn.Game()
-    for k, v in headers.items():
-        game.headers[k] = v
     start = chess.Board(_g(review, "start_fen") or chess.STARTING_FEN)
-    if start.fen() != chess.STARTING_FEN:
-        game.setup(start)
-    models = _g(review, "models") or []
-    game.headers["Annotator"] = f"chesscoach {__version__}" + (f" ({models[0]})" if models else "")
     moves = _g(review, "moves") or []
+    if source is not None and [m.uci() for m in source.mainline_moves()] == [_g(m, "uci") for m in moves]:
+        game = chess.pgn.read_game(io.StringIO(str(source)))      # a copy, with everything in it
+        own = True
+        _strip_coach(game)                     # a re-review replaces the coach's earlier notes
+    else:
+        game = chess.pgn.Game()
+        for k, v in headers.items():
+            game.headers[k] = v
+        if start.fen() != chess.STARTING_FEN:
+            game.setup(start)
+        own = False
+    models = _g(review, "models") or []
+    coach = f"chesscoach {__version__}" + (f" ({models[0]})" if models else "")
+    prior = game.headers.get("Annotator", "")
+    game.headers["Annotator"] = coach if not prior or prior.startswith("chesscoach") else f"{prior}; {coach}"
     named = [m for m in moves if _g(m, "opening")]
     if named:
         o = _g(named[-1], "opening")
-        game.headers.setdefault("ECO", o.get("eco", ""))
-        game.headers.setdefault("Opening", o.get("name", ""))
+        if game.headers.get("ECO", "?") in ("", "?"):
+            game.headers["ECO"] = o.get("eco", "")
+        if game.headers.get("Opening", "?") in ("", "?"):
+            game.headers["Opening"] = o.get("name", "")
 
     intro = []
     acc = _g(review, "accuracy") or {}
@@ -98,23 +147,27 @@ def annotated_game(review) -> chess.pgn.Game:
     intro += [c["text"] if isinstance(c, dict) else c.text
               for c in (_g(review, "summary") or []) if (_g(c, "kind") != "accuracy")]
     if intro:
-        game.comment = " ".join(intro).replace("{", "(").replace("}", ")")
+        text = f"{SUMMARY} " + " ".join(intro).replace("{", "(").replace("}", ")")
+        game.comment = f"{game.comment} {text}".strip() if own and game.comment else text
 
+    nodes = list(game.mainline()) if own else []
     node = game
     board = start.copy()
-    for mv in moves:
+    for k, mv in enumerate(moves):
         move = chess.Move.from_uci(_g(mv, "uci"))
         parent, before = node, board.copy()
-        node = parent.add_variation(move)
+        node = nodes[k] if own else parent.add_variation(move)
         board.push(move)
         label, reason = _g(mv, "label", ""), _g(mv, "reason", "")
         mark = _g(mv, "mark", "")
-        if mark in MARK_NAG:                       # !! ! !? from classify.py
-            node.nags.add(MARK_NAG[mark])
-        elif label in NAG_FOR:
-            node.nags.add(NAG_FOR[label])
-        elif reason in PRAISE:
-            node.nags.add(chess.pgn.NAG_GOOD_MOVE)
+        has_move_nag = any(1 <= n <= 6 for n in node.nags)         # the annotator's mark wins
+        if not has_move_nag:
+            if mark in MARK_NAG:                   # !! ! !? from classify.py
+                node.nags.add(MARK_NAG[mark])
+            elif label in NAG_FOR:
+                node.nags.add(NAG_FOR[label])
+            elif reason in PRAISE:
+                node.nags.add(chess.pgn.NAG_GOOD_MOVE)
         parts = []
         # The opening once, where the game settled into it (the header has it too).
         if named and mv is named[-1]:
@@ -130,16 +183,26 @@ def annotated_game(review) -> chess.pgn.Game:
         tac = _g(mv, "tactics") or {}
         if tac.get("allowed"):
             parts.append("Allowed " + ", ".join(MOTIFS.get(t, t) for t in tac["allowed"]) + ".")
+        prior = re.sub(r"\s*\[%eval [^\]]*\]\s*", " ", node.comment).strip() if own else ""
         if parts:
-            node.comment = " ".join(parts)
+            node.comment = (f"{prior} " if prior else "") + f"{COACH} " + " ".join(parts)
+        elif own:
+            node.comment = prior
         # [%eval] goes into the comment, so it is set after the text
         if not board.is_game_over():
             sc = _score(_g(mv, "score_cp"), _g(mv, "score_mate"))
             if sc is not None:
                 node.set_eval(sc)
-        # The engine's better line, as a variation from the position before.
+        # The engine's better line, as a variation from the position before
+        # (unless the annotator already gave that move as a variation).
         line = _g(mv, "best_line") or []
         if label in ERRORS and line and line[0] != _g(mv, "san"):
+            try:
+                first_move = before.parse_san(line[0])
+            except ValueError:
+                first_move = None
+            if first_move is None or parent.has_variation(first_move):
+                continue
             var, b = parent, before.copy()
             first = None
             for san in line:
@@ -152,14 +215,18 @@ def annotated_game(review) -> chess.pgn.Game:
                 b.push(m2)
             if first is not None:
                 missed = [MOTIFS.get(t, t) for t in tac.get("missed", [])]
-                first.comment = ("Stockfish " + _score_text(_g(mv, "best_cp"), _g(mv, "best_mate"))
+                first.comment = (f"{COACH} Stockfish "
+                                 + _score_text(_g(mv, "best_cp"), _g(mv, "best_mate"))
                                  + (f"; {', '.join(missed)}" if missed else "")).strip()
-                sc = _score(_g(mv, "best_cp"), _g(mv, "best_mate"))
+                # [%eval] is the position after the move it follows
+                mate, cp = _after_first(_g(mv, "best_mate"), _g(mv, "best_cp"),
+                                        before.turn == chess.WHITE)
+                sc = _score(cp, mate)
                 if sc is not None:
                     first.set_eval(sc)
-    game.headers["Result"] = headers.get("Result", "*")
+    game.headers["Result"] = headers.get("Result", game.headers.get("Result", "*"))
     return game
 
 
-def annotated_pgn(review) -> str:
-    return str(annotated_game(review)) + "\n"
+def annotated_pgn(review, source: Optional[chess.pgn.Game] = None) -> str:
+    return str(annotated_game(review, source)) + "\n"
