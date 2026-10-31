@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.1 — unreleased
+
+- The "In plain sight / Partly hidden / Hard to see" line and forced lines
+  are shown under the coach's note in the Annotations pane too: with that
+  pane open, the comment panel below it could be pushed out of view, and
+  the line with it
+
 ## 0.20.0 — unreleased
 
 - **All moves** (Fritz's "Explain all moves"): every legal move in the

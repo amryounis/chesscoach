@@ -638,7 +638,9 @@ function coachNote(ply) {
   if (!text || !mv.reason) return "";
   const mark = markOf(mv);
   const head = `${esc(JUDGMENT_TEXT[mv.label] || mv.label)}${mark ? ` ${esc(mark)}` : ""}`;
-  return `<div class="cmt coach"><span class="by-coach">Coach · ${head}</span>${renderAnnotation(text)}</div>`;
+  // how hard it was, and forced lines, here too: with the Annotations pane
+  // open, the comment panel under it can be pushed out of view
+  return `<div class="cmt coach"><span class="by-coach">Coach · ${head}</span>${renderAnnotation(text)}${difficultyHtml(mv)}</div>`;
 }
 
 // Main line in paragraphs, variations inline in brackets, as in a book.

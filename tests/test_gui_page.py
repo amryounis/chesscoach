@@ -186,6 +186,10 @@ def test_practice_your_mistakes(page):
     page.select_option("#review-side", "white")          # White made the mistakes here
     page.click("#start-review")
     page.wait_for_selector("#moments .practice-link", timeout=180000)
+    # how hard each error was: in the Annotations pane as well as the comment
+    page.wait_for_selector("#annotations .cmt.coach .difficulty", state="attached")
+    assert page.locator("#annotations .cmt.coach .difficulty").first.inner_text().split(".")[0] in (
+        "In plain sight", "Partly hidden", "Hard to see")
     page.click("#moments .practice-link")
     page.wait_for_selector("#drill:not([hidden])")
     assert "Find a better move" in page.inner_text("#drill-prompt")
