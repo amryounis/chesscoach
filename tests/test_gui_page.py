@@ -62,6 +62,7 @@ def page(browser, stockfish, monkeypatch, tmp_path):
     ctx = browser.new_context(viewport={"width": 1320, "height": 860})
     pg = ctx.new_page()
     pg.errors = []
+    pg.api = api
     pg.on("pageerror", lambda e: pg.errors.append(str(e)))
     pg.expose_function("__py", lambda name, args: getattr(api, name)(*args))
     pg.add_init_script(BRIDGE)
@@ -200,6 +201,12 @@ def test_practice_your_mistakes(page):
     assert "engine line" in page.inner_text("#drill-result").lower()   # shown in caps
     # "Show me" on the next one reveals the move, the line and the comment.
     page.click("#drill-next")
+    page.click("#drill-hint")                              # a hint first, one step
+    page.wait_for_selector("#drill-hint-box:not([hidden]) li", timeout=60000)
+    assert page.inner_text("#drill-hint") == "Hint 2 of 4"
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "drill-hint.png"))
     page.click("#drill-reveal")
     page.wait_for_selector("#drill-result .verdict", timeout=60000)
     assert "The engine's move was" in page.inner_text("#drill-result")
@@ -389,4 +396,63 @@ def test_explorer_shows_the_books_moves_and_their_ideas(page, tmp_path):
     first.click()
     page.wait_for_selector("#ex-about .why")
     assert "The idea of e4" in page.inner_text("#ex-about") and "Grabs the centre" in page.inner_text("#ex-about")
+    assert page.errors == []
+
+
+def test_hints_and_the_blunder_alert_in_play(page):
+    page.click("#tab-play")
+    page.click("#start-game")
+    page.wait_for_selector("#play-live:not([hidden])")
+    assert page.inner_text("#play-hint-btn") == "Hint"
+    page.click("#play-hint-btn")
+    page.wait_for_selector("#play-hint:not([hidden]) li")
+    assert page.inner_text("#play-hint-btn") == "Hint 2 of 4"
+    page.click("#play-hint-btn")
+    page.wait_for_function("document.querySelectorAll('#play-hint li').length === 2")
+    assert "The move goes to" in page.inner_text("#play-hint") or "takes on" in page.inner_text("#play-hint")
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "hint.png"))
+    _click_square(page, "e2", "white")
+    _click_square(page, "e4", "white")
+    page.wait_for_function("document.querySelectorAll('#play-moves .mv').length === 2")
+    assert page.is_hidden("#play-hint")                       # a new position: no old hint
+    # A blunder: the alert asks; Think again keeps the board as it was.
+    page.api._play.board.set_fen("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 4")
+    page.click("#takeback")                     # nothing to take back: just shows the board
+    page.wait_for_timeout(300)
+    _click_square(page, "h5", "white")
+    _click_square(page, "h7", "white")
+    page.wait_for_selector("#play-alert:not([hidden])", timeout=30000)
+    assert page.inner_text("#play-alert-text").startswith("Are you sure about")
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "alert.png"))
+    page.click("#alert-back")
+    assert page.is_hidden("#play-alert")
+    assert page.locator("#play-moves .mv").count() == 0
+    _click_square(page, "h5", "white")
+    _click_square(page, "h7", "white")
+    page.wait_for_selector("#play-alert:not([hidden])", timeout=30000)
+    page.click("#alert-play")
+    page.wait_for_function("document.querySelectorAll('#play-moves .mv').length === 2")
+    assert page.is_hidden("#play-alert")
+    assert page.errors == []
+
+
+def test_paste_a_position_and_copy_it(page):
+    page.evaluate("() => { if (navigator.clipboard) navigator.clipboard.readText = () => Promise.reject(new Error('no')); }")
+    page.click("#paste-btn")
+    page.wait_for_selector("#paste-dialog[open]")
+    page.fill("#paste-area", "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 4")
+    page.click("#paste-open")
+    page.wait_for_function("document.querySelector('#game-title').textContent === 'Pasted position'")
+    assert "White to move" in page.inner_text("#game-sub")
+    assert page.is_hidden("#review-controls")
+    assert page.api._game.board().fen().startswith("r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2")
+    page.click("#copy-fen")
+    page.wait_for_function("/copied|clipboard/.test(document.querySelector('#toast').textContent)")
+    for tab in ("play", "practice", "games"):
+        page.click(f"#tab-{tab}")
+        assert page.is_visible("#copy-fen") and page.is_hidden("#nav [data-nav=first]")
     assert page.errors == []

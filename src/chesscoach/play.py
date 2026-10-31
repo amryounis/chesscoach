@@ -73,6 +73,11 @@ class PlayGame:
         self.result_reason = ""
         self.resigned: Optional[chess.Color] = None
         self.engine_name = ""
+        # Help the player took, by ply (the number of moves before the
+        # player's move): hint steps seen, and moves the blunder alert
+        # questioned. Saved in the PGN as [%hint n] and [%alert SAN].
+        self.hints: dict = {}
+        self.alerts: dict = {}
         self._engine = open_maia(elo, temperature)
         self._limit = chess.engine.Limit(nodes=1)
         if self._engine is not None:
@@ -131,15 +136,23 @@ class PlayGame:
 
     # -- moves -------------------------------------------------------------
 
-    def player_move(self, uci: str) -> str:
-        """Play the player's move (UCI, e.g. 'e2e4' or 'e7e8q'); returns SAN."""
+    def check_move(self, uci: str) -> chess.Move:
+        """The player's move, if it may be played now (else ValueError)."""
         if self.over:
             raise ValueError("The game is over.")
         if self.board.turn != self.player_color:
             raise ValueError("It is not your move.")
-        move = chess.Move.from_uci(uci)
+        try:
+            move = chess.Move.from_uci(uci)
+        except ValueError:
+            raise ValueError(f"Illegal move: {uci}") from None
         if move not in self.board.legal_moves:
             raise ValueError(f"Illegal move: {uci}")
+        return move
+
+    def player_move(self, uci: str) -> str:
+        """Play the player's move (UCI, e.g. 'e2e4' or 'e7e8q'); returns SAN."""
+        move = self.check_move(uci)
         san = self.board.san(move)
         self.board.push(move)
         return san
@@ -184,6 +197,16 @@ class PlayGame:
         game.headers["White"] = name if self.player_color == chess.WHITE else self.engine_name
         game.headers["Black"] = self.engine_name if self.player_color == chess.WHITE else name
         game.headers["Result"] = self.result()
+        node = game
+        for ply, _ in enumerate(self.board.move_stack):
+            node = node.variations[0]
+            notes = []
+            if self.hints.get(ply):
+                notes.append(f"[%hint {self.hints[ply]}]")
+            for san in self.alerts.get(ply, []):
+                notes.append(f"[%alert {san}]")
+            if notes:
+                node.comment = " ".join(notes)
         return game
 
     def pgn(self) -> str:

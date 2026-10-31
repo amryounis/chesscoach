@@ -161,6 +161,8 @@ def queue_tag(progress: dict) -> str:
     """Why a drill sits where it does in the cross-game queue (order())."""
     if not progress or not progress.get("tries"):
         return "New"
+    if progress.get("last_verdict") == "hinted":
+        return "Solved with hints last time"
     if progress.get("last_verdict") not in SOLVED:
         return "Missed last time"
     n = progress.get("solved", 0)

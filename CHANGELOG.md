@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.18.0 — unreleased
+
+Borrowed from Chessmaster and Fritz, adapted.
+
+- **Hints, a step at a time** (Play and Practice). Step 1 says what is
+  going on, worked out by code from Stockfish: a mate to find, a threat to
+  meet ("Black threatens checkmate with Qxf7#", the threat drawn as an
+  arrow), the kind of tactic without the move ("Something is left
+  unprotected. Look at every capture."), material to win, an only move, or
+  nothing urgent and what kind of move fits. Step 2 marks the square,
+  step 3 the piece, step 4 gives the move, what it does and the engine's
+  line. No model, so it can't be wrong about the board; one search per
+  position, kept while you ask for more. In Practice the hint is about the
+  review's best move, and an exercise found after the square or the piece
+  was shown counts as "solved with hints" and comes back like a miss
+- **Blunder alert** (Play): before a move that loses a lot of winning
+  chance, "Are you sure about Qxh7? It looks like a blunder. Check what
+  Black can do after it." Think again, or play it anyway. It never says
+  why. Measured in winning chance like every judgement here, not
+  Chessmaster's pawns, so it doesn't fire at +8 and does at 0.0. Settings:
+  before blunders, before mistakes and blunders (default), before
+  inaccuracies too, or off (`blunder_alert` = 30/20/10/0)
+- Hints and alerts are kept in the played game's PGN (`[%hint 2]`,
+  `[%alert Qxh7]`), and the game's line in Review says how much help was
+  taken ("hints on 3 moves; the blunder alert spoke twice and you changed
+  your move each time")
+- **Copy and paste**: FEN and PGN buttons under the board copy the position
+  and the game (the reviewed game with the coach's notes); Paste or Ctrl+V
+  opens a PGN or a FEN. A pasted position opens in Review without moves,
+  where Explain this position and Ask the coach work on it
+- The move list of a played game is rebuilt from the game's own start
+  position, not always the standard one
+
 ## 0.17.0 — unreleased
 
 - **Opening study** (`chesscoach book study`): an opening book walked once,

@@ -129,7 +129,8 @@ function showTab(name) {
   $("panel-play").hidden = name !== "play";
   $("panel-practice").hidden = name !== "practice";
   $("panel-games").hidden = name !== "games";
-  $("nav").hidden = name !== "review";
+  // Move buttons belong to the review; copy and paste work everywhere.
+  document.querySelectorAll("#nav [data-nav], #nav .nav-gap").forEach((b) => (b.hidden = name !== "review"));
   $("eval").classList.toggle("off", name !== "review");
   if (name === "review") renderReviewBoard();
   else if (name === "practice") openPractice();
@@ -184,11 +185,14 @@ function loadSummary(summary) {
   setView(tree && tree.annotated ? "notes" : "moves");
   $("ask").hidden = false;
   const h = summary.headers;
-  $("game-title").textContent = `${h.White || "?"} – ${h.Black || "?"}`;
+  $("game-title").textContent = !summary.moves.length && h.Event && h.Event !== "?"
+    ? h.Event : `${h.White || "?"} – ${h.Black || "?"}`;
   const bits = [h.Result, h.Event && h.Event !== "?" ? h.Event : "", h.Date && !h.Date.includes("?") ? h.Date : ""];
   const full = Math.ceil(summary.moves.length / 2);
-  $("game-sub").textContent = bits.filter(Boolean).join(", ") + `. ${full} moves.`;
-  $("review-controls").hidden = false;
+  $("game-sub").textContent = summary.moves.length
+    ? bits.filter(Boolean).join(", ") + `. ${full} moves.` + helpText(summary.help)
+    : `${summary.start_fen.split(" ")[1] === "w" ? "White" : "Black"} to move. A position without moves: explain it, or ask the coach about it.`;
+  $("review-controls").hidden = !summary.moves.length;
   $("save-report").hidden = true;
   $("save-annotated").hidden = true;
   $("moments").hidden = true;
@@ -206,6 +210,28 @@ function loadSummary(summary) {
     const when = (summary.review.reviewed_at || "").replace("T", " ").slice(0, 16);
     toast(`Showing the review from ${when || "before"}. "Review game" redoes it.`, 5000);
   }
+}
+
+// Help the player took in a game played here (hints, blunder alerts).
+function helpText(help) {
+  if (!help || !help.length) return "";
+  const hinted = help.filter((h) => h.hint);
+  const alerted = help.filter((h) => h.alerts.length);
+  const parts = [];
+  if (hinted.length) {
+    const full = hinted.filter((h) => h.hint >= 4).length;
+    parts.push(`hints on ${hinted.length} move${hinted.length === 1 ? "" : "s"}`
+      + (full ? ` (the move shown ${full === hinted.length ? "each time" : `on ${full}`})` : ""));
+  }
+  if (alerted.length) {
+    const n = alerted.length, changed = alerted.filter((h) => h.changed).length;
+    const each = n === 1 ? "" : " each time";
+    const what = changed === n ? `you changed your move${each}`
+      : changed === 0 ? `you played the move anyway${each}`
+      : `you changed your move ${changed} of ${n} times`;
+    parts.push(`the blunder alert spoke ${n} time${n === 1 ? "" : "s"} and ${what}`);
+  }
+  return ` Help taken: ${parts.join("; ")}.`;
 }
 
 // ---- a file with many games: pick one
@@ -1097,7 +1123,7 @@ $("save-report").addEventListener("click", async () => {
   if (res && res.saved) toast(`Saved ${res.saved}`);
 });
 
-document.querySelectorAll("#nav button").forEach((b) => b.addEventListener("click", () => nav(b.dataset.nav)));
+document.querySelectorAll("#nav button[data-nav]").forEach((b) => b.addEventListener("click", () => nav(b.dataset.nav)));
 function nav(what) {
   if (what === "flip") return setOrientation(orientation === "white" ? "black" : "white");
   if (what === "arrows") {
@@ -1124,9 +1150,87 @@ document.addEventListener("keydown", (e) => {
   if (k) { e.preventDefault(); nav(k); }
 });
 
+// ---------------------------------------------------------------- copy and paste
+
+function currentFen() {
+  if (tab === "play") return P.state ? P.state.fen : START;
+  if (tab === "practice") { const d = curDrill(); return d ? d.fen : ""; }
+  if (tab === "games") return G.ex && G.ex.fen ? G.ex.fen : "";
+  if (!R.game) return "";
+  if (R.node !== null && treeNode(R.node)) return treeNode(R.node).fen;
+  return R.cursor < 0 ? R.game.start_fen : R.game.moves[R.cursor].fen_after;
+}
+
+// The async clipboard can wait forever on a permission nobody is asked
+// for; give it a moment, then use the old way.
+const soon = (p, ms = 800) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("timeout")), ms))]);
+
+async function copyText(text, what) {
+  let ok = false;
+  try { await soon(navigator.clipboard.writeText(text)); ok = true; } catch (e) { /* fall back below */ }
+  if (!ok) {
+    const t = document.createElement("textarea");
+    t.value = text;
+    t.style.position = "fixed"; t.style.opacity = "0";
+    document.body.appendChild(t);
+    t.select();
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    t.remove();
+  }
+  toast(ok ? `${what} copied.` : `Couldn't reach the clipboard.`);
+}
+
+$("copy-fen").addEventListener("click", () => {
+  const fen = currentFen();
+  if (fen) copyText(fen, "Position (FEN)"); else toast("No position on the board yet.");
+});
+$("copy-pgn").addEventListener("click", async () => {
+  const res = await call("copy_pgn", tab === "play" ? "play" : "review");
+  if (res) copyText(res.text, tab !== "play" && R.reviewed ? "Game with the coach's notes (PGN)" : "Game (PGN)");
+});
+
+async function openPasted(text) {
+  const s = await call("paste_text", text);
+  if (!s) return;
+  showTab("review");
+  loadSummary(s);
+  if (!s.moves.length) toast("Position opened. Explain this position, or ask the coach about it.", 5000);
+}
+$("paste-btn").addEventListener("click", async () => {
+  let text = "";
+  try { text = await soon(navigator.clipboard.readText()); } catch (e) { /* not allowed: ask for it */ }
+  if (text && text.trim()) return openPasted(text);
+  $("paste-area").value = "";
+  $("paste-dialog").showModal();
+  $("paste-area").focus();
+});
+$("paste-dialog").addEventListener("close", () => {
+  if ($("paste-dialog").returnValue === "open" && $("paste-area").value.trim()) openPasted($("paste-area").value);
+});
+// Ctrl+V anywhere but in a text field opens what is on the clipboard.
+document.addEventListener("paste", (e) => {
+  if (e.target.closest("input, textarea, select, dialog")) return;
+  const text = e.clipboardData && e.clipboardData.getData("text");
+  if (!text || !text.trim()) return;
+  e.preventDefault();
+  openPasted(text);
+});
+
 // ---------------------------------------------------------------- play
 
-const P = { state: null, busy: false };
+const P = { state: null, busy: false, hint: null, alert: null };
+
+// Hints come one step at a time; the board shows the latest step's marks.
+function hintHtml(h) {
+  return `<ol>${h.steps.map((st) => `<li>${esc(figurineText(st.text))}</li>`).join("")}</ol>`;
+}
+function hintShapes(h) {
+  return h && h.steps.length ? h.steps[h.steps.length - 1].shapes : [];
+}
+function hintLabel(h) {
+  if (!h) return "Hint";
+  return h.n >= h.total ? "No more hints" : `Hint ${h.n + 1} of ${h.total}`;
+}
 
 $("elo").addEventListener("input", () => {
   $("elo-out").textContent = $("elo").value;
@@ -1153,6 +1257,8 @@ function opponentNote(el, op) {
 
 $("start-game").addEventListener("click", startGame);
 $("new-game").addEventListener("click", () => {
+  P.hint = null;
+  P.alert = null;
   $("play-live").hidden = true;
   $("play-setup").hidden = false;
   showOpponent();
@@ -1173,8 +1279,10 @@ async function startGame() {
 }
 
 function applyPlayState(st) {
+  if (!P.state || P.state.fen !== st.fen) P.hint = null;   // hints belong to one position
   P.state = st;
   P.busy = false;
+  P.alert = st.alert || null;
   setOrientation(st.orientation);
   renderPlayBoard();
   $("play-status").textContent = st.status;
@@ -1183,10 +1291,50 @@ function applyPlayState(st) {
   fillMoveGrid($("play-moves"), st.moves, st.moves.length - 1, null, false);
   $("takeback").hidden = st.over;
   $("resign").hidden = st.over;
+  renderPlayHelp();
   $("review-played").hidden = !st.over;
   $("save-pgn").hidden = !st.over && st.moves.length === 0;
   $("new-game").hidden = !st.over;
 }
+
+function renderPlayHelp() {
+  const st = P.state;
+  const mine = st && !st.over && st.turn === st.orientation;
+  $("play-hint-btn").hidden = !mine;
+  $("play-hint-btn").textContent = hintLabel(P.hint);
+  $("play-hint-btn").disabled = !!P.hint && P.hint.n >= P.hint.total;
+  $("play-hint").hidden = !(mine && P.hint);
+  $("play-hint").innerHTML = P.hint ? hintHtml(P.hint) : "";
+  $("play-alert").hidden = !P.alert;
+  $("play-alert-text").textContent = P.alert ? figurineText(P.alert.text) : "";
+}
+
+$("play-hint-btn").addEventListener("click", async () => {
+  if (P.busy) return;
+  const btn = $("play-hint-btn");
+  btn.disabled = true;
+  btn.textContent = "Thinking…";
+  const h = await call("play_hint");
+  if (h) P.hint = h;
+  renderPlayHelp();
+  renderPlayBoard();
+});
+$("alert-back").addEventListener("click", () => {
+  P.alert = null;
+  renderPlayHelp();
+  renderPlayBoard();
+});
+$("alert-play").addEventListener("click", async () => {
+  const a = P.alert;
+  if (!a) return;
+  P.alert = null;
+  P.busy = true;
+  renderPlayHelp();
+  $("play-status").textContent = `${P.state.opponent} is thinking…`;
+  const st = await call("play_move", a.uci, true);
+  if (!st) { P.busy = false; renderPlayBoard(); return; }
+  applyPlayState(st);
+});
 
 function renderPlayBoard() {
   if (tab !== "play") return;
@@ -1213,6 +1361,7 @@ function renderPlayBoard() {
       events: { after: onPlayerMove },
     },
   });
+  if (P.hint && P.hint.fen === st.fen) board.setAutoShapes(hintShapes(P.hint));
 }
 
 async function onPlayerMove(orig, dest) {
@@ -1223,6 +1372,8 @@ async function onPlayerMove(orig, dest) {
     uci += piece;
   }
   P.busy = true;
+  P.alert = null;
+  renderPlayHelp();
   board.set({ movable: { color: undefined } });
   $("play-status").textContent = `${P.state.opponent} is thinking…`;
   const st = await call("play_move", uci);
@@ -1259,14 +1410,19 @@ $("review-played").addEventListener("click", async () => {
 // ---------------------------------------------------------------- settings
 
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
-                         "comment_language", "library_dir", "max_seconds"];
+                         "comment_language", "library_dir", "max_seconds", "blunder_alert"];
 const SETTINGS_CHECKS = ["autosave"];
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
   if (!s) return;
   settingsCache = s;
   const f = $("settings-form");
-  for (const k of SETTINGS_FIELDS) f.elements[k].value = s[k] ?? "";
+  for (const k of SETTINGS_FIELDS) {
+    const el = f.elements[k], v = String(s[k] ?? "");
+    // a value set in the config file that the list doesn't offer: keep it
+    if (el.tagName === "SELECT" && v && ![...el.options].some((o) => o.value === v)) el.add(new Option(v, v));
+    el.value = v;
+  }
   for (const k of SETTINGS_CHECKS) f.elements[k].checked = !!s[k];
   $("settings-file").textContent = `Saved to ${s.config_file}`;
   $("settings-error").hidden = true;
@@ -1320,9 +1476,9 @@ $("settings-form").addEventListener("submit", async (e) => {
 // Your reviewed mistakes come back as positions to solve. The board takes
 // one move; Stockfish (in Python) judges it against the review's numbers.
 
-const X = { drills: [], i: 0, result: null, loaded: null, busy: false };
+const X = { drills: [], i: 0, result: null, loaded: null, busy: false, hint: null };
 const VERDICT = { best: "Correct", good: "That works too", repeat: "Same move as in the game",
-                  miss: "Not quite", revealed: "The answer" };
+                  miss: "Not quite", revealed: "The answer", hinted: "Correct, with hints" };
 
 document.querySelectorAll("input[name=pscope]").forEach((r) =>
   r.addEventListener("change", () => { X.loaded = null; openPractice(); }));
@@ -1330,9 +1486,20 @@ $("drill-next").addEventListener("click", () => {
   if (!X.drills.length) return;
   X.i = (X.i + 1) % X.drills.length;
   X.result = null;
+  X.hint = null;
   renderDrill();
 });
-$("drill-retry").addEventListener("click", () => { X.result = null; renderDrill(); });
+$("drill-retry").addEventListener("click", () => { X.result = null; X.hint = null; renderDrill(); });
+$("drill-hint").addEventListener("click", async () => {
+  const d = curDrill();
+  if (!d || X.busy || X.result) return;
+  const btn = $("drill-hint");
+  btn.disabled = true;
+  btn.textContent = "Thinking…";
+  const h = await call("practice_hint", d.id);
+  if (h) X.hint = h;
+  renderDrill();
+});
 $("drill-reveal").addEventListener("click", () => submitDrill(null));
 
 async function openPractice() {
@@ -1342,7 +1509,7 @@ async function openPractice() {
     document.querySelector("input[name=pscope][value=all]").checked = true;
   }
   if (X.loaded !== scope) {
-    X.drills = []; X.result = null; X.i = 0;
+    X.drills = []; X.result = null; X.i = 0; X.hint = null;
     renderDrill();
     const res = await call("practice_drills", scope);
     X.loaded = scope;
@@ -1387,7 +1554,13 @@ function renderDrill() {
   $("drill-prompt").innerHTML = `${side} to move. In the game you played <b>${esc(figurine(d.move_label))}</b>, ${/^[aeiou]/i.test(d.label) ? "an" : "a"} ${esc(d.label.toLowerCase())}. Find a better move.`;
   const r = X.result;
   $("drill-reveal").hidden = !!r;
-  $("drill-retry").hidden = !r || r.verdict === "best" || r.verdict === "revealed";
+  const hint = !r && X.hint && X.hint.fen === d.fen ? X.hint : null;
+  $("drill-hint").hidden = !!r;
+  $("drill-hint").textContent = hintLabel(hint);
+  $("drill-hint").disabled = !!hint && hint.n >= hint.total;
+  $("drill-hint-box").hidden = !hint;
+  $("drill-hint-box").innerHTML = hint ? hintHtml(hint) : "";
+  $("drill-retry").hidden = !r || ["best", "revealed", "hinted"].includes(r.verdict);
   $("drill-result").innerHTML = r ? drillResultHtml(d, r) : "";
   if (tab !== "practice") return;
   if (orientation !== d.color) setOrientation(d.color);
@@ -1412,12 +1585,14 @@ function renderDrill() {
       if (u) shapes.push({ orig: u.slice(0, 2), dest: u.slice(2, 4), brush: r.verdict === "good" ? "played" : "attack" });
     }
     shapes.push({ orig: d.best_uci.slice(0, 2), dest: d.best_uci.slice(2, 4), brush: "defend" });
+  } else if (hint) {
+    shapes.push(...hintShapes(hint));
   }
   board.setAutoShapes(shapes);
 }
 
 function drillResultHtml(d, r) {
-  const cls = r.verdict === "best" || r.verdict === "good" ? "ok" : "no";
+  const cls = ["best", "good", "hinted"].includes(r.verdict) ? "ok" : "no";
   let html = `<p class="verdict ${cls}"><b>${esc(VERDICT[r.verdict] || "")}.</b> ${esc(figurineText(r.message))}</p>`;
   if (r.line && r.line.length) html += `<p class="line"><b class="k">Engine line</b> ${esc(lineText(d.fen, r.line))}</p>`;
   if (d.explanation) html += `<div class="drill-why"><b class="k">The coach said in the review</b>${renderAnnotation(d.explanation)}</div>`;
@@ -1449,6 +1624,7 @@ async function submitDrill(uci) {
   res.answer_uci = uci || "";
   d.progress = res.progress || d.progress;
   X.result = res;
+  X.hint = null;
   renderDrill();
   if (uci) board.set({ fen: d.fen });        // show the position, arrows carry the moves
 }

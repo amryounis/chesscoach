@@ -1,6 +1,8 @@
 """The GUI's Python side, exercised without a window."""
 import time
 
+import chess
+
 import pytest
 
 from chesscoach import config, narrator
@@ -179,3 +181,65 @@ def test_library_open_resets_the_picker_and_bad_reviews_are_ignored(api):
         (rdir / f"{gid}.json").write_text(junk)
         out = api.library_open(row["id"])
         assert "error" not in out and "review" not in out
+
+
+def test_hints_come_one_step_at_a_time_and_are_kept(api):
+    api.new_game("white", 1500)
+    first = api.play_hint()
+    assert first["n"] == 1 and len(first["steps"]) == 1 and first["total"] == 4
+    for _ in range(5):                                # never past the move
+        last = api.play_hint()
+    assert last["n"] == 4 and last["steps"][0] == first["steps"][0]
+    api.play_move("e2e4")
+    assert "[%hint 4]" in api.copy_pgn("play")["text"]
+
+
+def test_blunder_alert_asks_before_playing(api):
+    api.new_game("white", 1500)
+    g = api._play
+    assert "alert" not in api.play_move("e2e4")       # fine: no question
+    g.board.set_fen("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 4")
+    st = api.play_move("h5h7")                        # gives the queen for a pawn
+    assert st["alert"]["san"] == "Qxh7" and st["moves"] == [] and not st["played"]
+    st = api.play_move("h5h7", True)                  # played anyway
+    assert st["played"] == "Qxh7"
+    assert "[%alert Qxh7]" in api.copy_pgn("play")["text"]
+    config.settings.blunder_alert = 0                 # off: no question
+    api.new_game("white", 1500)
+    api._play.board.set_fen("r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 4")
+    assert "alert" not in api.play_move("h5h7")
+
+
+def test_hints_are_only_for_your_move(api):
+    assert "error" in api.play_hint()                 # no game
+    api.new_game("white", 1500)
+    api.resign()
+    assert "error" in api.play_hint()
+
+
+def test_paste_a_fen_or_a_pgn_and_copy_it_back(api):
+    out = api.paste_text("  r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 4\n")
+    assert out["moves"] == [] and out["headers"]["Event"] == "Pasted position"
+    assert "nothing to review" in api.start_review("white")["error"]
+    assert "error" not in api.explain_position(-1)
+    assert "error" in api.paste_text("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBN w KQkq - 0 1")
+    assert "error" in api.paste_text("   ")
+    out = api.paste_text("1. e4 e5 2. Nf3 Nc6 *")
+    assert [m["san"] for m in out["moves"]] == ["e4", "e5", "Nf3", "Nc6"]
+    assert api.copy_pgn("review")["text"].endswith("1. e4 e5 2. Nf3 Nc6 *")
+    assert "error" in api.copy_pgn("play")
+
+
+def test_practice_hints_past_the_first_mean_solved_with_hints(api, monkeypatch, tmp_path):
+    from chesscoach import practice
+    monkeypatch.setattr(practice, "progress_path", lambda: tmp_path / "practice.json")
+    drill = {"id": "d1", "fen": chess.STARTING_FEN, "best_uci": "e2e4", "best_san": "e4",
+             "played_uci": "a2a3", "label": "Mistake", "win_before": 55.0, "explanation": ""}
+    api._drills = {"d1": drill}
+    assert api.practice_hint("d1")["steps"][0]
+    api.practice_hint("d1")                           # the square: a real help
+    res = api.practice_answer("d1", "e2e4")
+    assert res["verdict"] == "hinted" and res["hints"] == 2
+    assert practice.queue_tag(res["progress"]) == "Solved with hints last time"
+    res = api.practice_answer("d1", "e2e4")           # alone this time
+    assert res["verdict"] == "best"

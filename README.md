@@ -107,11 +107,26 @@ chesscoach gui
   *Review this game* sends it straight to the coach. Without Maia the
   opponent is Stockfish, which can't play below 1320 and plays like an
   engine; the setup screen says so, with its real strength, before you start.
+  *Hint* helps a step at a time: first what is going on ("Black threatens
+  checkmate with Qxf7#", "something is left unprotected", "nothing urgent:
+  bring a piece into the game"), then the square, then the piece, and last
+  the move with the engine's line; often the first step is enough. The
+  **blunder alert** asks "Are you sure about Qxh7? It looks like a blunder"
+  before a move that throws away a lot of winning chance, without saying
+  why (Settings: before blunders, before mistakes too, before inaccuracies
+  too, or off). Hints and alerts are kept in the game's PGN, and the review
+  says how much help was taken.
 - **Practice**: your inaccuracies, mistakes and blunders from reviewed games
   come back as positions to solve. Make a move; Stockfish judges it (another
   move that keeps your chances counts), then you see the engine's move, its
   line and what the coach said in the review. Exercises you miss come back
   first. Choose the game you just reviewed or all your reviewed games.
+  *Hint* works here too; an exercise solved after being shown the square or
+  the piece counts as solved with hints and comes back to do alone.
+- **Copy and paste**: under the board, *FEN* and *PGN* copy the position and
+  the game (after a review, with the coach's notes); *Paste* or Ctrl+V
+  opens a PGN or a FEN from the clipboard. A pasted position opens in Review,
+  where Explain this position and Ask the coach work on it.
 - **Explain this position / Ask the coach**: under the comment, for any move
   of the open game. The coach explains the position, or answers a question
   such as "Why not Nd2?", "Is my bishop safe?" or "After Re1+ Kd8 Ne5,

@@ -61,6 +61,8 @@ class Settings:
     grounding: bool = True            # verify the model's claims on the board
     concepts: bool = True             # engine-verified threats, piece roles, key facts
     concept_depth: int = 14           # depth of those extra searches
+    blunder_alert: int = 20           # Play: ask "are you sure?" before a move losing this many
+                                      # points of winning chance (30 blunders, 20 mistakes, 10 inaccuracies; 0 off)
     source: str = "defaults"          # where the settings came from (info only)
 
     def require_stockfish(self) -> None:
@@ -189,6 +191,11 @@ grounding = true
 # extra searches per moment at concept_depth.
 concepts = true
 concept_depth = 14
+
+# Play: before a move that throws away this many points of winning chance,
+# ask "are you sure?" (without saying why). 30 = blunders only, 20 =
+# mistakes too, 10 = inaccuracies too, 0 = off.
+blunder_alert = 20
 '''
 
 

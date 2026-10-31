@@ -92,8 +92,9 @@ def game_summary(game: chess.pgn.Game) -> dict:
     from ..pgn_reader import game_tree
     # Always the tree: the Annotations pane shows the annotator's notes when
     # the PGN has them and the coach's once the game is reviewed.
+    from ..hints import help_taken
     return {"headers": dict(game.headers), "start_fen": game.board().fen(),
-            "moves": moves, "tree": game_tree(game)}
+            "moves": moves, "tree": game_tree(game), "help": help_taken(game)}
 
 
 def _patterns_after(review) -> list:
@@ -127,8 +128,12 @@ class Api:
         self._game_key = 0                    # changes with every game opened
         self._play_saved = ("", 0, "")        # (id, moves, result) of the played game as last saved
         self._drills: dict = {}               # practice: id -> drill, from the last listing
+        # A full-strength Stockfish for practice, hints and the blunder
+        # alert (the Play opponent is Maia or a weakened Stockfish).
         self._practice_sf = None
         self._practice_lock = threading.Lock()
+        self._hint_cache: dict = {}           # (fen, forced best) -> hints.hint(...)
+        self._drill_hints: dict = {}          # practice: id -> hint steps seen
 
     def _reviewing(self) -> bool:
         return bool(self._job and self._job.is_alive())
@@ -394,6 +399,9 @@ class Api:
     def start_review(self, side: str = "both", every_move: bool = False) -> dict:
         if self._game is None:
             raise ValueError("Open a game first.")
+        if self._game.next() is None:
+            raise ValueError("This is a position without moves: there is nothing to review. "
+                             "Explain this position, or ask the coach about it.")
         if self._job and self._job.is_alive():
             raise ValueError("A review is already running.")
         config.settings.require_stockfish()
@@ -483,6 +491,48 @@ class Api:
             f.write(annotated_pgn(self._review, self._game))
         return {"saved": path}
 
+    # -- copy and paste ----------------------------------------------------
+
+    @_safe
+    def copy_pgn(self, where: str = "review") -> dict:
+        """The PGN of the game in Review (with the coach's notes once it is
+        reviewed) or in Play, for the clipboard."""
+        if where == "play":
+            if not self._play or not self._play.board.move_stack:
+                raise ValueError("Play some moves first.")
+            return {"text": self._play.pgn()}
+        if self._game is None:
+            raise ValueError("Open a game first.")
+        if self._review is not None:
+            from ..pgn_export import annotated_pgn
+            return {"text": annotated_pgn(self._review, self._game)}
+        return {"text": str(self._game)}
+
+    @_safe
+    def paste_text(self, text: str) -> dict:
+        """Open pasted text: a FEN opens that position in Review (no moves:
+        Explain this position and Ask the coach work on it), anything else
+        is read as PGN."""
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("The clipboard is empty.")
+        if "\n" not in text and "[" not in text and text.count("/") == 7:
+            self._not_while_reviewing("opening another position")
+            try:
+                board = chess.Board(text)
+            except ValueError:
+                raise ValueError("That looks like a FEN, but it isn't a legal position.") from None
+            if not board.is_valid():
+                raise ValueError("That FEN isn't a legal position.")
+            game = chess.pgn.Game()
+            game.setup(board)
+            game.headers["Event"] = "Pasted position"
+            self._games, self._game_path = [game], ""
+            out = self.select_game(0)
+            out["games"] = []
+            return out
+        return self.load_pgn_text(text)
+
     def _set_status(self, **status):
         with self._lock:
             self._status = status
@@ -528,12 +578,49 @@ class Api:
             raise ValueError("That exercise is no longer loaded.")
         config.settings.require_stockfish()
         with self._practice_lock:
-            if self._practice_sf is None:
-                self._practice_sf = chess.engine.SimpleEngine.popen_uci(
-                    config.settings.stockfish_path)
-            res = practice.judge(drill, uci, engine=self._practice_sf)
+            res = practice.judge(drill, uci, engine=self._stockfish())
+        # Found after being shown the square or the piece: not solved alone,
+        # so it comes back like a miss.
+        seen = self._drill_hints.pop(drill_id, 0)
+        if seen >= 2 and res["verdict"] in practice.SOLVED:
+            res["verdict"] = "hinted"
+            res["message"] += " Found with hints, so it will come back to solve on your own."
+        res["hints"] = seen
         res["progress"] = practice.record_attempt(drill_id, res["verdict"])
         return res
+
+    def _stockfish(self):
+        """The helper Stockfish; call with _practice_lock held."""
+        if self._practice_sf is None:
+            config.settings.require_stockfish()
+            self._practice_sf = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+        return self._practice_sf
+
+    def _hint(self, board: chess.Board, best: Optional[chess.Move] = None) -> dict:
+        from .. import hints
+        key = (board.fen(), best.uci() if best else "")
+        if key not in self._hint_cache:
+            with self._practice_lock:
+                h = hints.hint(board, self._stockfish(), best=best)
+            if len(self._hint_cache) > 50:
+                self._hint_cache.clear()
+            self._hint_cache[key] = h
+        return self._hint_cache[key]
+
+    @_safe
+    def practice_hint(self, drill_id: str) -> dict:
+        """One more hint step for the exercise (up to 4; the last is the
+        move). Steps past the first count against solving it alone."""
+        from ..hints import STEPS
+        drill = self._drills.get(drill_id)
+        if drill is None:
+            raise ValueError("That exercise is no longer loaded.")
+        board = chess.Board(drill["fen"])
+        best = chess.Move.from_uci(drill["best_uci"]) if drill.get("best_uci") else None
+        h = self._hint(board, best)
+        n = min(STEPS, self._drill_hints.get(drill_id, 0) + 1)
+        self._drill_hints[drill_id] = n
+        return {"fen": h["fen"], "steps": h["steps"][:n], "n": n, "total": STEPS}
 
     @_safe
     def practice_answer(self, drill_id: str, uci: str) -> dict:
@@ -562,12 +649,45 @@ class Api:
         return self._play_state(reply)
 
     @_safe
-    def play_move(self, uci: str) -> dict:
+    def play_move(self, uci: str, confirm: bool = False) -> dict:
+        """The player's move. With the blunder alert on, a move that loses
+        a lot is not played: the state comes back with "alert", and the
+        page asks; confirm=True plays it anyway."""
         if not self._play:
             raise ValueError("Start a game first.")
-        san = self._play.player_move(uci)
+        g = self._play
+        move = g.check_move(uci)
+        level = config.settings.blunder_alert
+        if not confirm and level > 0:
+            from ..hints import alert
+            with self._practice_lock:
+                a = alert(g.board, move, self._stockfish(), level)
+            if a:
+                said = g.alerts.setdefault(len(g.board.move_stack), [])
+                if a["san"] not in said:
+                    said.append(a["san"])
+                st = self._play_state(None)
+                st["alert"] = a
+                return st
+        san = g.player_move(uci)
         reply = self._play.engine_move()
         return self._play_state(reply, played=san)
+
+    @_safe
+    def play_hint(self) -> dict:
+        """One more hint step for the player's move (up to 4; the last is
+        the move itself). Kept in the game's PGN as [%hint n]."""
+        from ..hints import STEPS
+        g = self._play
+        if not g:
+            raise ValueError("Start a game first.")
+        if g.over or g.board.turn != g.player_color:
+            raise ValueError("Hints are for your own move.")
+        h = self._hint(g.board)
+        ply = len(g.board.move_stack)
+        n = min(STEPS, g.hints.get(ply, 0) + 1)
+        g.hints[ply] = n
+        return {"fen": h["fen"], "steps": h["steps"][:n], "n": n, "total": STEPS}
 
     @_safe
     def takeback(self) -> dict:
@@ -630,7 +750,7 @@ class Api:
         saved = self._autosave_play() if g.over else ""
         b = g.board
         last = b.peek().uci() if b.move_stack else ""
-        moves, tmp = [], chess.Board()
+        moves, tmp = [], b.root()
         for m in b.move_stack:
             n, san, white = tmp.fullmove_number, tmp.san(m), tmp.turn == chess.WHITE
             tmp.push(m)
