@@ -215,6 +215,17 @@ def test_practice_your_mistakes(page):
     page.wait_for_selector("#drill-result .verdict", timeout=60000)
     assert "The engine's move was" in page.inner_text("#drill-result")
     assert "the coach said in the review" in page.inner_text("#drill-result").lower()
+    # All moves after the answer: the game's move carries the review's label,
+    # and moving over the rows (as a wheel scroll does) keeps the list's place
+    page.click("#drill-all")
+    page.wait_for_selector("#drill-result table.all-moves tr", timeout=60000)
+    assert "in the review)" in page.inner_text("#drill-result table.all-moves")
+    page.evaluate("document.querySelector('#drill-result .am-wrap').scrollTop = 120")
+    rows = page.locator("#drill-result table.all-moves tr")
+    rows.nth(6).hover()
+    rows.nth(7).hover()
+    page.mouse.move(5, 5)
+    assert page.evaluate("document.querySelector('#drill-result .am-wrap').scrollTop") == 120
     assert page.errors == []
 
 

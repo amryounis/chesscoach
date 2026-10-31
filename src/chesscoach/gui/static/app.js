@@ -1011,7 +1011,7 @@ function bindSummary(el) {
 const AM_CLASS = { Best: "Excellent", Good: "Good", Inaccuracy: "Inaccuracy", Mistake: "Mistake", Blunder: "Blunder" };
 function allMovesHtml(res, marks) {
   const side = res.fen.split(" ")[1] === "w" ? "White" : "Black";
-  let html = `<p class="am-head">${res.moves.length} moves for ${side} · quick search, depth ${res.depth}; hover a move for its line</p>`;
+  let html = `<p class="am-head" title="A quick search of every move at once. Near a borderline (an inaccuracy is 10 points of winning chance) its verdict can differ from the review's deeper search of the move played.">${res.moves.length} moves for ${side} · quick search, depth ${res.depth}; hover a move for its line</p>`;
   html += `<div class="am-wrap"><table class="all-moves">`;
   for (const m of res.moves) {
     const tag = marks[m.uci] ? ` <span class="am-tag">${esc(marks[m.uci])}</span>` : "";
@@ -1041,7 +1041,10 @@ function renderAsk() {
       if (a.pending) { html += `<p class="thinking">Stockfish is looking at every move…</p>`; continue; }
       const marks = {};
       const next = R.game.moves[R.cursor + 1];
-      if (next && next.uci) marks[next.uci] = "played in the game";
+      if (next && next.uci) {
+        marks[next.uci] = R.reviewed && BAD.has(next.label)
+          ? `played in the game (${next.label.toLowerCase()} in the review)` : "played in the game";
+      }
       html += allMovesHtml(a, marks);
       continue;
     }
@@ -1698,14 +1701,15 @@ function renderDrill() {
   $("drill-retry").hidden = !r || ["best", "revealed", "hinted"].includes(r.verdict);
   $("drill-result").innerHTML = r ? drillResultHtml(d, r) : "";
   if (r && X.all && X.all !== "pending" && X.all.fen === d.fen) {
-    const marks = { [d.played_uci]: "played in the game" };
+    const marks = { [d.played_uci]: `played in the game (${d.label.toLowerCase()} in the review)` };
     if (r.answer_uci && r.answer_uci !== d.played_uci) marks[r.answer_uci] = "your answer";
     $("drill-result").insertAdjacentHTML("beforeend", allMovesHtml(X.all, marks));
-    bindAllMoves($("drill-result"), () => renderDrill());
+    // leaving a row puts the arrows back, without rebuilding the list
+    // (which lost its scroll position mid-wheel)
+    bindAllMoves($("drill-result"), () => board.setAutoShapes(drillShapes(d, r, null)));
   }
   if (tab !== "practice") return;
   if (orientation !== d.color) setOrientation(d.color);
-  const answered = r && r.answer_san;
   board.set({
     fen: d.fen,
     turnColor: d.color,
@@ -1719,9 +1723,13 @@ function renderDrill() {
       events: { after: onDrillMove },
     },
   });
+  board.setAutoShapes(drillShapes(d, r, hint));
+}
+
+function drillShapes(d, r, hint) {
   const shapes = [];
   if (r) {
-    if (answered && r.verdict !== "best") {
+    if (r.answer_san && r.verdict !== "best") {
       const u = r.answer_uci || "";
       if (u) shapes.push({ orig: u.slice(0, 2), dest: u.slice(2, 4), brush: r.verdict === "good" ? "played" : "attack" });
     }
@@ -1729,7 +1737,7 @@ function renderDrill() {
   } else if (hint) {
     shapes.push(...hintShapes(hint));
   }
-  board.setAutoShapes(shapes);
+  return shapes;
 }
 
 function drillResultHtml(d, r) {

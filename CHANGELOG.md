@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.2 — unreleased
+
+- Practice: scrolling the All moves list with the wheel jumped back to the
+  top. Each row the pointer left redrew the whole exercise panel (to put
+  the arrows back); it now redraws only the arrows
+- The game's move in the All moves list says how the review labelled it
+  ("played in the game (inaccuracy in the review)"). The list's quick
+  search can call it Good when the review's deeper search found a loss
+  just over the 10-point line (14. Kxd1: about 7 points behind Rxd1 in
+  the quick search, over 10 in the review); the header's tooltip says so
+
 ## 0.20.1 — unreleased
 
 - The "In plain sight / Partly hidden / Hard to see" line and forced lines
