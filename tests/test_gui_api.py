@@ -243,3 +243,18 @@ def test_practice_hints_past_the_first_mean_solved_with_hints(api, monkeypatch, 
     assert practice.queue_tag(res["progress"]) == "Solved with hints last time"
     res = api.practice_answer("d1", "e2e4")           # alone this time
     assert res["verdict"] == "best"
+
+
+def test_the_opening_is_named_in_play_review_and_the_saved_game(api):
+    api.new_game("white", 1500)
+    st = api.play_move("e2e4")
+    assert st["opening"] and st["opening"]["name"]                # 1.e4 and the reply are named
+    pgn = api.copy_pgn("play")["text"]
+    assert '[Opening "' in pgn and '[ECO "' in pgn
+    out = api.paste_text("1. c4 e6 2. Nc3 Nf6 3. d4 Bb4 4. a3 *")   # the Nimzo by transposition
+    assert out["start_opening"] is None
+    assert out["moves"][5]["opening_now"]["name"] == "Nimzo-Indian Defense"
+    assert out["moves"][6]["opening_now"]["name"] == "Nimzo-Indian Defense: Sämisch Variation" \
+        or out["moves"][6]["opening_now"]["name"].startswith("Nimzo-Indian Defense")
+    pos = api.paste_text("rnbqkb1r/pp1ppppp/5n2/2p5/2P5/2N5/PP1PPPPP/R1BQKBNR w KQkq - 2 3")
+    assert pos["moves"] == []                                     # a position: named if the table names it

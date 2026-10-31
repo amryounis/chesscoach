@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.18.1 — unreleased
+
+- **The opening, always in view.** Above the board, in Review and in Play,
+  the opening the game is in at the current move: "B90 Sicilian Defense:
+  Najdorf Variation, Adams Attack". It is looked up by position, never by
+  move order, so a transposition gets the main line's name (1.Nf3 c5 2.e4
+  d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.h3 is the Adams Attack; 1.c4 e6
+  2.Nc3 Nf6 3.d4 Bb4 is the Nimzo-Indian), and past the named line the
+  game keeps its last name. A new name is highlighted when you play into
+  it or step forward onto it; the speaker button beside it says each new
+  name aloud (off by default, remembered on this computer). Tests check
+  that transposed orders get the same name and that every position in
+  the openings table can be found from a game
+- Games played here are saved with ECO and Opening headers
+- A hint missed a pawn fork: 8.e5 attacking Bd6 and Nf6 was "No tactic
+  here", because Black's best answer takes the pawn with the bishop and the
+  bishop is only won later, on e5, through a pin (8...Bxe5 9.Qe2 Qe7
+  10.Re1 Kf8 11.Qxe5). The motif check now follows a forked piece that
+  moves before it is won, and hints look 8 half-moves into the engine's
+  line instead of 6, so step 1 says "There is a fork" and step 4 says
+  what the move attacks ("It attacks Black's bishop on d6 and Black's
+  knight on f6") and shows the line up to the payoff. Review tags gain the
+  same fix for a forked piece that moves before it is taken
+
 ## 0.18.0 — unreleased
 
 Borrowed from Chessmaster and Fritz, adapted.

@@ -50,12 +50,18 @@ def _balance(board: chess.Board, color: bool) -> int:
 
 
 def _captures_later(boards: list, moves: list, start: int, squares: set, by: bool) -> bool:
-    """Does side `by` capture on one of `squares` (a piece that was there,
-    possibly moved on) within the rest of the line?"""
+    """Does side `by` capture one of the pieces on `squares` within the rest
+    of the line, there or wherever it has moved on to? (A forked bishop
+    that takes the forking pawn and is then won on e5 is still won.)"""
+    tracked = set(squares)
     for j in range(start, len(moves)):
         b, m = boards[j], moves[j]
-        if b.turn == by and b.is_capture(m) and m.to_square in squares:
-            return True
+        if b.turn == by:
+            if b.is_capture(m) and m.to_square in tracked:
+                return True
+        elif m.from_square in tracked:
+            tracked.discard(m.from_square)
+            tracked.add(m.to_square)
     return False
 
 
@@ -81,13 +87,15 @@ def _beyond(board: chess.Board, frm: int, through: int) -> Optional[int]:
     return None
 
 
-def line_motifs(board: chess.Board, line: list, score_mate: Optional[int] = None) -> list:
+def line_motifs(board: chess.Board, line: list, score_mate: Optional[int] = None,
+                plies: int = PLIES) -> list:
     """Motif tags in `line` (SAN or Move, from `board`), from the point of
     view of the side to move at `board` (the one carrying out the tactic).
-    `score_mate`: the engine's mate score for the line (White's view), if any."""
+    `score_mate`: the engine's mate score for the line (White's view), if any.
+    `plies`: how far into the line to look."""
     me = board.turn
     boards, moves = [board.copy(stack=False)], []
-    for item in line[:PLIES]:
+    for item in line[:plies]:
         b = boards[-1]
         try:
             mv = item if isinstance(item, chess.Move) else b.parse_san(item)

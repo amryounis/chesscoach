@@ -65,6 +65,22 @@ def name_at(board: chess.Board) -> Optional[tuple]:
     return (hit[0], hit[1]) if hit else None
 
 
+def openings_along(boards: list) -> list:
+    """Per position, the opening the game is in there: the last named
+    position reached so far, or None. Looked up by position, never by move
+    order, so a game that transposes (1.Nf3 c5 2.e4 d6 3.d4 ... into the
+    Najdorf, 1.c4 e6 2.Nc3 Nf6 3.d4 Bb4 into the Nimzo-Indian) gets the
+    same name as the main line. A position the table doesn't name keeps the
+    last name: the game is still in that opening, just past its named line."""
+    out, current = [], None
+    for b in boards:
+        hit = name_at(b)
+        if hit:
+            current = hit
+        out.append({"eco": current[0], "name": current[1]} if current else None)
+    return out
+
+
 def idea_for(name: str) -> tuple:
     """(key, idea) for the most specific opening idea that `name` falls
     under ("Sicilian Defense: Dragon Variation, Yugoslav Attack" → the

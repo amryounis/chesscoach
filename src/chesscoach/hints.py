@@ -36,7 +36,10 @@ from .motifs import _balance, line_motifs
 from .motifs import describe as motif_words
 
 STEPS = 4
-LINE_PLIES = 6
+# How far into the engine's line a hint looks for a tactic and its payoff,
+# and how much of it step 4 shows: a fork answered by taking the pawn, then
+# won through a pin, pays off at ply 7.
+LOOK_PLIES = 8
 # Alert levels offered in Settings (points of winning chance lost; 0 = off)
 ALERT_LEVELS = {0: "Off", 30: "Blunders", 20: "Mistakes and blunders",
                 10: "Inaccuracies too"}
@@ -99,7 +102,8 @@ def _situation(board: chess.Board, move: chess.Move, line: list, mate: Optional[
     if board.is_check():
         return ("You are in check. Of the ways out (take the checking piece, block, "
                 "move the king), one is clearly best."), []
-    tags = [t for t in line_motifs(board, line) if t not in ("mate", "back_rank_mate")]
+    tags = [t for t in line_motifs(board, line, plies=LOOK_PLIES)
+            if t not in ("mate", "back_rank_mate")]
     gain = _gain(board, line)
     if tags and gain >= 2:
         return TACTIC_HINT.get(tags[0], "There is a tactic for you here."), []
@@ -116,6 +120,34 @@ def _situation(board: chess.Board, move: chess.Move, line: list, mate: Optional[
     if tags:
         return TACTIC_HINT.get(tags[0], "There is a tactic for you here."), []
     return _quiet(board, move), []
+
+
+def _attacks(board: chess.Board, move: chess.Move) -> list:
+    """What the moved piece newly attacks that is worth attacking: the king,
+    a piece worth more than it, or an undefended piece (not pawns)."""
+    me = board.turn
+    after = board.copy(stack=False)
+    after.push(move)
+    mover = after.piece_at(move.to_square)
+    if mover is None:
+        return []
+    from .motifs import VALUES
+    out = []
+    for sq in after.attacks(move.to_square):
+        p = after.piece_at(sq)
+        if not p or p.color == me or p.piece_type == chess.PAWN:
+            continue
+        if p.piece_type == chess.KING:
+            continue                      # "giving check" is already said
+        if VALUES[p.piece_type] > VALUES[mover.piece_type] or not after.attackers(p.color, sq):
+            if sq in board.attacks(move.from_square) and board.piece_at(move.from_square) == mover:
+                continue                  # it attacked that before the move too
+            out.append(f"{side_name(p.color)}'s {PIECE_NAMES[p.piece_type]} on {chess.square_name(sq)}")
+    return out
+
+
+def _join(items: list) -> str:
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
 
 
 def _mates(board: chess.Board, move: chess.Move) -> bool:
@@ -139,7 +171,7 @@ def _gain(board: chess.Board, line: list) -> int:
     """Material won along the line (pawn units, for the side to move)."""
     b = board.copy(stack=False)
     start = _balance(b, board.turn)
-    for mv in line[:LINE_PLIES]:
+    for mv in line[:LOOK_PLIES]:
         if mv not in b.legal_moves:
             break
         b.push(mv)
@@ -215,12 +247,15 @@ def hint(board: chess.Board, engine, best: Optional[chess.Move] = None,
     san = board.san(move)
     what = describe_move(board, move)
     full = f"{san}. {what}."
-    tags = [t for t in line_motifs(board, line, mate)
-            if not (board.gives_check(move) and _mates(board, move))]
+    attacked = _attacks(board, move)
+    if attacked and not _mates(board, move):
+        full += f" It attacks {_join(attacked)}."
+    tags = [t for t in line_motifs(board, line, mate, plies=LOOK_PLIES)
+            if not _mates(board, move)]
     if tags:
         full += f" The idea: {motif_words(tags[:2])}."
     if len(line) > 1:
-        full += f" The engine's line: {board.variation_san(line[:LINE_PLIES])}."
+        full += f" The engine's line: {board.variation_san(line[:LOOK_PLIES])}."
     steps = [
         {"text": text, "shapes": shapes},
         {"text": where, "shapes": [_circle(move.to_square)]},

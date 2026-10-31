@@ -456,3 +456,30 @@ def test_paste_a_position_and_copy_it(page):
         page.click(f"#tab-{tab}")
         assert page.is_visible("#copy-fen") and page.is_hidden("#nav [data-nav=first]")
     assert page.errors == []
+
+
+def test_the_opening_is_shown_under_the_board(page):
+    page.evaluate("() => { if (navigator.clipboard) navigator.clipboard.readText = () => Promise.reject(new Error('no')); }")
+    page.click("#paste-btn")
+    page.wait_for_selector("#paste-dialog[open]")
+    page.fill("#paste-area", "1. Nf3 c5 2. e4 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6 6. h3 *")
+    page.click("#paste-open")
+    page.wait_for_function("document.querySelector('#game-sub').textContent.includes('6 moves')")
+    assert page.is_hidden("#opening-now")                       # the start position has no name
+    page.click("#nav [data-nav=last]")
+    page.wait_for_function("document.querySelector('#opening-name').textContent.includes('Najdorf')")
+    assert page.inner_text("#opening-name").startswith("B9")      # ECO, then the name
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "opening.png"))
+    page.click("#tab-play")
+    page.click("#start-game")
+    page.wait_for_selector("#play-live:not([hidden])")
+    assert page.is_hidden("#opening-now")
+    _click_square(page, "e2", "white")
+    _click_square(page, "e4", "white")
+    page.wait_for_function("document.querySelectorAll('#play-moves .mv').length === 2")
+    page.wait_for_selector("#opening-now:not([hidden])")
+    page.click("#tab-games")
+    assert page.is_hidden("#opening-now")
+    assert page.errors == []

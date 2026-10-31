@@ -616,3 +616,11 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .nav .nav-gap { width: 10px; }
 .nav button.clip { width: auto; padding: 5px 8px; font-family: inherit; font-size: 12px; }
 #paste-area { width: 100%; min-width: 420px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+/* the opening the game is in, under the board */
+.opening-now { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 75%; }
+#opening-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opening-now .eco { font-weight: 600; color: var(--ink); margin-right: 4px; }
+.opening-now.new #opening-name { color: var(--ink); font-weight: 600; transition: color .6s; }
+.opening-now .speak { padding: 0 4px; font-size: 13px; line-height: 1; border: 0; background: none; }
+.opening-now .speak[aria-pressed="true"] { color: var(--accent); }

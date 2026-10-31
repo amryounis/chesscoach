@@ -130,3 +130,46 @@ def test_named_lines_wording_does_not_claim_theory():
                                      no_book, theory=theory)
     assert prefix == "This is where the game left the named opening lines. "
     assert "Sicilian Defense: Dragon Variation" in note and "opening book" not in note
+
+
+def test_transposed_move_orders_get_the_same_opening():
+    """The opening is named by position, never by move order: a game that
+    reaches a named line by another order must not miss its name."""
+    import chess
+    from chesscoach.opening import openings_along
+
+    def last(sans):
+        b, boards = chess.Board(), [chess.Board()]
+        for s in sans.split():
+            b.push_san(s)
+            boards.append(b.copy())
+        return openings_along(boards)[-1]["name"]
+
+    pairs = [("e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6", "Nf3 c5 e4 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6"),
+             ("d4 Nf6 c4 e6 Nc3 Bb4", "c4 e6 Nc3 Nf6 d4 Bb4"),
+             ("e4 e5 Nf3 Nc6 Bc4 Bc5", "e4 e5 Bc4 Bc5 Nf3 Nc6"),
+             ("d4 d5 c4 e6 Nc3 Nf6", "c4 e6 Nc3 d5 d4 Nf6")]
+    for main, transposed in pairs:
+        assert last(main) == last(transposed), (main, transposed)
+    assert last("Nf3 c5 e4 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6") == "Sicilian Defense: Najdorf Variation"
+    assert last("c4 e6 Nc3 Nf6 d4 Bb4") == "Nimzo-Indian Defense"
+
+
+def test_past_the_named_line_the_game_keeps_its_opening():
+    import chess
+    from chesscoach.opening import openings_along
+    b, boards = chess.Board(), [chess.Board()]
+    for s in "e4 e5 Nf3 Nc6 Bc4 Bc5 a3 a6 h3 h6".split():
+        b.push_san(s)
+        boards.append(b.copy())
+    along = openings_along(boards)
+    assert along[0] is None
+    assert along[-1]["name"] == along[6]["name"]          # still the Italian after 4 more moves
+
+
+def test_every_table_position_can_be_found_from_a_game():
+    """A key spelled differently from how a game position is looked up
+    (en passant, castling rights) would never be found: none may be."""
+    import chess
+    from chesscoach.opening import _table
+    assert all(chess.Board(k + " 0 1").epd() == k for k in _table())

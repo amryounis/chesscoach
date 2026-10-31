@@ -89,11 +89,16 @@ def game_summary(game: chess.pgn.Game) -> dict:
                       "shapes": shapes})
     for mv, extra in zip(moves, opening_notes(boards, plain)):
         mv.update(extra)
+    from ..opening import openings_along
+    along = openings_along(boards)
+    for i, mv in enumerate(moves):
+        mv["opening_now"] = along[i + 1]
     from ..pgn_reader import game_tree
     # Always the tree: the Annotations pane shows the annotator's notes when
     # the PGN has them and the coach's once the game is reviewed.
     from ..hints import help_taken
     return {"headers": dict(game.headers), "start_fen": game.board().fen(),
+            "start_opening": along[0],
             "moves": moves, "tree": game_tree(game), "help": help_taken(game)}
 
 
@@ -750,10 +755,13 @@ class Api:
         saved = self._autosave_play() if g.over else ""
         b = g.board
         last = b.peek().uci() if b.move_stack else ""
+        from ..opening import name_at
         moves, tmp = [], b.root()
+        opening = name_at(tmp)
         for m in b.move_stack:
             n, san, white = tmp.fullmove_number, tmp.san(m), tmp.turn == chess.WHITE
             tmp.push(m)
+            opening = name_at(tmp) or opening
             moves.append({"san": san, "color": "white" if white else "black",
                           "move_label": f"{n}. {san}" if white else f"{n}...{san}"})
         return {"fen": b.fen(), "last_move": last, "moves": moves,
@@ -763,6 +771,7 @@ class Api:
                 "check": b.is_check(), "over": g.over, "status": g.status(),
                 "result": g.result(), "opponent": g.engine_name, "saved_to": saved,
                 "opponent_info": g.opponent,
+                "opening": {"eco": opening[0], "name": opening[1]} if opening else None,
                 "played": played, "reply": reply or ""}
 
     @_safe

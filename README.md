@@ -123,6 +123,9 @@ chesscoach gui
   first. Choose the game you just reviewed or all your reviewed games.
   *Hint* works here too; an exercise solved after being shown the square or
   the piece counts as solved with hints and comes back to do alone.
+- **The opening** the game is in is named above the board at every move,
+  in Review and in Play, by position, so transpositions are named right;
+  the speaker button beside it says each new name aloud.
 - **Copy and paste**: under the board, *FEN* and *PGN* copy the position and
   the game (after a review, with the coach's notes); *Paste* or Ctrl+V
   opens a PGN or a FEN from the clipboard. A pasted position opens in Review,

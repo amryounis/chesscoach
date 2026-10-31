@@ -131,6 +131,8 @@ function showTab(name) {
   $("panel-games").hidden = name !== "games";
   // Move buttons belong to the review; copy and paste work everywhere.
   document.querySelectorAll("#nav [data-nav], #nav .nav-gap").forEach((b) => (b.hidden = name !== "review"));
+  if (name !== "review" && name !== "play") showOpening(null);
+  OPEN.shown = "";                     // the new tab shows its own game's opening
   $("eval").classList.toggle("off", name !== "review");
   if (name === "review") renderReviewBoard();
   else if (name === "practice") openPractice();
@@ -149,6 +151,8 @@ const R = { game: null, reviewed: false, cursor: -1, compare: false, polling: nu
 
 // A finished review onto the open game: a new one, or one kept from before.
 function applyReview(res) {
+  const along = (R.game.moves || []).map((m) => m.opening_now || null);   // the review's moves don't carry it
+  res.moves.forEach((m, i) => { if (m.opening_now === undefined) m.opening_now = along[i] || null; });
   R.game.moves = res.moves;
   R.game.summary = res.summary || [];
   R.game.patterns = res.patterns || R.game.patterns || [];
@@ -271,9 +275,56 @@ function renderPlayers() {
   $("player-bottom").innerHTML = bottom;
 }
 
+// ---- the opening the game is in: under the board, in Review and Play.
+// Named by position (Python), so a transposition gets the right name. A new
+// name is highlighted, and said aloud when the speaker is on.
+const OPEN = { shown: "", speak: false, cursor: -2 };
+try { OPEN.speak = localStorage.getItem("speakOpenings") === "1"; } catch (e) { /* storage off */ }
+$("speak-openings").setAttribute("aria-pressed", String(OPEN.speak));
+$("speak-openings").addEventListener("click", () => {
+  OPEN.speak = !OPEN.speak;
+  $("speak-openings").setAttribute("aria-pressed", String(OPEN.speak));
+  try { localStorage.setItem("speakOpenings", OPEN.speak ? "1" : "0"); } catch (e) { /* storage off */ }
+  if (OPEN.speak && OPEN.shown) say(OPEN.shown);
+});
+function say(text) {
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US";
+    window.speechSynthesis.speak(u);
+  } catch (e) { /* no voice: the name is still on screen */ }
+}
+function showOpening(op, announce) {
+  const el = $("opening-now");
+  el.hidden = !op;
+  if (!op) { OPEN.shown = ""; return; }
+  if (op.name === OPEN.shown) return;
+  OPEN.shown = op.name;
+  $("opening-name").innerHTML = `<span class="eco">${esc(op.eco)}</span>${esc(op.name)}`;
+  $("opening-name").title = `${op.eco} ${op.name}`;
+  if (!announce) return;
+  el.classList.add("new");
+  clearTimeout(showOpening.timer);
+  showOpening.timer = setTimeout(() => el.classList.remove("new"), 2500);
+  if (OPEN.speak) say(op.name);
+}
+function reviewOpening() {
+  if (!R.game) return showOpening(null);
+  if (R.node !== null) return;                   // in a variation: keep the main line's
+  const op = R.cursor < 0 ? R.game.start_opening : R.game.moves[R.cursor].opening_now;
+  // said aloud only when stepping forward onto it, not while jumping about
+  // or while a running review moves the board
+  const forward = R.cursor === OPEN.cursor + 1 && !(R.running && R.follow);
+  OPEN.cursor = R.cursor;
+  showOpening(op, forward);
+}
+
 function renderReviewBoard() {
   if (tab !== "review") return;
   renderPlayers();
+  reviewOpening();
   board.set({ movable: { color: undefined, dests: new Map() } });
   if (!R.game) {
     board.set({ fen: START, lastMove: undefined, check: false });
@@ -1280,6 +1331,7 @@ async function startGame() {
 
 function applyPlayState(st) {
   if (!P.state || P.state.fen !== st.fen) P.hint = null;   // hints belong to one position
+  if (tab === "play") showOpening(st.opening, true);
   P.state = st;
   P.busy = false;
   P.alert = st.alert || null;
@@ -1344,10 +1396,12 @@ function renderPlayBoard() {
   if (!P.state) {
     const c = document.querySelector("input[name=color]:checked").value;
     setOrientation(c === "black" ? "black" : "white");
+    showOpening(null);
     board.set({ fen: START, lastMove: undefined, check: false, movable: { color: undefined, dests: new Map() } });
     return;
   }
   const st = P.state;
+  showOpening(st.opening, false);
   board.set({
     fen: st.fen,
     turnColor: st.turn,

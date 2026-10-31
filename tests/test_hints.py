@@ -99,3 +99,20 @@ def test_help_is_read_back_from_the_pgn():
         {"ply": 2, "san": "Qh5", "hint": 0, "alerts": ["Qh5"], "changed": False},
         {"ply": 4, "san": "Bc4", "hint": 0, "alerts": ["Qf3"], "changed": True},
     ]
+
+
+def test_a_pawn_fork_answered_by_taking_the_pawn_is_still_a_fork(sf):
+    # 8.e5 forks Bd6 and Nf6; 8...Bxe5 9.Qe2 (pin) Qe7 10.Re1 Kf8 11.Qxe5:
+    # the bishop moved before it was won, and the payoff comes at ply 7.
+    b = chess.Board("r1bqk2r/pppp1ppp/3b1n2/1B6/N2pP3/8/PPPP1PPP/R1BQ1RK1 w kq - 0 8")
+    h, t = _steps(b, sf)
+    assert h["best_uci"] == "e4e5"
+    assert t[0] == hints.TACTIC_HINT["fork"]
+    assert "It attacks Black's bishop on d6 and Black's knight on f6." in t[3]
+
+
+def test_what_a_move_attacks_counts_only_what_is_new():
+    b = chess.Board("r1bqk2r/pppp1ppp/3b1n2/1B6/N2pP3/8/PPPP1PPP/R1BQ1RK1 w kq - 0 8")
+    assert hints._attacks(b, chess.Move.from_uci("e4e5")) == [
+        "Black's bishop on d6", "Black's knight on f6"]
+    assert hints._attacks(b, chess.Move.from_uci("h2h3")) == []

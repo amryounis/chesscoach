@@ -70,3 +70,12 @@ def test_conservative_tags_from_a_real_game():
     b2 = chess.Board("rn1qk2r/p3pp2/2p2bpp/1p5P/2pP2b1/2N1PN2/PP3PP1/R2QK2R w KQkq - 0 11")
     assert "advanced_pawn" not in line_motifs(b2, "hxg6 fxg6".split())
     assert "advanced_pawn" in _m("4k3/8/2P5/8/8/8/8/4K3 w - - 0 1", "c7")
+
+
+def test_a_forked_piece_that_moves_and_is_then_won_still_makes_a_fork():
+    import chess
+    from chesscoach.motifs import line_motifs
+    b = chess.Board("r1bqk2r/pppp1ppp/3b1n2/1B6/N2pP3/8/PPPP1PPP/R1BQ1RK1 w kq - 0 8")
+    line = ["e5", "Bxe5", "Qe2", "Qe7", "Re1", "Kf8", "Qxe5", "Qxe5"]
+    assert "fork" in line_motifs(b, line, plies=8)
+    assert "fork" not in line_motifs(b, line)        # the default 6 plies stop before Qxe5

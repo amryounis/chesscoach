@@ -197,6 +197,16 @@ class PlayGame:
         game.headers["White"] = name if self.player_color == chess.WHITE else self.engine_name
         game.headers["Black"] = self.engine_name if self.player_color == chess.WHITE else name
         game.headers["Result"] = self.result()
+        from .opening import openings_along
+        b, boards = self.board.root(), []
+        boards.append(b.copy(stack=False))
+        for m in self.board.move_stack:
+            b.push(m)
+            boards.append(b.copy(stack=False))
+        named = openings_along(boards)[-1]
+        if named:
+            game.headers["ECO"] = named["eco"]
+            game.headers["Opening"] = named["name"]
         node = game
         for ply, _ in enumerate(self.board.move_stack):
             node = node.variations[0]
