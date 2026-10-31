@@ -243,15 +243,16 @@
     <div class="drill" id="drill" hidden>
       <p class="sub" id="drill-count"></p>
       <p class="status" id="drill-prompt"></p>
-      <div class="hint-box" id="drill-hint-box" aria-live="polite" hidden></div>
-      <div class="drill-result" id="drill-result" aria-live="polite"></div>
+      <!-- the buttons first: the answer, the coach's words and the move list
+           below them can run long, and Next must stay in reach -->
       <div class="play-actions">
         <button id="drill-hint" title="A little help at a time: what is going on, the square, the piece, the move. Past the first step, the exercise comes back to solve on your own.">Hint</button>
         <button id="drill-reveal">Show me</button>
-        <button id="drill-all" hidden title="Every legal move in this position with a short verdict">All moves</button>
         <button id="drill-retry" hidden>Try again</button>
         <button class="primary" id="drill-next">Next exercise</button>
       </div>
+      <div class="hint-box" id="drill-hint-box" aria-live="polite" hidden></div>
+      <div class="drill-result" id="drill-result" aria-live="polite"></div>
     </div>
   </section>
 </main>

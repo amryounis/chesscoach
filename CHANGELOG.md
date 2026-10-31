@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.20.3 — unreleased
+
+- All moves is gone from Practice: the long list pushed the exercise's own
+  buttons (Next exercise) out of reach, and Practice is about finding the
+  move, which the answer, the engine line and the coach's words already
+  explain. It stays in Review, where the same position can be opened from
+  the game. The Practice panel scrolls on its own when an answer is long
+
 ## 0.20.2 — unreleased
 
 - Practice: scrolling the All moves list with the wheel jumped back to the

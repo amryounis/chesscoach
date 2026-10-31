@@ -1600,7 +1600,7 @@ $("settings-form").addEventListener("submit", async (e) => {
 // Your reviewed mistakes come back as positions to solve. The board takes
 // one move; Stockfish (in Python) judges it against the review's numbers.
 
-const X = { drills: [], i: 0, result: null, loaded: null, busy: false, hint: null, all: null };
+const X = { drills: [], i: 0, result: null, loaded: null, busy: false, hint: null };
 const VERDICT = { best: "Correct", good: "That works too", repeat: "Same move as in the game",
                   miss: "Not quite", revealed: "The answer", hinted: "Correct, with hints" };
 
@@ -1611,7 +1611,6 @@ $("drill-next").addEventListener("click", () => {
   X.i = (X.i + 1) % X.drills.length;
   X.result = null;
   X.hint = null;
-  X.all = null;
   renderDrill();
 });
 $("drill-retry").addEventListener("click", () => { X.result = null; X.hint = null; renderDrill(); });
@@ -1626,17 +1625,7 @@ $("drill-hint").addEventListener("click", async () => {
   renderDrill();
 });
 $("drill-reveal").addEventListener("click", () => submitDrill(null));
-$("drill-all").addEventListener("click", async () => {
-  const d = curDrill();
-  if (!d || X.all === "pending") return;
-  X.all = "pending";
-  $("drill-all").textContent = "Thinking…";
-  renderDrill();
-  const res = await call("all_moves", "practice", d.id);
-  X.all = res || null;
-  $("drill-all").textContent = "All moves";
-  renderDrill();
-});
+
 
 async function openPractice() {
   let scope = document.querySelector("input[name=pscope]:checked").value;
@@ -1690,8 +1679,6 @@ function renderDrill() {
   $("drill-prompt").innerHTML = `${side} to move. In the game you played <b>${esc(figurine(d.move_label))}</b>, ${/^[aeiou]/i.test(d.label) ? "an" : "a"} ${esc(d.label.toLowerCase())}. Find a better move.`;
   const r = X.result;
   $("drill-reveal").hidden = !!r;
-  $("drill-all").hidden = !r;
-  $("drill-all").disabled = X.all === "pending";
   const hint = !r && X.hint && X.hint.fen === d.fen ? X.hint : null;
   $("drill-hint").hidden = !!r;
   $("drill-hint").textContent = hintLabel(hint);
@@ -1700,14 +1687,6 @@ function renderDrill() {
   $("drill-hint-box").innerHTML = hint ? hintHtml(hint) : "";
   $("drill-retry").hidden = !r || ["best", "revealed", "hinted"].includes(r.verdict);
   $("drill-result").innerHTML = r ? drillResultHtml(d, r) : "";
-  if (r && X.all && X.all !== "pending" && X.all.fen === d.fen) {
-    const marks = { [d.played_uci]: `played in the game (${d.label.toLowerCase()} in the review)` };
-    if (r.answer_uci && r.answer_uci !== d.played_uci) marks[r.answer_uci] = "your answer";
-    $("drill-result").insertAdjacentHTML("beforeend", allMovesHtml(X.all, marks));
-    // leaving a row puts the arrows back, without rebuilding the list
-    // (which lost its scroll position mid-wheel)
-    bindAllMoves($("drill-result"), () => board.setAutoShapes(drillShapes(d, r, null)));
-  }
   if (tab !== "practice") return;
   if (orientation !== d.color) setOrientation(d.color);
   board.set({

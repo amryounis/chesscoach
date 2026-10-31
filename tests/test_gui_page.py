@@ -215,17 +215,19 @@ def test_practice_your_mistakes(page):
     page.wait_for_selector("#drill-result .verdict", timeout=60000)
     assert "The engine's move was" in page.inner_text("#drill-result")
     assert "the coach said in the review" in page.inner_text("#drill-result").lower()
-    # All moves after the answer: the game's move carries the review's label,
-    # and moving over the rows (as a wheel scroll does) keeps the list's place
-    page.click("#drill-all")
-    page.wait_for_selector("#drill-result table.all-moves tr", timeout=60000)
-    assert "in the review)" in page.inner_text("#drill-result table.all-moves")
-    page.evaluate("document.querySelector('#drill-result .am-wrap').scrollTop = 120")
-    rows = page.locator("#drill-result table.all-moves tr")
-    rows.nth(6).hover()
-    rows.nth(7).hover()
-    page.mouse.move(5, 5)
-    assert page.evaluate("document.querySelector('#drill-result .am-wrap').scrollTop") == 120
+    # no All moves here, and Next exercise stays reachable on a small window
+    assert page.locator("#drill-all").count() == 0
+    page.set_viewport_size({"width": 1320, "height": 300})
+    page.mouse.move(400, 150)                      # over the panel: the wheel scrolls it
+    page.mouse.wheel(0, 1500)
+    page.wait_for_timeout(300)
+    box = page.locator("#drill-next").bounding_box()
+    assert box and box["y"] >= 0 and box["y"] + box["height"] <= 300   # on screen
+    page.click("#drill-next")
+    page.set_viewport_size({"width": 1320, "height": 860})
+    # with the answer, the coach's words and the list open, Next is still in view
+    box = page.locator("#drill-next").bounding_box()
+    assert box and box["y"] + box["height"] <= page.viewport_size["height"]
     assert page.errors == []
 
 
@@ -515,6 +517,12 @@ def test_all_moves_in_review(page):
     assert "Best move: recaptures" in first.inner_text()
     assert "played in the game" in page.inner_text("table.all-moves tr.marked")
     first.hover()
+    page.evaluate("document.querySelector('#ask-answer .am-wrap').scrollTop = 120")
+    rows = page.locator("table.all-moves tr")
+    rows.nth(6).hover()
+    rows.nth(7).hover()
+    page.mouse.move(5, 5)
+    assert page.evaluate("document.querySelector('#ask-answer .am-wrap').scrollTop") == 120
     import os
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "allmoves.png"))

@@ -497,6 +497,8 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
 /* ---- practice: your reviewed mistakes as exercises */
 #panel-practice .seg { margin-top: 14px; }
+/* a long comment must never push Next exercise out of reach */
+#panel-practice { overflow-y: auto; padding-right: 6px; }
 #panel-practice .empty { color: var(--muted); font: 14px var(--ui); margin-top: 18px; }
 .drill { margin-top: 18px; display: grid; gap: 10px; }
 .drill .status b { white-space: nowrap; }
@@ -646,3 +648,7 @@ table.all-moves tr.j-Good td:last-child { color: var(--j-good); }
 table.all-moves tr.j-Inaccuracy td:last-child { color: var(--j-inaccuracy); }
 table.all-moves tr.j-Mistake td:last-child { color: var(--j-mistake); }
 table.all-moves tr.j-Blunder td:last-child { color: var(--j-blunder); }
+
+/* Practice and Play scroll as a whole when their content runs past the
+   window (a long answer plus the All moves list), so nothing is out of reach */
+#panel-practice, #panel-play { overflow-y: auto; padding-right: 6px; }

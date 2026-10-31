@@ -269,7 +269,5 @@ def test_all_moves_in_review_and_practice_not_in_play(api):
     r = api.all_moves("review", 7)
     assert r["moves"][0]["san"] == "Nxd4" and len(r["moves"]) > 30
     assert api.all_moves("review", -1)["moves"]                 # the start position
-    api._drills = {"d1": {"id": "d1", "fen": chess.STARTING_FEN}}
-    assert api.all_moves("practice", "d1")["moves"]
-    assert "error" in api.all_moves("practice", "nope")
+    assert "error" in api.all_moves("practice", "d1")
     assert "error" in api.all_moves("play", 0)

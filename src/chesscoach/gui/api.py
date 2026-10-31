@@ -615,18 +615,13 @@ class Api:
     @_safe
     def all_moves(self, where: str, arg) -> dict:
         """Every legal move with a verdict (allmoves.py), for the position on
-        the board in Review (arg = ply, -1 = the start) or an exercise in
-        Practice (arg = its id). Not in Play: it would play the game for you."""
+        the board in Review (arg = ply, -1 = the start). Not in Play, where
+        it would play the game for you, nor in Practice, which is about
+        finding the move (and where the list crowded out the exercise)."""
         from ..allmoves import explain_all
-        if where == "practice":
-            drill = self._drills.get(arg)
-            if drill is None:
-                raise ValueError("That exercise is no longer loaded.")
-            board = chess.Board(drill["fen"])
-        elif where == "review":
-            board, _ = self._position(int(arg))
-        else:
-            raise ValueError("All moves works in Review and Practice.")
+        if where != "review":
+            raise ValueError("All moves works in Review.")
+        board, _ = self._position(int(arg))
         key = ("all", board.fen())
         if key not in self._hint_cache:
             with self._practice_lock:
