@@ -72,7 +72,8 @@ def _move_record(m) -> dict:
            "best_san": _get(m, "best_san"), "best_uci": _get(m, "best_uci"),
            "win_before": _get(m, "win_before"), "win_after": _get(m, "win_after"),
            "themes": _get(m, "themes") or [],
-           "tactics": _get(m, "tactics") or {}}
+           "tactics": _get(m, "tactics") or {},
+           "difficulty": (_get(m, "difficulty") or {}).get("level", "")}
     if _get(m, "label") in ERRORS:
         # what the coach said, so the move can be practised later (practice.py)
         from .practice import explanation_of

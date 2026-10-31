@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.19.0 — unreleased
+
+From the research links (Chess Engine Lab's depth comparison, Maia, the
+chess evolution paper's forced lines).
+
+- **How hard was it to find?** Each commented error gets a measured
+  difficulty: Stockfish compares the better move with the one played at a
+  two-move search and at full depth. If the short look already shows most
+  of the difference, it was **in plain sight** (a piece left hanging, a
+  mate in one); if it sees none, it was **hard to see** (8.e5 forking Bd6
+  and Nf6, which pays off only through a pin four moves later); otherwise
+  **partly hidden**. With Maia installed it adds what players around your
+  rating play there ("c3 is what players around 1500 usually play here").
+  Shown under the coach's comment, given to the coach as a fact (without
+  move notation), stored in the history
+- The game summary says which errors were in plain sight and which were
+  hard to see ("Two of your three errors were in plain sight (a two-move
+  look already shows the better move): 10. Bxc4 and 13. Qa4."), checked
+  against the stored facts like every other claim
+- Practice serves the plain-sight misses first among exercises of equal
+  standing: they are the ones never to miss, and the quickest to fix; after
+  an answer it says how hidden the move was
+- **Forced lines.** When the engine's line (or the opponent's best line
+  after an error) mates or wins material and every reply in it is the
+  only legal move, or the attacker checks on every move, the comment says
+  so ("In the line 1. Nf7+ Kg8 2. Nh6+ Kh8 3. Qg8+ Rxg8 4. Nf7#, White
+  gives check on every move, so Black's replies are forced, and it ends in
+  checkmate."), and the coach is told
+- `chesscoach eval` gives the model the same measured facts as a review,
+  so a run with a model scores the prompt the review sends
+
 ## 0.18.1 — unreleased
 
 - **The opening, always in view.** Above the board, in Review and in Play,

@@ -208,6 +208,24 @@ def _side_claims(moves: list, color: str, single: bool,
                          [f"{_get(m, 'move_label')}: {verb} {MOTIFS[t]}" for t in top
                           for m in by_motif[t]], tag=kind))
 
+    # 3c. How hard the errors were to avoid (difficulty.py): the ones in
+    #     plain sight are the ones to train first.
+    for level, said in (("plain", "in plain sight (a two-move look already shows the better move)"),
+                        ("deep", "hard to see (the better move only proves itself several moves deep)")):
+        these = [m for m in errors if (_get(m, "difficulty") or {}).get("level") == level]
+        if not these:
+            continue
+        labels = _join([_get(m, "move_label") for m in these])
+        if len(these) == 1:
+            text = f"{labels} was {said}."
+        else:
+            of = (f"{whose} errors" if len(these) == len(errors) else
+                  f"{whose} {_n(len(errors))} errors")
+            text = f"{_n(len(these)).capitalize()} of {of} were {said}: {labels}."
+        out.append(Claim(text, "difficulty", color, [_get(m, "ply") for m in these],
+                         [f"{_get(m, 'move_label')}: {(_get(m, 'difficulty') or {}).get('text', '')}"
+                          for m in these], tag=level))
+
     # 4. Where the errors came.
     if len(errors) >= 3:
         by_phase = {p: [m for m in errors if phase_of(_get(m, "fen_before")) == p]
@@ -256,7 +274,8 @@ def verify(review) -> list:
                     t["tag"] == c["tag"] for t in _get(m, "themes") or []):
                 problems.append(f"{c['text']} — {_get(m, 'move_label')} has no "
                                 f"'{c['tag']}' fact")
-            if c["kind"] in ("counts", "theme", "phase") and _get(m, "label") not in ERRORS:
+            if c["kind"] in ("counts", "theme", "phase", "difficulty") \
+                    and _get(m, "label") not in ERRORS:
                 problems.append(f"{c['text']} — {_get(m, 'move_label')} is not an error")
             if c["kind"] == "turning":
                 for x in (_get(m, "win_before"), _get(m, "win_after")):
@@ -268,6 +287,12 @@ def verify(review) -> list:
                 if m and not (_get(m, "tactics") or {}).get(c["tag"]):
                     problems.append(f"{c['text']} — {_get(m, 'move_label')} has no "
                                     f"'{c['tag']}' tactics stored")
+        if c["kind"] == "difficulty":
+            for p in c["plies"]:
+                m = moves.get(p)
+                if m and (_get(m, "difficulty") or {}).get("level") != c["tag"]:
+                    problems.append(f"{c['text']} — {_get(m, 'move_label')} is not stored "
+                                    f"as '{c['tag']}'")
         if c["kind"] == "accuracy":
             acc = ((review.get("accuracy") if isinstance(review, dict)
                     else getattr(review, "accuracy", None)) or {}).get(c["color"])

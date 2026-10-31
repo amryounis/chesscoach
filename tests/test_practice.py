@@ -130,3 +130,11 @@ def test_progress_file_survives_bad_entries(tmp_path):
     assert practice.load_progress(path) == {}
     practice.record_attempt("d", "best", path)
     assert practice.load_progress(path)["d"]["solved"] == 1 and not list(tmp_path.glob("*.tmp"))
+
+
+def test_errors_in_plain_sight_come_before_hard_ones():
+    from chesscoach.practice import order
+    drills = [{"id": "a", "label": "Blunder", "difficulty": "deep"},
+              {"id": "b", "label": "Inaccuracy", "difficulty": "plain"},
+              {"id": "c", "label": "Mistake", "difficulty": ""}]
+    assert [d["id"] for d in order(drills, {})] == ["b", "c", "a"]

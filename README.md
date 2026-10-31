@@ -137,6 +137,11 @@ chesscoach gui
   what the question needs, gathers verified facts and writes the verdict
   (which move is better, whether a piece is attacked); the model explains,
   and its answer is checked against the board before you see it.
+- **How hard was it?** Under each commented error: *in plain sight* (a
+  two-move look already shows the better move), *partly hidden* or *hard to
+  see* (it only proves itself several moves deep), measured with Stockfish
+  at two depths, plus what Maia says players at your rating play there.
+  Forced lines (only legal replies, or check after check) are pointed out.
 - **Game summary**: at the top of a finished review, written by code from
   the stored facts of each move: your errors, the biggest swing, the themes
   that recur ("three of your errors weakened your king's pawn shelter"),

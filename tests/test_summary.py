@@ -238,3 +238,26 @@ def test_missed_tactics_read_as_a_sentence():
     assert texts == ["You missed a fork (3. Qh5)."]
     both = [c.text for c in summarize({"side": "both", "moves": [mv]}) if c.kind == "tactics"]
     assert both == ["White missed a fork (3. Qh5)."]
+
+
+def test_errors_in_plain_sight_and_hard_to_see_are_named():
+    from chesscoach.summary import summarize, verify
+    base = {"color": "white", "book": False, "best_san": "Nf3", "san": "a3",
+            "win_before": 60.0, "win_after": 40.0, "fen_before": chess.STARTING_FEN}
+    moves = [dict(base, ply=0, move_label="1. a3", label="Blunder",
+                  difficulty={"level": "plain", "text": "In plain sight: x"}),
+             dict(base, ply=2, move_label="2. h3", label="Mistake",
+                  difficulty={"level": "plain", "text": "In plain sight: y"}),
+             dict(base, ply=4, move_label="3. g3", label="Mistake",
+                  difficulty={"level": "deep", "text": "Hard to see: z"})]
+    review = {"side": "white", "moves": moves}
+    claims = [c.to_dict() for c in summarize(review)]
+    texts = [c["text"] for c in claims if c["kind"] == "difficulty"]
+    assert texts == ["Two of your three errors were in plain sight (a two-move look already "
+                     "shows the better move): 1. a3 and 2. h3.",
+                     "3. g3 was hard to see (the better move only proves itself several "
+                     "moves deep)."]
+    review["summary"] = claims
+    assert verify(review) == []
+    moves[1]["difficulty"] = {"level": "deep"}                     # the stored fact changed
+    assert any("not stored as 'plain'" in p for p in verify(review))

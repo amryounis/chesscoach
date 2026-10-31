@@ -33,6 +33,7 @@ from .engine import run_stockfish
 
 DRILL_LABELS = ("Inaccuracy", "Mistake", "Blunder")
 _SEVERITY = {"Blunder": 0, "Mistake": 1, "Inaccuracy": 2}
+_EASY = {"plain": 0, "middle": 1, "deep": 2}
 SOLVED = ("best", "good")
 LINE_PLIES = 6                     # how much of the engine's line to show
 
@@ -78,7 +79,14 @@ def make_drill(mv, game: str, game_name: str = "") -> Optional[dict]:
             "win_before": _get(mv, "win_before"), "win_after": _get(mv, "win_after"),
             "explanation": _get(mv, "explanation") or explanation_of(mv),
             "themes": [t.get("tag", "") for t in (_get(mv, "themes") or [])
-                       if isinstance(t, dict)]}
+                       if isinstance(t, dict)],
+            "difficulty": _level(mv)}
+
+
+def _level(mv) -> str:
+    """plain / middle / deep (difficulty.py), from a review move or a history record."""
+    d = _get(mv, "difficulty")
+    return d.get("level", "") if isinstance(d, dict) else (d or "")
 
 
 def drills_from_review(review, color: Optional[str] = None) -> list:
@@ -171,13 +179,16 @@ def queue_tag(progress: dict) -> str:
 
 def order(drills: list, progress: dict) -> list:
     """Not yet solved (never tried, or missed last time) first, then the
-    ones solved least often, oldest attempt first; within that, blunders
-    before mistakes before inaccuracies."""
+    ones solved least often; within that, errors in plain sight before the
+    hard-to-see ones (difficulty.py), then oldest attempt first, then
+    blunders before mistakes before inaccuracies."""
     def key(d):
         p = progress.get(d["id"], {})
         missed_last = p.get("last_verdict") not in SOLVED if p else True
-        return (not missed_last, p.get("solved", 0), p.get("last", ""),
-                _SEVERITY.get(d["label"], 3))
+        # within that, the ones in plain sight first: those are the ones a
+        # player should never miss, and the quickest to fix
+        return (not missed_last, p.get("solved", 0), _EASY.get(d.get("difficulty", ""), 1),
+                p.get("last", ""), _SEVERITY.get(d["label"], 3))
     return sorted(drills, key=key)
 
 

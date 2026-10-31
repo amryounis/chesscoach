@@ -317,7 +317,22 @@ def prepared(key: Key, engines: Engines) -> Optional[dict]:
     a = b.copy()
     a.push(mv)
     eb, ea = engines.analyse(b), engines.analyse(a)
-    engines.preps[key.id] = prepare_move(b, mv, eb, ea, maia=None, engine=engines.sf)
+    # the review's measured facts too (how hard the better move was to
+    # find, forced lines), so the eval scores the prompt the review sends
+    from types import SimpleNamespace
+
+    from .assessment import compute_assessment, win_pct
+    from .review import _hard_facts
+    white = b.turn == chess.WHITE
+    label, _ = compute_assessment(eb.score_cp, ea.score_cp, eb.score_mate, ea.score_mate,
+                                  white, delivered_mate=a.is_checkmate())
+    shim = SimpleNamespace(label=label, win_before=win_pct(eb.score_cp, eb.score_mate, white),
+                           win_after=(100.0 if a.is_checkmate()
+                                      else win_pct(ea.score_cp, ea.score_mate, white)),
+                           difficulty={}, forced=[])
+    extra = _hard_facts(shim, b, mv, eb, ea, engines.sf, "", 0)
+    engines.preps[key.id] = prepare_move(b, mv, eb, ea, maia=None, engine=engines.sf,
+                                         extra_facts=extra)
     return engines.preps[key.id]
 
 

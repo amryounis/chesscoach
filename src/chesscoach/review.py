@@ -84,6 +84,9 @@ class MoveReview:
     wdl: Optional[list] = None           # [win, draw, loss] % for the mover after the move (Stockfish)
     mark: str = ""                       # !! ! !? best ok ?! ? ?? book (classify.py)
     tactics: dict = field(default_factory=dict)       # errors: {"allowed": [motif], "missed": [motif]}
+    difficulty: dict = field(default_factory=dict)    # errors: how hard the better move was to find
+                                                      # (difficulty.py): {level, label, text, ...}
+    forced: list = field(default_factory=list)        # forced lines in the engine's lines (sentences)
 
 
 @dataclass
@@ -117,6 +120,43 @@ def _log_timing(game, n_positions: int, n_moments: int, total: float, timing: di
     for i, secs, depth, fen in timing["slow"]:
         lines.append(f"  slow position {i}: {secs}s (depth {depth}) {fen}")
     append("review timing", "\n".join(lines))
+
+
+def _hard_facts(mv, board: chess.Board, played: chess.Move, ea_before: EngineAnalysis,
+                ea_after: EngineAnalysis, engine, maia_san: str, elo: int) -> list:
+    """How hard the better move was to find (errors), and forced lines in
+    the engine's lines; stored on the move, returned as facts for the coach."""
+    from .difficulty import difficulty, forced_line
+    facts = []
+    bad = mv.label in ("Inaccuracy", "Mistake", "Blunder")
+    best = None
+    if ea_before.best_move:
+        try:
+            best = board.parse_san(ea_before.best_move)
+        except ValueError:
+            best = None
+    if bad and best is not None and best != played and engine is not None:
+        try:
+            d = difficulty(engine, board, played, best, mv.win_before, mv.win_after,
+                           maia_san, elo)
+        except Exception:
+            d = None
+        if d:
+            mv.difficulty = d
+            facts.append(d["fact"])
+    after = board.copy(stack=False)
+    after.push(played)
+    lines = []
+    if best is not None and best != played:
+        lines.append((board, ea_before.best_line, "the engine's preferred line"))
+    if not after.is_game_over():
+        lines.append((after, ea_after.best_line, "the best line after the move"))
+    for start, line, whose in lines:
+        f = forced_line(start, line, whose=whose)
+        if f and f["text"] not in mv.forced:
+            mv.forced.append(f["text"])
+            facts.append(f["fact"])
+    return facts
 
 
 def _wdl_for(after: chess.Board, ea: EngineAnalysis, white: bool) -> Optional[list]:
@@ -298,8 +338,9 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         todo = sorted(picks)
         t_narrate = time.time()
         # One Stockfish for the engine-verified concepts of every moment.
+        # (also for how hard each error's better move was to find)
         concept_sf = (chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
-                      if config.settings.concepts and todo else None)
+                      if todo else None)
         for k, i in enumerate(todo):
             if stop():
                 raise Cancelled()
@@ -308,9 +349,13 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
             maia = run_maia(boards[i], engine=maia_engine) if maia_engine else None
             note, prefix, focus = moment_context(i, picks[i], boards, moves, labels, book,
                                                 theory=theory)
+            extra = _hard_facts(mv, boards[i], moves[i], evals[i], evals[i + 1], concept_sf,
+                                maia.predicted_move if maia else "",
+                                config.settings.player_elo if maia_engine else 0)
             prep = prepare_move(boards[i], moves[i], evals[i], evals[i + 1],
                                 maia, opening_note=note, reason=picks[i],
-                                fixed_prefix=prefix, focus=focus, engine=concept_sf)
+                                fixed_prefix=prefix, focus=focus, engine=concept_sf,
+                                extra_facts=extra)
             mv.key_facts = prep.get("key_facts", [])
             mv.plan = prep.get("plan") or {}
             c = prep.get("concepts")

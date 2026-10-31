@@ -43,6 +43,20 @@ function tacticsHtml(mv) {
   if ((t.missed || []).length) parts.push(`<span><b>The engine had</b> ${esc(say(t.missed))}</span>`);
   return parts.length ? `<p class="tactics" title="Tactical motifs found by code in the engine's lines">${parts.join(" · ")}</p>` : "";
 }
+// How hard the better move was to find, and forced lines (difficulty.py).
+const LEVEL_TEXT = { plain: "In plain sight: a two-move look already shows the better move.",
+                     middle: "Partly hidden: a two-move look shows only part of why the better move is better.",
+                     deep: "Hard to see: the better move only proves itself several moves deep." };
+function difficultyHtml(mv) {
+  const d = mv.difficulty || {};
+  let html = "";
+  if (d.level) {
+    const rest = (d.text || "").replace(/^[^:]+:\s*/, "");
+    html += `<p class="difficulty d-${d.level}" title="Measured: a 2-move Stockfish search against the full search, and what Maia (players at your rating) plays"><b>${esc(d.label)}.</b> ${esc(figurineText(rest))}</p>`;
+  }
+  for (const f of mv.forced || []) html += `<p class="forced">${esc(figurineText(f))}</p>`;
+  return html;
+}
 // Said under every comment, so no one reads the model's opinions as verified.
 const CHECKED_NOTE = `<div class="checked scope" title="Checked: pieces on squares, attacks and defences between named pieces, pins, forks, king shelter, files opened, material, legal moves. Not checked: judgements such as strong, weak, active or the initiative, and wording the checker does not recognise.">Facts about the pieces were checked against the board; judgements are the coach's opinion.</div>`;
 
@@ -539,7 +553,7 @@ function renderCoach() {
   }
   if (text) {
     if (mv.reason && mv.reason !== "every-move mode") html += `<div class="why">Commented because: ${esc(mv.reason)}.</div>`;
-    html += renderAnnotation(text) + tacticsHtml(mv) + legendHtml(mv) + planHtml(mv);
+    html += renderAnnotation(text) + tacticsHtml(mv) + difficultyHtml(mv) + legendHtml(mv) + planHtml(mv);
     const removed = (Object.values(mv.stats || {})[0] || {}).removed || 0;
     if (removed) html += `<div class="checked" title="The coach's statements are checked against the board. A statement that was not true was taken out rather than shown.">${removed === 1 ? "One sentence was" : removed + " sentences were"} left out because ${removed === 1 ? "it was" : "they were"} not true on the board.</div>`;
     html += CHECKED_NOTE;
@@ -1649,6 +1663,7 @@ function drillResultHtml(d, r) {
   const cls = ["best", "good", "hinted"].includes(r.verdict) ? "ok" : "no";
   let html = `<p class="verdict ${cls}"><b>${esc(VERDICT[r.verdict] || "")}.</b> ${esc(figurineText(r.message))}</p>`;
   if (r.line && r.line.length) html += `<p class="line"><b class="k">Engine line</b> ${esc(lineText(d.fen, r.line))}</p>`;
+  if (d.difficulty && LEVEL_TEXT[d.difficulty]) html += `<p class="difficulty d-${d.difficulty}">${esc(LEVEL_TEXT[d.difficulty])}</p>`;
   if (d.explanation) html += `<div class="drill-why"><b class="k">The coach said in the review</b>${renderAnnotation(d.explanation)}</div>`;
   return html;
 }

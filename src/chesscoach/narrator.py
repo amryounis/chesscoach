@@ -58,8 +58,10 @@ def prepare_move(board_before: chess.Board, played: chess.Move,
                  eng_before: EngineAnalysis, eng_after: EngineAnalysis,
                  maia: Optional[MaiaPrediction], opening_note: str = "",
                  reason: str = "", fixed_prefix: str = "",
-                 focus: str = "", engine=None) -> dict:
-    """Everything the narrator needs for one move: prompt + check data."""
+                 focus: str = "", engine=None, extra_facts: Optional[list] = None) -> dict:
+    """Everything the narrator needs for one move: prompt + check data.
+    `extra_facts`: measured facts added after the key facts (how hard the
+    better move was to find, forced lines)."""
     board_after = board_before.copy()
     board_after.push(played)
     features = extract_features(board_after)
@@ -101,6 +103,8 @@ def prepare_move(board_before: chess.Board, played: chess.Move,
         equal = " ".join(x for x in (c.equal_sentence, c.loose_sentence) if x)
     else:
         equal = ""
+    if extra_facts:
+        key_facts = list(key_facts) + [f for f in extra_facts if f not in key_facts]
     # root(): the position the move stack starts from (a FEN, or the start).
     pgn_moves = board_after.root().variation_san(board_after.move_stack)
     prompt, banned, fixed = build_user_prompt(

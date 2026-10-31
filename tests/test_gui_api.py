@@ -48,6 +48,10 @@ def test_review_runs_in_background_and_returns_moves(api):
     stats = st["result"]["stats"]
     assert stats["black"]["analysed"] == 39 and sum(stats["black"]["counts"].values()) == 39
     assert all(m["mark"] for m in moves) and any(m["wdl"] for m in moves)
+    # how hard each commented error's better move was to find
+    errs = [m for m in moments if m["label"] in ("Inaccuracy", "Mistake", "Blunder")
+            and m["best_san"] != m["san"]]
+    assert errs and all(m["difficulty"].get("level") in ("plain", "middle", "deep") for m in errs)
     log = (config.user_config_path().parent / "chesscoach.log").read_text(encoding="utf-8")
     assert "review timing" in log and "engine:" in log and "comments:" in log
     # Save PGN: the reviewed game, annotated, for any chess program
