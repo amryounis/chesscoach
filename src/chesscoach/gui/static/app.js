@@ -1005,11 +1005,44 @@ function bindSummary(el) {
 
 // ---- ask the coach: answers belong to a position, so they are kept per move
 
+// ---- all moves: every legal move with the engine's short verdict
+const AM_CLASS = { Best: "Excellent", Good: "Good", Inaccuracy: "Inaccuracy", Mistake: "Mistake", Blunder: "Blunder" };
+function allMovesHtml(res, marks) {
+  const side = res.fen.split(" ")[1] === "w" ? "White" : "Black";
+  let html = `<p class="am-head">${res.moves.length} moves for ${side} · quick search, depth ${res.depth}; hover a move for its line</p>`;
+  html += `<div class="am-wrap"><table class="all-moves">`;
+  for (const m of res.moves) {
+    const tag = marks[m.uci] ? ` <span class="am-tag">${esc(marks[m.uci])}</span>` : "";
+    html += `<tr class="j-${AM_CLASS[m.label] || ""}${marks[m.uci] ? " marked" : ""}" data-uci="${m.uci}" title="${esc(figurineText(m.line))}">`
+      + `<td class="mv">${esc(figurine(m.san))}${tag}</td><td>${esc(figurineText(m.text))}</td></tr>`;
+  }
+  return html + `</table></div>`;
+}
+// Hovering a row draws the move on the board; leaving puts the board back.
+function bindAllMoves(el, restore) {
+  el.querySelectorAll("table.all-moves tr[data-uci]").forEach((tr) => {
+    tr.addEventListener("mouseenter", () => {
+      const u = tr.dataset.uci;
+      board.setAutoShapes([{ orig: u.slice(0, 2), dest: u.slice(2, 4), brush: "blue" }]);
+    });
+    tr.addEventListener("mouseleave", restore);
+  });
+}
+
 function renderAsk() {
   const el = $("ask-answer");
   const list = R.answers[R.cursor] || [];
   let html = "";
   for (const a of list) {
+    if (a.kind === "all") {
+      html += `<p class="q">All moves</p>`;
+      if (a.pending) { html += `<p class="thinking">Stockfish is looking at every move…</p>`; continue; }
+      const marks = {};
+      const next = R.game.moves[R.cursor + 1];
+      if (next && next.uci) marks[next.uci] = "played in the game";
+      html += allMovesHtml(a, marks);
+      continue;
+    }
     if (a.question) html += `<p class="q">You asked: ${esc(a.question)}</p>`;
     else html += `<p class="q">Explain this position</p>`;
     if (a.pending) { html += `<p class="thinking">The coach is checking the position with the engine…</p>`; continue; }
@@ -1022,9 +1055,27 @@ function renderAsk() {
     if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;
   }
   el.innerHTML = html;
+  bindAllMoves(el, () => renderReviewBoard());
   $("explain-btn").disabled = R.asking;
   $("ask-btn").disabled = R.asking;
+  $("all-moves-btn").disabled = R.asking;
 }
+
+$("all-moves-btn").addEventListener("click", async () => {
+  if (!R.game || R.asking || R.node !== null) return;
+  const ply = R.cursor;
+  const entry = { kind: "all", pending: true };
+  (R.answers[ply] = R.answers[ply] || []).push(entry);
+  R.asking = true;
+  renderAsk();
+  showLatestAnswer();
+  const res = await call("all_moves", "review", ply);
+  R.asking = false;
+  if (res) Object.assign(entry, res, { pending: false });
+  else R.answers[ply] = R.answers[ply].filter((a) => a !== entry);
+  if (R.cursor === ply) { renderAsk(); showLatestAnswer(); }
+  else { $("explain-btn").disabled = false; $("ask-btn").disabled = false; $("all-moves-btn").disabled = false; }
+});
 
 async function askCoach(question) {
   if (!R.game || R.asking) return;
@@ -1040,7 +1091,7 @@ async function askCoach(question) {
   if (res) Object.assign(entry, res, { pending: false });
   else R.answers[ply] = R.answers[ply].filter((a) => a !== entry);
   if (R.cursor === ply) { renderAsk(); showLatestAnswer(); }
-  else { $("explain-btn").disabled = false; $("ask-btn").disabled = false; }
+  else { $("explain-btn").disabled = false; $("ask-btn").disabled = false; $("all-moves-btn").disabled = false; }
 }
 
 // The newest question at the top of the view; the comment is above it, one
@@ -1544,7 +1595,7 @@ $("settings-form").addEventListener("submit", async (e) => {
 // Your reviewed mistakes come back as positions to solve. The board takes
 // one move; Stockfish (in Python) judges it against the review's numbers.
 
-const X = { drills: [], i: 0, result: null, loaded: null, busy: false, hint: null };
+const X = { drills: [], i: 0, result: null, loaded: null, busy: false, hint: null, all: null };
 const VERDICT = { best: "Correct", good: "That works too", repeat: "Same move as in the game",
                   miss: "Not quite", revealed: "The answer", hinted: "Correct, with hints" };
 
@@ -1555,6 +1606,7 @@ $("drill-next").addEventListener("click", () => {
   X.i = (X.i + 1) % X.drills.length;
   X.result = null;
   X.hint = null;
+  X.all = null;
   renderDrill();
 });
 $("drill-retry").addEventListener("click", () => { X.result = null; X.hint = null; renderDrill(); });
@@ -1569,6 +1621,17 @@ $("drill-hint").addEventListener("click", async () => {
   renderDrill();
 });
 $("drill-reveal").addEventListener("click", () => submitDrill(null));
+$("drill-all").addEventListener("click", async () => {
+  const d = curDrill();
+  if (!d || X.all === "pending") return;
+  X.all = "pending";
+  $("drill-all").textContent = "Thinking…";
+  renderDrill();
+  const res = await call("all_moves", "practice", d.id);
+  X.all = res || null;
+  $("drill-all").textContent = "All moves";
+  renderDrill();
+});
 
 async function openPractice() {
   let scope = document.querySelector("input[name=pscope]:checked").value;
@@ -1622,6 +1685,8 @@ function renderDrill() {
   $("drill-prompt").innerHTML = `${side} to move. In the game you played <b>${esc(figurine(d.move_label))}</b>, ${/^[aeiou]/i.test(d.label) ? "an" : "a"} ${esc(d.label.toLowerCase())}. Find a better move.`;
   const r = X.result;
   $("drill-reveal").hidden = !!r;
+  $("drill-all").hidden = !r;
+  $("drill-all").disabled = X.all === "pending";
   const hint = !r && X.hint && X.hint.fen === d.fen ? X.hint : null;
   $("drill-hint").hidden = !!r;
   $("drill-hint").textContent = hintLabel(hint);
@@ -1630,6 +1695,12 @@ function renderDrill() {
   $("drill-hint-box").innerHTML = hint ? hintHtml(hint) : "";
   $("drill-retry").hidden = !r || ["best", "revealed", "hinted"].includes(r.verdict);
   $("drill-result").innerHTML = r ? drillResultHtml(d, r) : "";
+  if (r && X.all && X.all !== "pending" && X.all.fen === d.fen) {
+    const marks = { [d.played_uci]: "played in the game" };
+    if (r.answer_uci && r.answer_uci !== d.played_uci) marks[r.answer_uci] = "your answer";
+    $("drill-result").insertAdjacentHTML("beforeend", allMovesHtml(X.all, marks));
+    bindAllMoves($("drill-result"), () => renderDrill());
+  }
   if (tab !== "practice") return;
   if (orientation !== d.color) setOrientation(d.color);
   const answered = r && r.answer_san;

@@ -130,6 +130,10 @@ chesscoach gui
   the game (after a review, with the coach's notes); *Paste* or Ctrl+V
   opens a PGN or a FEN from the clipboard. A pasted position opens in Review,
   where Explain this position and Ask the coach work on it.
+- **All moves**: beside Explain this position, and in Practice after an
+  answer: every legal move with a short verdict from the engine ("Best
+  move: recaptures", "Blunder: loses a knight (after 5...exd5)", "Allows
+  mate in 1"), so "why not my move?" has an answer. Hover a move to see it.
 - **Explain this position / Ask the coach**: under the comment, for any move
   of the open game. The coach explains the position, or answers a question
   such as "Why not Nd2?", "Is my bishop safe?" or "After Re1+ Kd8 Ne5,

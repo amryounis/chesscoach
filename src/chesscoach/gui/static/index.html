@@ -106,6 +106,7 @@
     <section class="ask" id="ask" hidden aria-label="Ask the coach">
       <div class="ask-row">
         <button id="explain-btn">Explain this position</button>
+        <button id="all-moves-btn" title="Every legal move here with a short verdict from the engine: why not my move?">All moves</button>
         <form id="ask-form" class="ask-form">
           <input id="ask-q" maxlength="300" autocomplete="off"
                  placeholder="Ask about this position, e.g. &ldquo;Why not Nd2?&rdquo;">
@@ -247,6 +248,7 @@
       <div class="play-actions">
         <button id="drill-hint" title="A little help at a time: what is going on, the square, the piece, the move. Past the first step, the exercise comes back to solve on your own.">Hint</button>
         <button id="drill-reveal">Show me</button>
+        <button id="drill-all" hidden title="Every legal move in this position with a short verdict">All moves</button>
         <button id="drill-retry" hidden>Try again</button>
         <button class="primary" id="drill-next">Next exercise</button>
       </div>

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.20.0 — unreleased
+
+- **All moves** (Fritz's "Explain all moves"): every legal move in the
+  position with a short verdict, best first: "Best move: recaptures",
+  "As good as the best: castles", "Good", "Checkmate!", "Forces mate in 3",
+  "Allows mate in 1: 4. Qxf7#", "Blunder: loses a queen for a knight and a
+  pawn (after 5...Nxd4)", "Mistake: refuted by 9...Qb6", "the check is
+  easily answered". Stockfish scores every move at once (a quick search,
+  depth 12, a second or two); material is counted along each move's line
+  until the captures stop. No model: every word comes from the board and
+  the engine. Hover a move to see it on the board and its line.
+  In Review it is a button beside Explain this position (the move played
+  in the game is marked); in Practice it appears after you answer (your
+  answer and the game's move are marked). Not in Play, where it would play
+  the game for you
+
 ## 0.19.0 — unreleased
 
 From the research links (Chess Engine Lab's depth comparison, Maia, the

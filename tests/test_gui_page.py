@@ -483,3 +483,24 @@ def test_the_opening_is_shown_under_the_board(page):
     page.click("#tab-games")
     assert page.is_hidden("#opening-now")
     assert page.errors == []
+
+
+def test_all_moves_in_review(page):
+    page.evaluate("() => { if (navigator.clipboard) navigator.clipboard.readText = () => Promise.reject(new Error('no')); }")
+    page.click("#paste-btn")
+    page.wait_for_selector("#paste-dialog[open]")
+    page.fill("#paste-area", "1. e4 c5 2. Nf3 Nc6 3. Nc3 e6 4. d4 cxd4 5. Nxd4 *")
+    page.click("#paste-open")
+    page.wait_for_function("document.querySelector('#game-sub').textContent.includes('5 moves')")
+    for _ in range(8):
+        page.click("#nav [data-nav=next]")
+    page.click("#all-moves-btn")
+    page.wait_for_selector("table.all-moves tr", timeout=60000)
+    first = page.locator("table.all-moves tr").first
+    assert "Best move: recaptures" in first.inner_text()
+    assert "played in the game" in page.inner_text("table.all-moves tr.marked")
+    first.hover()
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "allmoves.png"))
+    assert page.errors == []

@@ -631,3 +631,18 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .difficulty.d-plain b { color: var(--j-mistake); }
 .difficulty.d-deep b { color: var(--j-interesting); }
 .forced { font-size: 13px; margin: 6px 0; color: var(--muted); border-left: 2px solid var(--line); padding-left: 8px; }
+
+/* all moves: every legal move with a verdict */
+.am-head { font-size: 12px; color: var(--muted); margin: 4px 0; }
+.am-wrap { max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
+table.all-moves { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.all-moves td { padding: 3px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.all-moves td.mv { white-space: nowrap; font-family: var(--fig); font-weight: 600; width: 1%; }
+table.all-moves tr:hover { background: rgba(47, 95, 110, .08); cursor: default; }
+table.all-moves tr.marked td { background: rgba(185, 138, 0, .10); }
+table.all-moves .am-tag { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 4px; font-family: var(--ui); }
+table.all-moves tr.j-Excellent td:last-child { color: var(--j-excellent); }
+table.all-moves tr.j-Good td:last-child { color: var(--j-good); }
+table.all-moves tr.j-Inaccuracy td:last-child { color: var(--j-inaccuracy); }
+table.all-moves tr.j-Mistake td:last-child { color: var(--j-mistake); }
+table.all-moves tr.j-Blunder td:last-child { color: var(--j-blunder); }

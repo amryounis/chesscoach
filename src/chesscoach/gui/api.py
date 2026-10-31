@@ -613,6 +613,27 @@ class Api:
         return self._hint_cache[key]
 
     @_safe
+    def all_moves(self, where: str, arg) -> dict:
+        """Every legal move with a verdict (allmoves.py), for the position on
+        the board in Review (arg = ply, -1 = the start) or an exercise in
+        Practice (arg = its id). Not in Play: it would play the game for you."""
+        from ..allmoves import explain_all
+        if where == "practice":
+            drill = self._drills.get(arg)
+            if drill is None:
+                raise ValueError("That exercise is no longer loaded.")
+            board = chess.Board(drill["fen"])
+        elif where == "review":
+            board, _ = self._position(int(arg))
+        else:
+            raise ValueError("All moves works in Review and Practice.")
+        key = ("all", board.fen())
+        if key not in self._hint_cache:
+            with self._practice_lock:
+                self._hint_cache[key] = explain_all(board, self._stockfish())
+        return self._hint_cache[key]
+
+    @_safe
     def practice_hint(self, drill_id: str) -> dict:
         """One more hint step for the exercise (up to 4; the last is the
         move). Steps past the first count against solving it alone."""

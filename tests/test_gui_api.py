@@ -262,3 +262,14 @@ def test_the_opening_is_named_in_play_review_and_the_saved_game(api):
         or out["moves"][6]["opening_now"]["name"].startswith("Nimzo-Indian Defense")
     pos = api.paste_text("rnbqkb1r/pp1ppppp/5n2/2p5/2P5/2N5/PP1PPPPP/R1BQKBNR w KQkq - 2 3")
     assert pos["moves"] == []                                     # a position: named if the table names it
+
+
+def test_all_moves_in_review_and_practice_not_in_play(api):
+    api.paste_text("1. e4 c5 2. Nf3 Nc6 3. Nc3 e6 4. d4 cxd4 *")
+    r = api.all_moves("review", 7)
+    assert r["moves"][0]["san"] == "Nxd4" and len(r["moves"]) > 30
+    assert api.all_moves("review", -1)["moves"]                 # the start position
+    api._drills = {"d1": {"id": "d1", "fen": chess.STARTING_FEN}}
+    assert api.all_moves("practice", "d1")["moves"]
+    assert "error" in api.all_moves("practice", "nope")
+    assert "error" in api.all_moves("play", 0)
