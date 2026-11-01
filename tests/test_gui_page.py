@@ -555,3 +555,22 @@ def test_the_explorer_shows_lichess_masters(page, monkeypatch, tmp_path):
     page.click("#lib-views [data-lview=list]")
     assert not page.is_disabled("#lib-mine")
     assert page.errors == []
+
+
+def test_the_look_can_be_chosen_previewed_and_kept(page):
+    assert page.get_attribute("html", "data-theme") == "auto"
+    page.click("#open-settings")
+    page.select_option("#theme-pick", "parchment")
+    assert page.get_attribute("html", "data-theme") == "parchment"         # preview at once
+    page.keyboard.press("Escape")                                          # cancel: back to the saved one
+    page.wait_for_function("document.documentElement.dataset.theme === 'auto'")
+    page.click("#open-settings")
+    page.select_option("#theme-pick", "night")
+    page.click("#save-settings")
+    page.wait_for_function("document.documentElement.dataset.theme === 'night'")
+    assert config.settings.theme == "night"
+    bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
+    assert bg == "rgb(22, 28, 31)"                                         # the night page
+    page.reload()                                                          # opens in it again
+    page.wait_for_function("document.documentElement.dataset.theme === 'night'")
+    assert page.errors == []

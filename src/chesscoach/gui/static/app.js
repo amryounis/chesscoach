@@ -94,6 +94,16 @@ async function call(name, ...args) {
 // ---------------------------------------------------------------- board
 
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+// ---- the look (Settings): a data-theme attribute the CSS keys on. Kept in
+// this browser too, so the app opens in it without a flash of the default.
+const THEMES = ["auto", "classic", "night", "parchment"];
+function applyTheme(name) {
+  const t = THEMES.includes(name) ? name : "auto";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("theme", t); } catch (e) { /* storage off */ }
+}
+try { applyTheme(localStorage.getItem("theme") || "auto"); } catch (e) { applyTheme("auto"); }
 const board = Chessground($("board"), {
   fen: START,
   coordinates: true,
@@ -1534,7 +1544,8 @@ $("review-played").addEventListener("click", async () => {
 // ---------------------------------------------------------------- settings
 
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
-                         "comment_language", "library_dir", "max_seconds", "blunder_alert", "lichess_token"];
+                         "comment_language", "library_dir", "max_seconds", "blunder_alert", "lichess_token",
+                         "theme"];
 const SETTINGS_CHECKS = ["autosave"];
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
@@ -1552,6 +1563,9 @@ $("open-settings").addEventListener("click", async () => {
   $("settings-error").hidden = true;
   $("settings").showModal();
 });
+// the look changes as you pick it; Cancel puts the saved one back
+$("theme-pick").addEventListener("change", () => applyTheme($("theme-pick").value));
+$("settings").addEventListener("close", () => applyTheme((settingsCache && settingsCache.theme) || "auto"));
 $("settings-form").addEventListener("submit", async (e) => {
   if (e.submitter && e.submitter.value === "cancel") return;   // let the dialog close
   e.preventDefault();
@@ -1565,6 +1579,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     return;
   }
   settingsCache = res;
+  applyTheme(res.theme);
   $("settings").close();
   toast("Settings saved.");
   if (R.game && R.game.tree) renderNotes();
@@ -1970,6 +1985,7 @@ function isPromotion(o, d) {
 
 async function init() {
   settingsCache = await api().get_settings();
+  if (settingsCache && settingsCache.theme) applyTheme(settingsCache.theme);
   if (settingsCache && settingsCache.version) {
     $("app-version").textContent = `v${settingsCache.version}`;
     document.title = `chesscoach ${settingsCache.version}`;

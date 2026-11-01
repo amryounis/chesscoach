@@ -61,6 +61,7 @@ class Settings:
     grounding: bool = True            # verify the model's claims on the board
     concepts: bool = True             # engine-verified threats, piece roles, key facts
     concept_depth: int = 14           # depth of those extra searches
+    theme: str = "auto"               # the app's look: auto (Windows light/dark), classic, night, parchment
     lichess_token: str = ""           # Lichess API token for the online opening explorer (no permissions)
     blunder_alert: int = 20           # Play: ask "are you sure?" before a move losing this many
                                       # points of winning chance (30 blunders, 20 mistakes, 10 inaccuracies; 0 off)
@@ -192,6 +193,10 @@ grounding = true
 # extra searches per moment at concept_depth.
 concepts = true
 concept_depth = 14
+
+# The app's look: "auto" (light or dark, as Windows is set), "classic",
+# "night" or "parchment" (paper, cream and teal board, book type).
+theme = "auto"
 
 # The opening explorer can also show what masters and Lichess players play,
 # online and only when you choose it there. Lichess needs a personal API

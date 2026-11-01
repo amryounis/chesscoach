@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.22.0 — unreleased
+
+- **Themes** (Settings, Look): *As Windows is set* (light or dark, as
+  before), *Classic*, *Night* and *Parchment*. Parchment is a study book:
+  paper with a faint grain behind the page, cream and teal squares with a
+  wood-like grain, an inked frame round the board, buttons drawn like cards
+  with a soft shadow, and book type (Palatino) throughout. Textures are
+  drawn by the stylesheet itself (SVG noise), so there are no image files
+  and nothing to license; they are kept faint so arrows, highlighted
+  squares and the check marker read as on the flat board. The look changes
+  as you pick it, Cancel puts the saved one back, and the app opens in it
+  without a flash of the default
+- A theme is a set of values in one place (colours, board squares, grain,
+  paper, frame, button shape), so more can be added the same way. Piece
+  sets stay as they are for now: hand-drawn sets are a separate choice, to
+  come once each one's licence is checked against the GPL
+
 ## 0.21.0 — unreleased
 
 - **The opening explorer can ask Lichess** (as Chess Forge does): beside

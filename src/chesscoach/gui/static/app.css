@@ -30,11 +30,48 @@
   --fig: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", var(--ui);
 
   --board: min(calc(100vh - 168px), calc(100vw - 560px));
+
+  /* what a theme can add beyond colour: the board's dark squares, a grain
+     over the board, a paper texture behind the page, a frame, and how
+     buttons are drawn */
+  --board-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><defs><pattern id='p' width='2' height='2' patternUnits='userSpaceOnUse'><rect x='1' width='1' height='1' fill='%238ca2ad'/><rect y='1' width='1' height='1' fill='%238ca2ad'/></pattern></defs><rect width='8' height='8' fill='url(%23p)'/></svg>");
+  --board-grain: none;
+  --paper: none;
+  --frame: none;
+  --btn-radius: 6px;
+  --btn-border: 1px;
+  --btn-shadow: none;
+  --btn-bg: var(--panel);
   color-scheme: light;
 }
 
+/* ---- themes (Settings): auto follows Windows' light or dark mode ---- */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]), :root[data-theme="auto"] {
+      --bg: #161c1f;
+      --panel: #1e262a;
+      --ink: #e3e8e9;
+      --muted: #93a1a6;
+      --line: #2f3a3f;
+      --accent: #6fa6b5;
+      --accent-ink: #0f1517;
+      --sq-light: #b9c3c8;
+      --sq-dark: #6f8793;
+      --eval-white: #e9ecec;
+      --eval-black: #0f1416;
+      --j-book: #7d898e;
+      --j-excellent: #5cb27f;
+      --j-good: #6fb0a8;
+      --j-inaccuracy: #e0b23a;
+      --j-mistake: #ee8a45;
+      --j-blunder: #ef6a5e;
+      --j-brilliant: #4fc7c4;
+      --j-interesting: #8fb0ef;
+      --board-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><defs><pattern id='p' width='2' height='2' patternUnits='userSpaceOnUse'><rect x='1' width='1' height='1' fill='%236f8793'/><rect y='1' width='1' height='1' fill='%236f8793'/></pattern></defs><rect width='8' height='8' fill='url(%23p)'/></svg>");
+      color-scheme: dark;
+  }
+}
+:root[data-theme="night"] {
     --bg: #161c1f;
     --panel: #1e262a;
     --ink: #e3e8e9;
@@ -54,15 +91,52 @@
     --j-blunder: #ef6a5e;
     --j-brilliant: #4fc7c4;
     --j-interesting: #8fb0ef;
+    --board-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><defs><pattern id='p' width='2' height='2' patternUnits='userSpaceOnUse'><rect x='1' width='1' height='1' fill='%236f8793'/><rect y='1' width='1' height='1' fill='%236f8793'/></pattern></defs><rect width='8' height='8' fill='url(%23p)'/></svg>");
     color-scheme: dark;
-  }
+}
+/* Parchment: a study book. Paper with a faint grain, cream and teal squares
+   with a grain of their own, an inked frame, buttons drawn like cards.
+   Textures are faint on purpose: the arrows, the highlighted squares and
+   the check marker must stay as easy to read as on the flat board. */
+:root[data-theme="parchment"] {
+  --bg: #ece0c4;
+  --panel: #f5ecd7;
+  --ink: #2b2118;
+  --muted: #6d5c47;
+  --line: #c9b48e;
+  --accent: #1f5b63;
+  --accent-ink: #fbf5e6;
+  --sq-light: #ecdcb6;
+  --sq-dark: #5f918d;
+  --eval-white: #f7f0dd;
+  --eval-black: #2b2118;
+  --j-book: #7d6f5c;
+  --j-excellent: #2c6e45;
+  --j-good: #3b7a73;
+  --j-inaccuracy: #9a6f00;
+  --j-mistake: #b5561a;
+  --j-blunder: #a92b22;
+  --j-brilliant: #0f6e6c;
+  --j-interesting: #345fa8;
+  --ui: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --book: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --board-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><defs><pattern id='p' width='2' height='2' patternUnits='userSpaceOnUse'><rect x='1' width='1' height='1' fill='%235f918d'/><rect y='1' width='1' height='1' fill='%235f918d'/></pattern></defs><rect width='8' height='8' fill='url(%23p)'/></svg>");
+  --board-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.9 .06' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .2  0 0 0 0 .14  0 0 0 0 .06  0 0 0 .2 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+  --paper: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .25  0 0 0 0 .1  0 0 0 .08 0'/></filter><filter id='b'><feTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='2' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .32  0 0 0 0 .12  0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23b)'/><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --frame: 0 0 0 6px #2b2118, 0 3px 10px 6px rgba(43, 33, 24, .25);
+  --btn-radius: 10px;
+  --btn-border: 1.5px;
+  --btn-shadow: 1px 2px 0 rgba(43, 33, 24, .35);
+  --btn-bg: #f3e5c4;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--paper), var(--bg);
+  background-color: var(--bg);
   color: var(--ink);
   font: 14px/1.45 var(--ui);
   display: grid;
@@ -76,9 +150,10 @@ button, select, input {
   color: inherit;
 }
 button {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 6px;
+  border: var(--btn-border) solid var(--line);
+  background: var(--btn-bg);
+  border-radius: var(--btn-radius);
+  box-shadow: var(--btn-shadow);
   padding: 6px 12px;
   cursor: pointer;
   white-space: nowrap;
@@ -91,7 +166,9 @@ button.primary {
   font-weight: 600;
 }
 button.primary:hover { filter: brightness(1.08); }
-button.quiet { background: transparent; border-color: transparent; color: var(--muted); }
+button.quiet { background: transparent; border-color: transparent; color: var(--muted); box-shadow: none; }
+/* buttons drawn as text (tabs, moves in the list, the speaker) get no card shadow */
+.tabs button, .viewtabs button, .movelist .mv, .opening-now .speak, .seg button { box-shadow: none; }
 button.quiet:hover { color: var(--ink); }
 button:disabled { opacity: .5; cursor: default; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -162,13 +239,10 @@ button:disabled { opacity: .5; cursor: default; }
 /* ---- board theme (blue-grey analysis board) ---- */
 cg-board {
   background-color: var(--sq-light);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><defs><pattern id='p' width='2' height='2' patternUnits='userSpaceOnUse'><rect x='1' width='1' height='1' fill='%238ca2ad'/><rect y='1' width='1' height='1' fill='%238ca2ad'/></pattern></defs><rect width='8' height='8' fill='url(%23p)'/></svg>");
+  background-image: var(--board-grain), var(--board-pattern);
+  background-size: auto, 100% 100%;
 }
-@media (prefers-color-scheme: dark) {
-  cg-board {
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'><defs><pattern id='p' width='2' height='2' patternUnits='userSpaceOnUse'><rect x='1' width='1' height='1' fill='%236f8793'/><rect y='1' width='1' height='1' fill='%236f8793'/></pattern></defs><rect width='8' height='8' fill='url(%23p)'/></svg>");
-  }
-}
+.cg-wrap { box-shadow: var(--frame); }
 cg-board square.last-move { background-color: rgba(214, 170, 40, .5); }
 cg-board square.selected { background-color: rgba(47, 95, 110, .5); }
 cg-board square.move-dest {

@@ -131,6 +131,8 @@ chesscoach gui
   the game (after a review, with the coach's notes); *Paste* or Ctrl+V
   opens a PGN or a FEN from the clipboard. A pasted position opens in Review,
   where Explain this position and Ask the coach work on it.
+- **Look** (Settings): as Windows is set, Classic, Night, or Parchment (a
+  study book: paper texture, cream and teal board with a grain, book type).
 - **Lichess in the explorer** (online, only when you choose it): what
   masters or Lichess players around your rating play in the position, with
   their results. Needs a Lichess API token with no permissions
