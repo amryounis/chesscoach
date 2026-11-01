@@ -1534,7 +1534,7 @@ $("review-played").addEventListener("click", async () => {
 // ---------------------------------------------------------------- settings
 
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
-                         "comment_language", "library_dir", "max_seconds", "blunder_alert"];
+                         "comment_language", "library_dir", "max_seconds", "blunder_alert", "lichess_token"];
 const SETTINGS_CHECKS = ["autosave"];
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
@@ -1808,12 +1808,14 @@ $("lib-remove").addEventListener("click", async () => {
   if (res) { G.selected = null; toast("Removed."); openGames(); }
 });
 $("ex-start").addEventListener("click", () => { G.line = []; explore(); });
+$("ex-source").addEventListener("change", () => explore());
 $("ex-back").addEventListener("click", () => { G.line.pop(); explore(); });
 
 function openGames() {
   $("lib-list").hidden = G.view !== "list";
   $("lib-explorer").hidden = G.view !== "explorer";
   $("lib-list-filters").hidden = G.view !== "list";
+  $("lib-mine").disabled = $("lib-file").disabled = false;      // the explorer may have greyed them
   if (G.view === "explorer") return explore();
   listGames();
 }
@@ -1870,25 +1872,44 @@ async function openFromLibrary(id) {
 }
 
 async function explore() {
-  const res = await call("library_explore", G.line, $("lib-mine").value, $("lib-file").value);
-  if (!res) { G.line.pop(); return; }
+  const source = $("ex-source").value;
+  // the Games filters (file, whose games) apply to your own games only
+  $("lib-mine").disabled = $("lib-file").disabled = !!source && G.view === "explorer";
+  if (source) $("ex-empty").hidden = true;
+  const res = await call("library_explore", G.line, $("lib-mine").value, $("lib-file").value, source);
+  if (!res) {
+    if (source && !G.line.length) { $("ex-source").value = ""; return explore(); }   // e.g. no token yet
+    G.line.pop();
+    return;
+  }
   fillFiles(res.files || []);
   G.ex = res;
   $("ex-line").textContent = res.line || "Starting position";
   $("ex-back").disabled = $("ex-start").disabled = !G.line.length;
-  const mine = $("lib-mine").value;
+  const mine = source ? "" : $("lib-mine").value;
   $("ex-score-h").textContent = mine === "white" || mine === "black" ? "Your score"
     : `${res.turn === "white" ? "White" : "Black"}'s score`;
+  $("ex-games-h").title = source ? `${res.label}: games that reached this position` : "Your games";
   // the book's moves (with the coach's idea) and your games' moves, merged
   const book = (res.book && res.book.moves) || [];
   const byUci = {};
   for (const b of book) byUci[b.uci] = { uci: b.uci, san: b.san, games: 0, white: 0, draws: 0, black: 0, score: null, book: b };
   for (const m of res.moves) byUci[m.uci] = Object.assign(byUci[m.uci] || {}, m);
-  const rows = Object.values(byUci).sort((a, b) => ((b.book ? b.book.share : 0) - (a.book ? a.book.share : 0)) || (b.games - a.games));
+  const share = (m) => (m.book ? m.book.share : 0);
+  const rows = Object.values(byUci).sort((a, b) => source
+    ? (b.games - a.games) || (share(b) - share(a))            // what is played most first
+    : (share(b) - share(a)) || (b.games - a.games));
   const op = res.opening ? `<b>${esc(res.opening.eco)} ${esc(res.opening.name)}</b>` : "";
   const here = res.book && res.book.verdict ? ` <span class="sub">Stockfish: ${esc(res.book.verdict)}</span>` : "";
   const last = G.line.length ? res.line.split(" ").slice(-1)[0] : "";
-  $("ex-about").innerHTML = (op || here ? `<p>${op}${here}</p>` : "")
+  let src = "";
+  if (source) {
+    const when = (res.cached || "").replace("T", " ");
+    src = `<p class="sub ex-src">${esc(res.label)}${source === "lichess" ? " around your rating (blitz, rapid, classical)" : ""}`
+      + ` · ${Number(res.games || 0).toLocaleString()} games`
+      + (res.stale ? ` · <b>offline: Lichess's answer from ${esc(when)}</b>` : when ? ` · as of ${esc(when)}` : "") + `</p>`;
+  }
+  $("ex-about").innerHTML = src + (op || here ? `<p>${op}${here}</p>` : "")
     + (res.why ? `<p class="why"><b class="k">The idea of ${esc(figurine(last))}</b> ${esc(figurineText(res.why))}</p>` : "")
     + (!res.study || !res.study.ideas
       ? `<p class="sub">Run <code>chesscoach book study</code> once to add an opening book's moves here, each with the coach's explanation of its idea.</p>` : "");
@@ -1901,11 +1922,12 @@ async function explore() {
     };
     const bar = `<span class="wdl">${seg("w", m.white)}${seg("d", m.draws)}${seg("b", m.black)}</span>`;
     const bk = m.book;
-    return `<tr data-uci="${m.uci}"${bk && bk.idea ? ` title="${esc(bk.idea)}"` : ""} class="${bk ? "inbook" : ""}">`
+    const tip = [bk && bk.idea ? bk.idea : "", m.rating ? `average rating ${m.rating}` : ""].filter(Boolean).join(" · ");
+    return `<tr data-uci="${m.uci}"${tip ? ` title="${esc(tip)}"` : ""} class="${bk ? "inbook" : ""}">`
       + `<td class="mv-san">${esc(figurine(m.san))}${bk && bk.idea ? ' <span class="has-idea" aria-label="has an idea">●</span>' : ""}</td>`
       + `<td class="num">${bk ? Math.round(bk.share * 100) + "%" : ""}</td>`
       + `<td class="verdict">${bk && bk.verdict ? esc(bk.verdict) : ""}</td>`
-      + `<td class="num">${m.games || ""}</td>`
+      + `<td class="num">${m.games ? Number(m.games).toLocaleString() : ""}</td>`
       + `<td title="${m.white} · ${m.draws} · ${m.black}">${m.games ? bar : ""}</td><td class="num">${m.score === null || m.score === undefined ? "–" : m.score + "%"}</td></tr>`;
   }).join("");
   $("ex-rows").querySelectorAll("tr").forEach((tr) => tr.addEventListener("click", () => {
@@ -1913,7 +1935,8 @@ async function explore() {
     explore();
   }));
   $("ex-empty").hidden = rows.length > 0;
-  $("ex-empty").textContent = res.games === 0 && !G.line.length
+  $("ex-empty").textContent = source ? `No ${res.label.toLowerCase()} game reached this position.`
+    : res.games === 0 && !G.line.length
     ? (mine ? "None of your games yet: set your name in Settings, as it appears in your PGNs." : "No games yet.")
     : "No game in your library reached this position.";
   renderGamesBoard();

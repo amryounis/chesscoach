@@ -61,6 +61,7 @@ class Settings:
     grounding: bool = True            # verify the model's claims on the board
     concepts: bool = True             # engine-verified threats, piece roles, key facts
     concept_depth: int = 14           # depth of those extra searches
+    lichess_token: str = ""           # Lichess API token for the online opening explorer (no permissions)
     blunder_alert: int = 20           # Play: ask "are you sure?" before a move losing this many
                                       # points of winning chance (30 blunders, 20 mistakes, 10 inaccuracies; 0 off)
     source: str = "defaults"          # where the settings came from (info only)
@@ -192,6 +193,12 @@ grounding = true
 concepts = true
 concept_depth = 14
 
+# The opening explorer can also show what masters and Lichess players play,
+# online and only when you choose it there. Lichess needs a personal API
+# token for that: lichess.org -> Preferences -> API access tokens, tick no
+# permissions. (Or set CHESSCOACH_LICHESS_TOKEN instead of writing it here.)
+lichess_token = ""
+
 # Play: before a move that throws away this many points of winning chance,
 # ask "are you sure?" (without saying why). 30 = blunders only, 20 =
 # mistakes too, 10 = inaccuracies too, 0 = off.
@@ -219,6 +226,9 @@ def save_settings(s: Settings, path: Optional[Path] = None) -> Path:
         if f.name == "source":
             continue
         v = getattr(s, f.name)
+        # a token from the environment stays there: never copied into the file
+        if f.name == "lichess_token" and v and v == os.environ.get("CHESSCOACH_LICHESS_TOKEN"):
+            v = ""
         if isinstance(v, bool):
             v = "true" if v else "false"
         elif isinstance(v, str):

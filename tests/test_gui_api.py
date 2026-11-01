@@ -271,3 +271,18 @@ def test_all_moves_in_review_and_practice_not_in_play(api):
     assert api.all_moves("review", -1)["moves"]                 # the start position
     assert "error" in api.all_moves("practice", "d1")
     assert "error" in api.all_moves("play", 0)
+
+
+def test_the_explorer_can_ask_lichess(api, monkeypatch, tmp_path):
+    from chesscoach import lichess
+    config.settings.library_dir = str(tmp_path)
+    config.settings.lichess_token = ""
+    assert "token" in api.library_explore(["e2e4"], "", "", "masters")["error"]
+    config.settings.lichess_token = "t"
+    body = {"white": 5, "draws": 3, "black": 2, "opening": {"eco": "B00", "name": "King's Pawn Game"},
+            "moves": [{"uci": "c7c5", "san": "c5", "white": 3, "draws": 1, "black": 2}]}
+    monkeypatch.setattr(lichess, "_get", lambda url, tok: body)
+    out = api.library_explore(["e2e4"], "", "", "masters")
+    assert out["moves"][0]["san"] == "c5" and out["moves"][0]["score"] == round(100 * 2.5 / 6)
+    assert out["opening"]["name"] == "King's Pawn Game" and out["label"] == "Lichess masters"
+    assert out["line"] == "1. e4" and "book" in out

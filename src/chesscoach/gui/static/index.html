@@ -213,11 +213,16 @@
         <button class="quiet" id="ex-start" title="Back to the starting position">⏮</button>
         <button class="quiet" id="ex-back" title="One move back">◀</button>
         <span id="ex-line">Starting position</span>
+        <select id="ex-source" aria-label="Whose moves" title="Your own games and the opening study, or (online) what masters or Lichess players around your rating play">
+          <option value="">Your games</option>
+          <option value="masters">Lichess: masters</option>
+          <option value="lichess">Lichess: players around your rating</option>
+        </select>
       </div>
       <div class="ex-about" id="ex-about"></div>
       <table class="lib-table ex-table">
         <thead><tr><th>Move</th><th class="num" title="How often the opening book plays it here">Book</th>
-          <th title="Stockfish after the move">Engine</th><th class="num" title="Your games">Games</th>
+          <th title="Stockfish after the move">Engine</th><th class="num" id="ex-games-h" title="Your games">Games</th>
           <th>White · Draw · Black</th><th class="num" id="ex-score-h">Score</th></tr></thead>
         <tbody id="ex-rows"></tbody>
       </table>
@@ -293,6 +298,10 @@
     <label>Most seconds per position <input name="max_seconds" type="number" min="1" max="120" step="1" title="Stockfish stops at the engine depth or after this many seconds, whichever comes first"></label>
     <label>Games folder <input name="library_dir" placeholder="default: &ldquo;games&rdquo; next to the settings file"></label>
     <label class="check"><input type="checkbox" name="autosave"> Keep every game I play or review in my games</label>
+    <label>Lichess token, for the online opening explorer (optional)
+      <input name="lichess_token" type="password" autocomplete="off" spellcheck="false"
+             placeholder="lichess.org &rarr; Preferences &rarr; API access tokens; tick no permissions">
+    </label>
     <label>Blunder alert when playing
       <select name="blunder_alert" title="Before a move that throws away this much winning chance, ask &ldquo;are you sure?&rdquo; (without saying why)">
         <option value="30">Before blunders</option>

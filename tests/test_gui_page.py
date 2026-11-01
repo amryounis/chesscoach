@@ -527,3 +527,31 @@ def test_all_moves_in_review(page):
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "allmoves.png"))
     assert page.errors == []
+
+
+def test_the_explorer_shows_lichess_masters(page, monkeypatch, tmp_path):
+    from chesscoach import lichess
+    config.settings.library_dir = str(tmp_path)
+    config.settings.lichess_token = ""
+    page.click("#tab-games")
+    page.click("#lib-views [data-lview=explorer]")
+    page.select_option("#ex-source", "masters")
+    # no token: says how to get one, and goes back to your games
+    page.wait_for_function("document.querySelector('#toast').textContent.includes('token')")
+    assert page.input_value("#ex-source") == ""
+    config.settings.lichess_token = "t"
+    body = {"white": 6000, "draws": 3000, "black": 1000, "opening": None, "moves": [
+        {"uci": "e2e4", "san": "e4", "white": 3500, "draws": 1500, "black": 700, "averageRating": 2410},
+        {"uci": "d2d4", "san": "d4", "white": 2500, "draws": 1500, "black": 300, "averageRating": 2420}]}
+    monkeypatch.setattr(lichess, "_get", lambda url, tok: body)
+    page.select_option("#ex-source", "masters")
+    page.wait_for_function("document.querySelector('#ex-about').textContent.includes('Lichess masters')")
+    first = page.inner_text("#ex-rows tr >> nth=0")
+    assert first.startswith("e4") and "5,700" in first
+    assert page.is_disabled("#lib-mine")                       # your-games filters do not apply
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "lichess.png"))
+    page.click("#lib-views [data-lview=list]")
+    assert not page.is_disabled("#lib-mine")
+    assert page.errors == []

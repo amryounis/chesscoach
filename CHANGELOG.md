@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.21.0 — unreleased
+
+- **The opening explorer can ask Lichess** (as Chess Forge does): beside
+  the line, choose "Lichess: masters" or "Lichess: players around your
+  rating" (your rating group and the one above it, blitz, rapid and
+  classical) instead of your own games. Each move shows how many games
+  reached it, White · Draw · Black, the score for the side to move, and its
+  average rating on hover; Lichess names the opening. The opening study's
+  book share, engine verdict and ideas still show beside them
+- It is the only part of chesscoach that uses the internet, and only when
+  chosen there. Lichess has required a personal API token for the explorer
+  since 2026: create one at lichess.org (Preferences, API access tokens,
+  tick no permissions; it can read public data and nothing else) and paste
+  it in Settings, or set CHESSCOACH_LICHESS_TOKEN (a token from the
+  environment is never written into the settings file). The token goes in
+  the request header only, never in a URL, a message or the log
+- Every answer is kept in lichess_cache.db in your games folder: a position
+  looked up once opens offline afterwards (marked "offline: Lichess's
+  answer from ..."), and an answer is asked for again after 30 days. One
+  request at a time; after "too many requests" nothing is sent for a
+  minute. Without a token, or offline with nothing kept, it says so and
+  goes back to your games
+
 ## 0.20.3 — unreleased
 
 - All moves is gone from Practice: the long list pushed the exercise's own

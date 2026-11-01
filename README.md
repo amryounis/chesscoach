@@ -3,7 +3,8 @@
 An offline chess coach that explains your games the way an annotated games
 book does: few comments, on the moments that matter, in plain language.
 
-Everything runs on your own machine. No internet, no accounts.
+Everything runs on your own machine. No internet, no accounts; the one
+exception is optional: the opening explorer can ask Lichess when you choose it.
 
 ![Reviewing a game: a critical moment, with the better move shown on the board](docs/review.png)
 
@@ -130,6 +131,11 @@ chesscoach gui
   the game (after a review, with the coach's notes); *Paste* or Ctrl+V
   opens a PGN or a FEN from the clipboard. A pasted position opens in Review,
   where Explain this position and Ask the coach work on it.
+- **Lichess in the explorer** (online, only when you choose it): what
+  masters or Lichess players around your rating play in the position, with
+  their results. Needs a Lichess API token with no permissions
+  (lichess.org, Preferences, API access tokens), pasted in Settings. Every
+  answer is kept, so positions you have looked up work offline afterwards.
 - **All moves**: beside Explain this position in Review:
   every legal move with a short verdict from the engine ("Best
   move: recaptures", "Blunder: loses a knight (after 5...exd5)", "Allows

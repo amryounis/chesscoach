@@ -292,8 +292,11 @@ class Api:
         return {"ok": True}
 
     @_safe
-    def library_explore(self, line: Optional[list] = None, mine: str = "", file: str = "") -> dict:
-        """The opening explorer after `line` (UCI moves from the start)."""
+    def library_explore(self, line: Optional[list] = None, mine: str = "", file: str = "",
+                        source: str = "") -> dict:
+        """The opening explorer after `line` (UCI moves from the start).
+        source: "" for your games (and the opening study), or a Lichess
+        database ("masters", "lichess"), asked online (lichess.py)."""
         from .. import library
         b, sans = chess.Board(), []
         for u in line or []:
@@ -302,7 +305,14 @@ class Api:
                 raise ValueError(f"Illegal move in the line: {u}")
             sans.append(b.san(m))
             b.push(m)
-        out = library.explore(b, mine=mine, file=file)
+        if source:
+            from .. import lichess
+            try:
+                out = lichess.explore(b, source)
+            except lichess.LichessError as e:
+                raise ValueError(str(e)) from None
+        else:
+            out = library.explore(b, mine=mine, file=file)
         # the opening study (chesscoach book study): the book's moves here,
         # and the idea of the move that led here
         from .. import book_study
@@ -322,7 +332,8 @@ class Api:
         for u in line or []:
             tmp.push(chess.Move.from_uci(u))
             named = name_at(tmp) or named
-        out["opening"] = {"eco": named[0], "name": named[1]} if named else None
+        if not (source and out.get("opening")):        # Lichess names it itself
+            out["opening"] = {"eco": named[0], "name": named[1]} if named else None
         dests: dict = {}
         for m in b.legal_moves:
             dests.setdefault(chess.square_name(m.from_square), []).append(chess.square_name(m.to_square))
