@@ -45,3 +45,15 @@ def test_a_config_file_in_the_current_folder_is_not_read(tmp_path, monkeypatch):
     assert config.find_config_file() is None
     assert config.load_settings().stockfish_path != "evil.exe"
     assert config.load_settings(str(tmp_path / "chesscoach.toml")).stockfish_path == "evil.exe"
+
+
+def test_the_app_opens_maximized_or_centred():
+    from types import SimpleNamespace as S
+    from chesscoach.gui.app import placement
+    p = placement([S(width=1920, height=1080)], True)
+    assert p["maximized"] and p["width"] == 1320 and p["x"] == 300 and p["y"] == 90
+    p = placement([S(width=1366, height=768)], False)                # a small laptop screen
+    assert not p["maximized"] and p["width"] == 1320 and p["height"] == 688
+    assert p["x"] == 23 and 0 <= p["y"] <= 768 - 688
+    p = placement([], False)                                         # no screen information
+    assert p == {"maximized": False, "width": 1320, "height": 860}

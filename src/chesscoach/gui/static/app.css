@@ -619,6 +619,12 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .lib-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
 #panel-games .empty { color: var(--muted); font: 14px var(--ui); }
 .ex-head { display: flex; gap: 6px; align-items: center; margin: 4px 0 8px; }
+/* the explorer fills the Openings tab and its moves scroll inside it, header
+   kept in view: a position can have thirty moves (Lichess) */
+#lib-explorer { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ex-table-wrap { flex: 1 1 auto; min-height: 120px; overflow: auto;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.ex-filters { margin-bottom: 6px; }
 #ex-line { font: 15px var(--fig); }
 .ex-table td.mv-san { font: 600 15px var(--fig); }
 .wdl { display: flex; width: 170px; height: 16px; border-radius: 3px; overflow: hidden;
@@ -726,3 +732,7 @@ table.all-moves tr.j-Blunder td:last-child { color: var(--j-blunder); }
 /* Practice and Play scroll as a whole when their content runs past the
    window (a long answer plus the All moves list), so nothing is out of reach */
 #panel-practice, #panel-play { overflow-y: auto; padding-right: 6px; }
+
+/* the game summary, in its own tab of the review */
+.summary-view { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 6px; }
+.summary-view .summary { margin-top: 0; }

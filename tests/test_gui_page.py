@@ -80,13 +80,14 @@ def test_review_flow(page):
     page.click("#start-review")
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
     assert page.locator("#moments button").count() >= 2
-    # The review opens on the game summary, written by code from stored facts.
-    summary = page.inner_text("#summary")
+    # The game summary, written by code from stored facts, in its own tab.
+    page.click("#view-summary")
+    summary = page.inner_text("#summary-view")
     assert "Game summary" in summary and "You made" in summary
     assert "Across your reviewed games" in summary          # stored in the history
-    if page.locator("#summary a.ply").count():
-        page.click("#summary a.ply >> nth=0")
-        assert page.locator("#summary").count() == 0        # now on that move
+    if page.locator("#summary-view a.ply").count():
+        page.click("#summary-view a.ply >> nth=0")
+        assert page.is_hidden("#summary-view")              # now on that move
     page.click("#moments button >> nth=1")
     assert "A reason." in page.inner_text("#coach")
     # Facts behind the comment: the panel lists them and circles their squares.
@@ -329,8 +330,7 @@ def test_games_tab_lists_opens_and_explores(page):
     notes = page.inner_text("#annotations")
     assert "Coach:" not in notes and "Coach summary:" not in notes
     assert notes.count("A reason.") == page.locator("#annotations .cmt.coach").count()
-    page.click("#tab-games")
-    page.click("#lib-views [data-lview=explorer]")
+    page.click("#tab-openings")
     page.wait_for_selector("#ex-rows tr")
     first = page.inner_text("#ex-rows tr >> nth=0")
     assert "1" in first                                          # games count
@@ -384,7 +384,8 @@ def test_analysis_table_and_move_counts(page):
     page.click("#start-review")
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
     # the counts per side, at the top of the game summary
-    st = page.inner_text("#summary .st-table")
+    page.click("#view-summary")
+    st = page.inner_text("#summary-view .st-table")
     assert "Accuracy" in st and "Best moves" in st and "Acceptable" in st
     page.click("#view-table")
     page.wait_for_selector("#analysis:not([hidden]) tbody tr")
@@ -404,8 +405,7 @@ def test_explorer_shows_the_books_moves_and_their_ideas(page, tmp_path):
     book = write_book(tmp_path / "b.bin", LINES)
     bs.run(book, "m", plies=2, min_line=0.01, depth=6,
            llm=lambda model, msgs, system=None: ("Grabs the centre and frees a bishop.", None))
-    page.click("#tab-games")
-    page.click("#lib-views [data-lview=explorer]")
+    page.click("#tab-openings")
     page.wait_for_selector("#ex-rows tr.inbook")
     first = page.locator("#ex-rows tr").first
     assert first.inner_text().startswith("e4") and "%" in first.inner_text()
@@ -533,8 +533,7 @@ def test_the_explorer_shows_lichess_masters(page, monkeypatch, tmp_path):
     from chesscoach import lichess
     config.settings.library_dir = str(tmp_path)
     config.settings.lichess_token = ""
-    page.click("#tab-games")
-    page.click("#lib-views [data-lview=explorer]")
+    page.click("#tab-openings")
     page.select_option("#ex-source", "masters")
     # no token: says how to get one, and goes back to your games
     page.wait_for_function("document.querySelector('#toast').textContent.includes('token')")
@@ -542,18 +541,28 @@ def test_the_explorer_shows_lichess_masters(page, monkeypatch, tmp_path):
     config.settings.lichess_token = "t"
     body = {"white": 6000, "draws": 3000, "black": 1000, "opening": None, "moves": [
         {"uci": "e2e4", "san": "e4", "white": 3500, "draws": 1500, "black": 700, "averageRating": 2410},
-        {"uci": "d2d4", "san": "d4", "white": 2500, "draws": 1500, "black": 300, "averageRating": 2420}]}
+        {"uci": "d2d4", "san": "d4", "white": 2500, "draws": 1500, "black": 300, "averageRating": 2420}]
+        + [{"uci": u, "white": 5, "draws": 5, "black": 5} for u in               # all twenty
+           ("g1f3 c2c4 g2g3 b2b3 f2f4 b1c3 b2b4 e2e3 a2a3 d2d3 c2c3 h2h3 g2g4 a2a4 h2h4 "
+            "g1h3 b1a3 f2f3").split()]}
     monkeypatch.setattr(lichess, "_get", lambda url, tok: body)
     page.select_option("#ex-source", "masters")
     page.wait_for_function("document.querySelector('#ex-about').textContent.includes('Lichess masters')")
     first = page.inner_text("#ex-rows tr >> nth=0")
     assert first.startswith("e4") and "5,700" in first
-    assert page.is_disabled("#lib-mine")                       # your-games filters do not apply
+    # twenty moves: they scroll inside the tab, which stays within the window
+    assert page.locator("#ex-rows tr").count() == 20
+    wrap = page.evaluate("""() => { const w = document.querySelector('.ex-table-wrap');
+        return [w.scrollHeight > w.clientHeight, w.getBoundingClientRect().bottom, innerHeight]; }""")
+    assert wrap[0] and wrap[1] <= wrap[2]
+    assert page.is_hidden("#ex-mine") and page.is_hidden("#ex-file")   # for your own games only
     import os
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "lichess.png"))
-    page.click("#lib-views [data-lview=list]")
-    assert not page.is_disabled("#lib-mine")
+    page.select_option("#ex-source", "")
+    page.wait_for_function("!document.querySelector('#ex-mine').hidden")
+    page.click("#tab-games")                                  # the Games tab is the list alone
+    assert page.is_visible("#lib-list") and page.locator("#ex-rows").is_hidden()
     assert page.errors == []
 
 
@@ -573,4 +582,40 @@ def test_the_look_can_be_chosen_previewed_and_kept(page):
     assert bg == "rgb(22, 28, 31)"                                         # the night page
     page.reload()                                                          # opens in it again
     page.wait_for_function("document.documentElement.dataset.theme === 'night'")
+    assert page.errors == []
+
+
+def test_openings_has_its_own_tab(page):
+    page.click("#tab-openings")
+    page.wait_for_selector("#panel-openings:not([hidden])")
+    assert page.is_hidden("#panel-games") and page.inner_text("#panel-openings h1") == "Openings"
+    page.wait_for_function("document.getElementById('ex-line').textContent === 'Starting position'")
+    _click_square(page, "e2", "white")                         # a move on the board goes on from here
+    _click_square(page, "e4", "white")
+    page.wait_for_function("document.getElementById('ex-line').textContent === '1. e4'")
+    page.click("#tab-review")
+    page.click("#tab-openings")                                # and the line is still there
+    page.wait_for_function("document.getElementById('ex-line').textContent === '1. e4'")
+    assert page.errors == []
+
+
+def test_the_game_summary_has_its_own_tab(page):
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    page.click("#nav [data-nav=first]")
+    assert "Summary" in page.inner_text("#coach") and page.locator("#coach .summary").count() == 0
+    page.click("#view-summary")
+    page.wait_for_selector("#summary-view:not([hidden]) .summary")
+    assert "Game summary" in page.inner_text("#summary-view")
+    assert page.is_hidden("#coach-scroll") and page.is_hidden("#splitter")
+    link = page.locator("#summary-view a.ply").first
+    label = link.inner_text()
+    link.click()                                              # a move named there: shown with its comment
+    page.wait_for_selector("#summary-view", state="hidden")
+    assert page.is_visible("#coach-scroll")
+    assert page.inner_text("#coach .move").startswith(label)
+    page.click("#view-summary")
+    page.click("#moments button >> nth=0")                    # a critical moment too
+    page.wait_for_selector("#summary-view", state="hidden")
     assert page.errors == []

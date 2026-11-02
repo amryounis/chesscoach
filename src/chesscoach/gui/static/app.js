@@ -153,6 +153,7 @@ function showTab(name) {
   $("panel-play").hidden = name !== "play";
   $("panel-practice").hidden = name !== "practice";
   $("panel-games").hidden = name !== "games";
+  $("panel-openings").hidden = name !== "openings";
   // Move buttons belong to the review; copy and paste work everywhere.
   document.querySelectorAll("#nav [data-nav], #nav .nav-gap").forEach((b) => (b.hidden = name !== "review"));
   if (name !== "review" && name !== "play") showOpening(null);
@@ -161,6 +162,7 @@ function showTab(name) {
   if (name === "review") renderReviewBoard();
   else if (name === "practice") openPractice();
   else if (name === "games") { renderGamesBoard(); openGames(); }
+  else if (name === "openings") { renderExplorerBoard(); explore(); }
   else {
     renderPlayBoard();
     if (!P.state) showOpponent();       // Maia may have been set up since
@@ -190,6 +192,7 @@ function applyReview(res) {
   // Annotations pane, alongside the annotator's when the PGN had them.
   $("viewtabs").hidden = !R.game.tree;
   $("view-table").hidden = false;
+  $("view-summary").hidden = false;
   renderNotes();
   if (R.game.tree) setView("notes");
   $("save-report").hidden = false;
@@ -210,6 +213,7 @@ function loadSummary(summary) {
   const tree = summary.tree;
   $("viewtabs").hidden = !(tree && tree.annotated);   // shown for every reviewed game too
   $("view-table").hidden = true;
+  $("view-summary").hidden = true;
   setView(tree && tree.annotated ? "notes" : "moves");
   $("ask").hidden = false;
   const h = summary.headers;
@@ -443,6 +447,7 @@ function renderMoveList() {
 
 function goTo(i) {
   if (!R.game) return;
+  if (R.view === "summary") setView(R.lastView || "notes");   // a move: show it with its comment
   if (R.running && R.follow) {            // the player took over the board
     R.follow = false;
     $("follow-review").hidden = false;
@@ -537,9 +542,11 @@ function renderCoach() {
   }
   if (R.cursor < 0) {
     el.innerHTML = R.reviewed
-      ? renderSummary() + `<p class="empty">Pick a critical moment above, or step through with the arrow keys.</p>`
+      ? `<p class="empty">Pick a critical moment above, or step through with the arrow keys. The game summary, with the patterns across your games, is in the <a href="#" id="to-summary">Summary</a> tab.</p>`
       : `<p class="empty">Choose whose moves to comment on, then review the game. Stockfish analyses every position first; the coach then writes about the critical moments.</p>`;
     bindSummary(el);
+    const ts = $("to-summary");
+    if (ts) ts.addEventListener("click", (e) => { e.preventDefault(); setView("summary"); });
     R.facts = null;
     return;
   }
@@ -706,13 +713,29 @@ function markNotes() {
 }
 
 function setView(v) {
+  if (v !== "summary") R.lastView = v;
   R.view = v;
   document.querySelectorAll("#viewtabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === v)));
   $("movelist").hidden = v !== "moves";
   $("annotations").hidden = v !== "notes";
   $("analysis").hidden = v !== "table";
+  // the game summary has the whole space: no move list, no comment under it
+  $("summary-view").hidden = v !== "summary";
+  $("splitter").hidden = $("coach-scroll").hidden = v === "summary";
   markNotes();
   if (v === "table") renderAnalysis();
+  if (v === "summary") renderSummaryView();
+}
+
+function renderSummaryView() {
+  const el = $("summary-view");
+  el.innerHTML = renderSummary() || `<p class="empty">No summary for this review.</p>`;
+  // a move named in the summary: go to it, back in the view you came from
+  el.querySelectorAll("a.ply").forEach((a) => a.addEventListener("click", (e) => {
+    e.preventDefault();
+    setView(R.lastView || "notes");
+    goTo(Number(a.dataset.ply));
+  }));
 }
 
 // ---- the analysis table (Lucas Chess's "All moves"): every move against
@@ -1286,7 +1309,8 @@ document.addEventListener("keydown", (e) => {
 function currentFen() {
   if (tab === "play") return P.state ? P.state.fen : START;
   if (tab === "practice") { const d = curDrill(); return d ? d.fen : ""; }
-  if (tab === "games") return G.ex && G.ex.fen ? G.ex.fen : "";
+  if (tab === "openings") return G.ex && G.ex.fen ? G.ex.fen : START;
+  if (tab === "games") return START;
   if (!R.game) return "";
   if (R.node !== null && treeNode(R.node)) return treeNode(R.node).fen;
   return R.cursor < 0 ? R.game.start_fen : R.game.moves[R.cursor].fen_after;
@@ -1546,7 +1570,7 @@ $("review-played").addEventListener("click", async () => {
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
                          "comment_language", "library_dir", "max_seconds", "blunder_alert", "lichess_token",
                          "theme"];
-const SETTINGS_CHECKS = ["autosave"];
+const SETTINGS_CHECKS = ["autosave", "start_maximized"];
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
   if (!s) return;
@@ -1780,14 +1804,8 @@ async function submitDrill(uci) {
 // (with its review, if it was reviewed before). The explorer reads the
 // same games' openings.
 
-const G = { view: "list", sort: "date", desc: true, selected: null, rows: [], line: [], ex: null,
+const G = { sort: "date", desc: true, selected: null, rows: [], line: [], ex: null,
             armed: false, timer: null };
-
-document.querySelectorAll("#lib-views button").forEach((b) => b.addEventListener("click", () => {
-  G.view = b.dataset.lview;
-  document.querySelectorAll("#lib-views button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-  openGames();
-}));
 for (const id of ["lib-file", "lib-mine", "lib-result", "lib-reviewed"])
   $(id).addEventListener("change", () => openGames());
 $("lib-q").addEventListener("input", () => { clearTimeout(G.timer); G.timer = setTimeout(openGames, 250); });
@@ -1824,14 +1842,10 @@ $("lib-remove").addEventListener("click", async () => {
 });
 $("ex-start").addEventListener("click", () => { G.line = []; explore(); });
 $("ex-source").addEventListener("change", () => explore());
+for (const id of ["ex-file", "ex-mine"]) $(id).addEventListener("change", () => explore());
 $("ex-back").addEventListener("click", () => { G.line.pop(); explore(); });
 
 function openGames() {
-  $("lib-list").hidden = G.view !== "list";
-  $("lib-explorer").hidden = G.view !== "explorer";
-  $("lib-list-filters").hidden = G.view !== "list";
-  $("lib-mine").disabled = $("lib-file").disabled = false;      // the explorer may have greyed them
-  if (G.view === "explorer") return explore();
   listGames();
 }
 
@@ -1866,8 +1880,8 @@ async function listGames() {
   selectRow(res.games.some((g) => g.id === G.selected) ? G.selected : null);
 }
 
-function fillFiles(files) {
-  const sel = $("lib-file"), cur = sel.value;
+function fillFiles(files, id = "lib-file") {
+  const sel = $(id), cur = sel.value;
   sel.innerHTML = `<option value="">All files</option>` + files.map((f) => `<option>${esc(f)}</option>`).join("");
   sel.value = files.includes(cur) ? cur : "";
 }
@@ -1888,20 +1902,21 @@ async function openFromLibrary(id) {
 
 async function explore() {
   const source = $("ex-source").value;
-  // the Games filters (file, whose games) apply to your own games only
-  $("lib-mine").disabled = $("lib-file").disabled = !!source && G.view === "explorer";
+  // which file and whose games: for your own games only
+  $("ex-mine").hidden = $("ex-file").hidden = !!source;
   if (source) $("ex-empty").hidden = true;
-  const res = await call("library_explore", G.line, $("lib-mine").value, $("lib-file").value, source);
+  const res = await call("library_explore", G.line, source ? "" : $("ex-mine").value,
+                         source ? "" : $("ex-file").value, source);
   if (!res) {
     if (source && !G.line.length) { $("ex-source").value = ""; return explore(); }   // e.g. no token yet
     G.line.pop();
     return;
   }
-  fillFiles(res.files || []);
+  fillFiles(res.files || [], "ex-file");
   G.ex = res;
   $("ex-line").textContent = res.line || "Starting position";
   $("ex-back").disabled = $("ex-start").disabled = !G.line.length;
-  const mine = source ? "" : $("lib-mine").value;
+  const mine = source ? "" : $("ex-mine").value;
   $("ex-score-h").textContent = mine === "white" || mine === "black" ? "Your score"
     : `${res.turn === "white" ? "White" : "Black"}'s score`;
   $("ex-games-h").title = source ? `${res.label}: games that reached this position` : "Your games";
@@ -1954,7 +1969,7 @@ async function explore() {
     : res.games === 0 && !G.line.length
     ? (mine ? "None of your games yet: set your name in Settings, as it appears in your PGNs." : "No games yet.")
     : "No game in your library reached this position.";
-  renderGamesBoard();
+  renderExplorerBoard();
 }
 
 function renderGamesBoard() {
@@ -1962,7 +1977,16 @@ function renderGamesBoard() {
   renderPlayers();
   setEval(50);
   board.setAutoShapes([]);
-  if (G.view !== "explorer" || !G.ex) {
+  board.set({ fen: START, lastMove: undefined, check: false, movable: { color: undefined, dests: new Map() } });
+}
+
+// the Openings tab: the explorer's position, and moves played on the board go on from it
+function renderExplorerBoard() {
+  if (tab !== "openings") return;
+  renderPlayers();
+  setEval(50);
+  board.setAutoShapes([]);
+  if (!G.ex) {
     board.set({ fen: START, lastMove: undefined, check: false, movable: { color: undefined, dests: new Map() } });
     return;
   }

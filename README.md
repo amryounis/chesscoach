@@ -6,6 +6,68 @@ book does: few comments, on the moments that matter, in plain language.
 Everything runs on your own machine. No internet, no accounts; the one
 exception is optional: the opening explorer can ask Lichess when you choose it.
 
+## Features
+
+**Review a game**
+- Stockfish analyses every move; the coach comments only on the critical
+  moments, and every fact it states about the pieces is checked against the
+  board before you see it (a false sentence is rewritten or removed)
+- Move marks (!!, !, !?, ?!, ?, ??), accuracy per side (Lichess's method),
+  an evaluation graph, and an analysis table with Stockfish's
+  win/draw/loss for every move
+- *Show the better move*: your move and the engine's on the board, with the
+  idea behind a quiet engine move
+- **How hard was it?** Each error is marked *in plain sight*, *partly
+  hidden* or *hard to see* (Stockfish at two depths), with what players at
+  your rating usually play there (Maia); forced lines are pointed out
+- Tactics each error allowed or missed (fork, pin, skewer, hanging piece…)
+- A game summary written by code from the stored facts, and the patterns
+  that recur across all your reviewed games
+- **Explain this position**, **Ask the coach** ("Why not Nd2?") and **All
+  moves**: every legal move with a short verdict ("Blunder: loses a knight
+  (after 5...exd5)")
+- Annotated PGNs (Lucas Chess, ChessBase) open with their own notes, in
+  English, German or both
+- Save the reviewed game as a PGN with marks, evaluations, the coach's
+  comments and the engine's lines, or as a report
+
+**Play**
+- Against Maia at the rating you choose: it plays like a human of that
+  strength, mistakes included
+- **Hints a step at a time**: what is going on, then the square, then the
+  piece, then the move
+- **Blunder alert**: "Are you sure?" before a move that throws away the game
+  (it never says why)
+- Hints and alerts are kept in the game and counted in its review
+
+**Practice**
+- Your own mistakes come back as exercises, the ones you missed and the
+  ones in plain sight first; hints here too
+- Any move that keeps your chances counts, judged by Stockfish
+
+**Openings**
+- The opening explorer in its own tab: what was played in each position in
+  your games and how it scored, the opening book's moves with the coach's
+  explanation of each idea, and (online, only if you choose) what masters
+  and Lichess players around your rating play
+- `chesscoach book study` walks an opening book once and has the coach
+  explain the idea of every popular move
+- The opening the game is in is named above the board at every move, found
+  by position so transpositions are named right; it can be said aloud
+
+**Your games**
+- Every game you play or review is kept as ordinary PGN files, searchable
+  and sortable; a reviewed game opens with its review
+- Copy a position (FEN) or a game (PGN); paste or Ctrl+V a PGN or FEN to
+  open it
+
+**The app**
+- Looks: as Windows is set, Classic, Night, or Parchment (a study book)
+- Opens maximized (or centred, if you prefer)
+- Everything also from the command line, and `chesscoach eval`: answer keys
+  that measure how often the coach states the facts and how often it is
+  wrong
+
 ![Reviewing a game: a critical moment, with the better move shown on the board](docs/review.png)
 
 A comment from a real review (qwen3:14b, Homer vs Fritz), unedited:
@@ -133,7 +195,7 @@ chesscoach gui
   where Explain this position and Ask the coach work on it.
 - **Look** (Settings): as Windows is set, Classic, Night, or Parchment (a
   study book: paper texture, cream and teal board with a grain, book type).
-- **Lichess in the explorer** (online, only when you choose it): what
+- **Lichess in Openings** (online, only when you choose it): what
   masters or Lichess players around your rating play in the position, with
   their results. Needs a Lichess API token with no permissions
   (lichess.org, Preferences, API access tokens), pasted in Settings. Every
@@ -163,8 +225,11 @@ chesscoach gui
 - **Games**: every game you play or review is kept as ordinary PGN files
   (Played.pgn, Reviewed.pgn, and any file you add), searchable by player,
   event or opening and sortable by column; a reviewed game opens with its
-  review. The **opening explorer** shows what was played in each position
-  of your games and how it scored, for you as White or as Black.
+  review.
+- **Openings**: the opening explorer, in its own tab. What was played in
+  each position of your games and how it scored, for you as White or as
+  Black, with the opening study's book moves and ideas beside them; play a
+  move on the board to go on from there.
 - **Save PGN…** after a review: the game with ?!/?/?? marks, [%eval] on
   every move, the coach's comments and the engine's better line as a
   variation on every error, for ChessBase, Lichess, Lucas Chess or SCID.

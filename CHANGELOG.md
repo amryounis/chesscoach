@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.23.0 — unreleased
+
+- **Openings has its own tab** (Review, Play, Practice, Openings, Games):
+  the opening explorer moved out of Games, with its own choice of source,
+  file and whose games. Games is the list of your games alone. The line you
+  were exploring stays when you switch tabs and come back
+- The explorer's moves scroll inside the tab, with the column heads kept in
+  view: with Lichess a position has twenty moves or more, and they ran past
+  the bottom of the window with no way to reach them
+- The desktop app opens maximized. Left to Windows, it opened a little lower
+  on the screen at every start (Windows cascades new windows) until the
+  bottom of the board was out of sight. Settings: "Open the app maximized";
+  turned off, it opens centred on the main screen, sized to fit it
+- **The game summary has its own tab** in Review (Moves, Annotations,
+  Analysis, Summary). It used to sit in the comment panel under the move
+  list, two scrolling panes on top of each other; now it has the whole
+  space. A move named in it, or a critical moment, takes you to that move
+  with its comment
+- README: a list of every feature at the top
+
 ## 0.22.0 — unreleased
 
 - **Themes** (Settings, Look): *As Windows is set* (light or dark, as

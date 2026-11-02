@@ -15,6 +15,7 @@
     <button role="tab" id="tab-review" aria-selected="true" data-tab="review">Review</button>
     <button role="tab" id="tab-play" aria-selected="false" data-tab="play">Play</button>
     <button role="tab" id="tab-practice" aria-selected="false" data-tab="practice">Practice</button>
+    <button role="tab" id="tab-openings" aria-selected="false" data-tab="openings">Openings</button>
     <button role="tab" id="tab-games" aria-selected="false" data-tab="games">Games</button>
   </nav>
   <button class="quiet" id="open-settings">Settings</button>
@@ -89,9 +90,11 @@
       <button role="tab" data-view="moves" aria-selected="true">Moves</button>
       <button role="tab" data-view="notes" aria-selected="false">Annotations</button>
       <button role="tab" data-view="table" aria-selected="false" id="view-table" hidden>Analysis</button>
+      <button role="tab" data-view="summary" aria-selected="false" id="view-summary" hidden>Summary</button>
     </div>
     <div class="movelist" id="movelist" role="listbox" aria-label="Moves"></div>
     <div class="analysis" id="analysis" hidden aria-label="Every move against the engine"></div>
+    <div class="summary-view" id="summary-view" hidden aria-label="Game summary"></div>
     <div class="annotations" id="annotations" hidden aria-label="The annotator's notes"></div>
     <div class="splitter" id="splitter" role="separator" aria-orientation="horizontal"
          aria-label="Drag to share the space between the moves and the comments" title="Drag to resize"></div>
@@ -167,10 +170,6 @@
       </div>
       <button id="lib-add" title="Copy a PGN file into your games (the original stays where it is)">Add PGN file…</button>
     </div>
-    <div class="viewtabs" id="lib-views" role="tablist">
-      <button role="tab" data-lview="list" aria-selected="true">Games</button>
-      <button role="tab" data-lview="explorer" aria-selected="false">Opening explorer</button>
-    </div>
     <div class="lib-filters">
       <select id="lib-file" aria-label="File"><option value="">All files</option></select>
       <select id="lib-mine" aria-label="Whose games">
@@ -208,24 +207,45 @@
         <span class="sub" id="lib-count"></span>
       </div>
     </div>
-    <div id="lib-explorer" hidden>
+  </section>
+
+  <!-- Openings: the opening explorer -->
+  <section class="panel" id="panel-openings" role="tabpanel" aria-labelledby="tab-openings" hidden>
+    <div class="game-head">
+      <div>
+        <h1>Openings</h1>
+        <p class="sub">What is played after each move: in your games, in the opening book with the coach's idea of each move, or (online, if you choose) by masters and Lichess players.</p>
+      </div>
+    </div>
+    <div id="lib-explorer">
       <div class="ex-head">
         <button class="quiet" id="ex-start" title="Back to the starting position">⏮</button>
         <button class="quiet" id="ex-back" title="One move back">◀</button>
         <span id="ex-line">Starting position</span>
+      </div>
+      <div class="lib-filters ex-filters">
         <select id="ex-source" aria-label="Whose moves" title="Your own games and the opening study, or (online) what masters or Lichess players around your rating play">
           <option value="">Your games</option>
           <option value="masters">Lichess: masters</option>
           <option value="lichess">Lichess: players around your rating</option>
         </select>
+        <select id="ex-file" aria-label="File"><option value="">All files</option></select>
+        <select id="ex-mine" aria-label="Whose games">
+          <option value="">Everyone's games</option>
+          <option value="any">My games</option>
+          <option value="white">Me as White</option>
+          <option value="black">Me as Black</option>
+        </select>
       </div>
       <div class="ex-about" id="ex-about"></div>
+      <div class="ex-table-wrap">
       <table class="lib-table ex-table">
         <thead><tr><th>Move</th><th class="num" title="How often the opening book plays it here">Book</th>
           <th title="Stockfish after the move">Engine</th><th class="num" id="ex-games-h" title="Your games">Games</th>
           <th>White · Draw · Black</th><th class="num" id="ex-score-h">Score</th></tr></thead>
         <tbody id="ex-rows"></tbody>
       </table>
+      </div>
       <p class="empty" id="ex-empty" hidden></p>
       <p class="sub" id="ex-foot">Click a move, or play one on the board. Hover a book move for its idea.</p>
     </div>
@@ -298,6 +318,7 @@
     <label>Most seconds per position <input name="max_seconds" type="number" min="1" max="120" step="1" title="Stockfish stops at the engine depth or after this many seconds, whichever comes first"></label>
     <label>Games folder <input name="library_dir" placeholder="default: &ldquo;games&rdquo; next to the settings file"></label>
     <label class="check"><input type="checkbox" name="autosave"> Keep every game I play or review in my games</label>
+    <label class="check"><input type="checkbox" name="start_maximized"> Open the app maximized (otherwise centred; from the next start)</label>
     <label>Look
       <select name="theme" id="theme-pick">
         <option value="auto">As Windows is set (light or dark)</option>

@@ -35,6 +35,24 @@ def serve_static() -> http.server.ThreadingHTTPServer:
     return server
 
 
+WIDTH, HEIGHT = 1320, 860            # the window when not maximized, if the screen allows
+
+
+def placement(screens: list, maximized: bool) -> dict:
+    """Where the window opens: maximized, or centred on the main screen at a
+    size that fits it. Left to Windows, each start opened lower down the
+    screen than the last (it cascades new windows), until the bottom of the
+    board was off screen. `screens`: pywebview's screens (width, height)."""
+    w, h = WIDTH, HEIGHT
+    out = {"maximized": bool(maximized)}
+    if screens:
+        sw, sh = screens[0].width, screens[0].height
+        w, h = min(WIDTH, max(800, sw - 40)), min(HEIGHT, max(600, sh - 80))
+        out.update(x=max(0, (sw - w) // 2), y=max(0, (sh - h) // 2 - 20))
+    out.update(width=w, height=h)
+    return out
+
+
 def launch(debug: bool = False) -> None:
     try:
         import webview
@@ -46,9 +64,13 @@ def launch(debug: bool = False) -> None:
     server = serve_static()
     api = Api()
     port = server.server_address[1]
+    try:
+        screens = list(webview.screens)
+    except Exception:
+        screens = []
     window = webview.create_window(
         f"chesscoach {__version__}", url=f"http://127.0.0.1:{port}/index.html", js_api=api,
-        width=1320, height=860, min_size=(1000, 680))
+        min_size=(1000, 680), **placement(screens, config.settings.start_maximized))
     api._window = window
     window.events.closing += api.shutdown
     try:
