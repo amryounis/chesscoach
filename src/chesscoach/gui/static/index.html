@@ -168,7 +168,10 @@
         <p class="sub">Every game you play or review is kept here, as ordinary PGN files any chess program opens.</p>
         <p class="sub lib-path" id="lib-path"></p>
       </div>
-      <button id="lib-add" title="Copy a PGN file into your games (the original stays where it is)">Add PGN file…</button>
+      <div class="lib-head-actions">
+        <button id="lib-import" title="Download your games from Lichess or Chess.com (online)">Import…</button>
+        <button id="lib-add" title="Copy a PGN file into your games (the original stays where it is)">Add PGN file…</button>
+      </div>
     </div>
     <div class="lib-filters">
       <select id="lib-file" aria-label="File"><option value="">All files</option></select>
@@ -290,6 +293,34 @@
     <button data-piece="n" aria-label="Knight">&#x265E;</button>
   </div>
 </div>
+
+<dialog id="import-dialog">
+  <form method="dialog" id="import-form">
+    <h2>Import your games</h2>
+    <p class="sub">Downloads your games (online) into your games folder, ready to review. Games already there are skipped, so importing again adds only new ones.</p>
+    <label>From
+      <select id="import-site">
+        <option value="lichess">Lichess</option>
+        <option value="chesscom">Chess.com</option>
+      </select>
+    </label>
+    <label>Your name there <input id="import-user" autocomplete="off" spellcheck="false" required></label>
+    <label>Which games
+      <select id="import-period">
+        <option value="new">New since the last import</option>
+        <option value="month">The last month</option>
+        <option value="year">The last year</option>
+        <option value="all">Everything (the newest 2,000)</option>
+      </select>
+    </label>
+    <p class="sub">FICS has no download service: save your games from ficsgames.org and use Add PGN file.</p>
+    <p class="error" id="import-error" hidden></p>
+    <div class="dialog-actions">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button value="import" class="primary" id="import-go">Import</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="paste-dialog">
   <form method="dialog">

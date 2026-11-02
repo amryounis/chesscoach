@@ -110,6 +110,15 @@ def build_parser() -> argparse.ArgumentParser:
     sh.add_argument("moves", nargs="?", default="", help='moves from the start, e.g. "e4 e5 Nf3"')
     _common(sh)
 
+    im = sub.add_parser("import", help="download your games from Lichess or Chess.com (online)")
+    im.add_argument("site", choices=["lichess", "chesscom"])
+    im.add_argument("user", nargs="?", default="",
+                    help="your name there (default: lichess_user / chesscom_user in the settings)")
+    im.add_argument("--period", choices=["new", "month", "year", "all"], default="new",
+                    help="new since the last import (default), the last month or year, or everything "
+                         "(the newest 2,000)")
+    _common(im)
+
     c = sub.add_parser("config", help="show settings, or create a config file")
     c.add_argument("--init", action="store_true",
                    help="write a commented config file to the user config folder")
@@ -241,6 +250,18 @@ def main(argv=None) -> int:
             return 0
         if args.command == "book":
             return _book(args, models[0])
+        if args.command == "import":
+            from . import online_games
+            s = config.settings
+            user = args.user or (s.lichess_user if args.site == "lichess" else s.chesscom_user)
+            try:
+                r = online_games.import_games(args.site, user, args.period)
+            except online_games.OnlineError as e:
+                print(e)
+                return 1
+            print(f"{r['site']}, {r['user']}: {r['added']} new game(s) added to {r['file']}"
+                  + (f", {r['skipped']} already there." if r["skipped"] else "."))
+            return 0
         if args.command == "eval":
             from .evaluate import main_eval
             return main_eval(args, args.models or [])

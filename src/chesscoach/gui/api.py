@@ -157,6 +157,7 @@ class Api:
     def get_settings(self) -> dict:
         s = asdict(config.settings)
         s["config_file"] = str(config.user_config_path())
+        s["my_names"] = config.my_names()
         s["version"] = __version__
         return s
 
@@ -286,6 +287,24 @@ class Api:
         return {"file": name, "games": n}
 
     @_safe
+    def import_games(self, site: str, user: str, period: str = "new") -> dict:
+        """Your games from Lichess or Chess.com into your games folder
+        (online_games.py); the name is remembered as yours."""
+        from .. import online_games
+        try:
+            out = online_games.import_games(site, user, period)
+        except online_games.OnlineError as e:
+            raise ValueError(str(e)) from None
+        field = {"lichess": "lichess_user", "chesscom": "chesscom_user"}[site]
+        if getattr(config.settings, field) != out["user"]:
+            setattr(config.settings, field, out["user"])
+            try:
+                config.save_settings(config.settings)
+            except OSError:
+                log_error("saving the imported player's name")
+        return out
+
+    @_safe
     def library_remove(self, game_row: int) -> dict:
         from .. import library
         library.remove_game(int(game_row))
@@ -403,9 +422,9 @@ class Api:
             return side == "white"
         if self._game is None:
             return None
-        name = (config.settings.player_name or "").strip().lower()
+        names = config.my_names()
         for color, key in ((chess.WHITE, "White"), (chess.BLACK, "Black")):
-            if name and self._game.headers.get(key, "").strip().lower() == name:
+            if self._game.headers.get(key, "").strip().lower() in names:
                 return color
         return None
 

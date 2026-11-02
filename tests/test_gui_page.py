@@ -619,3 +619,31 @@ def test_the_game_summary_has_its_own_tab(page):
     page.click("#moments button >> nth=0")                    # a critical moment too
     page.wait_for_selector("#summary-view", state="hidden")
     assert page.errors == []
+
+
+def test_import_your_games(page, monkeypatch, tmp_path):
+    from chesscoach import online_games
+    config.settings.library_dir = str(tmp_path)
+    pgn = ('[Site "https://lichess.org/zz"]\n[Date "2026.10.30"]\n[White "youamer"]\n[Black "b"]\n'
+           '[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0\n')
+    monkeypatch.setattr(online_games, "get_text", lambda url, tok="": pgn)
+    page.click("#tab-games")
+    page.click("#lib-import")
+    page.wait_for_selector("#import-dialog[open]")
+    assert page.input_value("#import-user") == "Homer"               # your name, until you change it
+    page.fill("#import-user", "youamer")
+    page.select_option("#import-period", "month")
+    import os
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "import.png"))
+    page.click("#import-go")
+    page.wait_for_function("document.querySelector('#toast').textContent.includes('Added 1 game')")
+    assert not page.is_visible("#import-dialog")
+    page.wait_for_selector("#lib-rows tr")
+    assert "youamer" in page.inner_text("#lib-rows") and page.input_value("#lib-file") == "Lichess.pgn"
+    page.click("#lib-import")                                           # it remembers the name
+    assert page.input_value("#import-user") == "youamer"
+    page.fill("#import-user", "bad name")
+    page.click("#import-go")
+    page.wait_for_selector("#import-error:not([hidden])")
+    assert page.errors == []

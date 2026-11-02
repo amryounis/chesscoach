@@ -736,3 +736,5 @@ table.all-moves tr.j-Blunder td:last-child { color: var(--j-blunder); }
 /* the game summary, in its own tab of the review */
 .summary-view { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 6px; }
 .summary-view .summary { margin-top: 0; }
+
+.lib-head-actions { display: flex; gap: 8px; align-items: flex-start; }

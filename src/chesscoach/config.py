@@ -63,6 +63,8 @@ class Settings:
     concept_depth: int = 14           # depth of those extra searches
     start_maximized: bool = True      # the desktop app opens maximized (else centred)
     theme: str = "auto"               # the app's look: auto (Windows light/dark), classic, night, parchment
+    lichess_user: str = ""            # your name on Lichess (imports, and "my games")
+    chesscom_user: str = ""           # your name on Chess.com
     lichess_token: str = ""           # Lichess API token for the online opening explorer (no permissions)
     blunder_alert: int = 20           # Play: ask "are you sure?" before a move losing this many
                                       # points of winning chance (30 blunders, 20 mistakes, 10 inaccuracies; 0 off)
@@ -76,6 +78,18 @@ class Settings:
                 "CHESSCOACH_STOCKFISH_PATH.")
         if not os.path.exists(self.stockfish_path):
             raise ConfigError(f"Stockfish not found at {self.stockfish_path}")
+
+
+def my_names(s: Optional["Settings"] = None) -> list:
+    """Every name you play under, lower case: your name in Settings and your
+    Lichess and Chess.com names. A game with one of them is yours."""
+    s = s or settings
+    out = []
+    for n in (s.player_name, s.lichess_user, s.chesscom_user):
+        n = (n or "").strip().lower()
+        if n and n not in out:
+            out.append(n)
+    return out
 
 
 def user_config_path() -> Path:
@@ -201,6 +215,11 @@ start_maximized = true
 # The app's look: "auto" (light or dark, as Windows is set), "classic",
 # "night" or "parchment" (paper, cream and teal board, book type).
 theme = "auto"
+
+# Your names on Lichess and Chess.com: Import (Games tab) downloads your games
+# from there, and games under these names count as yours, like player_name.
+lichess_user = ""
+chesscom_user = ""
 
 # The opening explorer can also show what masters and Lichess players play,
 # online and only when you choose it there. Lichess needs a personal API

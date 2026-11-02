@@ -282,9 +282,10 @@ $("game-pick").addEventListener("change", async () => {
 
 let settingsCache = null;
 function guessSide(h) {
-  const me = (settingsCache && settingsCache.player_name || "").toLowerCase();
-  if (me && (h.White || "").toLowerCase() === me) return "white";
-  if (me && (h.Black || "").toLowerCase() === me) return "black";
+  // your name in Settings, or your Lichess / Chess.com name
+  const mine = (settingsCache && settingsCache.my_names) || [];
+  if (mine.includes((h.White || "").toLowerCase())) return "white";
+  if (mine.includes((h.Black || "").toLowerCase())) return "black";
   return "both";
 }
 
@@ -1826,6 +1827,45 @@ $("lib-add").addEventListener("click", async () => {
   }
 });
 $("lib-open").addEventListener("click", () => G.selected !== null && openFromLibrary(G.selected));
+
+// ---- Import: your games from Lichess or Chess.com (online, on request)
+function importUser() {
+  const s = settingsCache || {};
+  return ($("import-site").value === "lichess" ? s.lichess_user : s.chesscom_user) || s.player_name || "";
+}
+$("lib-import").addEventListener("click", () => {
+  $("import-user").value = importUser();
+  $("import-error").hidden = true;
+  $("import-go").disabled = false;
+  $("import-go").textContent = "Import";
+  $("import-dialog").showModal();
+});
+$("import-site").addEventListener("change", () => { $("import-user").value = importUser(); });
+$("import-form").addEventListener("submit", async (e) => {
+  if (e.submitter && e.submitter.value === "cancel") return;
+  e.preventDefault();
+  const site = $("import-site").value, user = $("import-user").value.trim();
+  $("import-go").disabled = true;
+  $("import-go").textContent = "Downloading…";
+  $("import-error").hidden = true;
+  const res = await api().import_games(site, user, $("import-period").value);
+  $("import-go").disabled = false;
+  $("import-go").textContent = "Import";
+  if (res.error) {
+    $("import-error").textContent = res.error;
+    $("import-error").hidden = false;
+    return;
+  }
+  $("import-dialog").close();
+  settingsCache = await api().get_settings();              // the name is now known as yours
+  toast(res.added
+    ? `Added ${res.added} game${res.added === 1 ? "" : "s"} from ${res.site} to ${res.file}`
+      + (res.skipped ? ` (${res.skipped} already there).` : ".")
+    : `No new games from ${res.site}` + (res.skipped ? ` (${res.skipped} already there).` : "."), 5000);
+  fillFiles([...new Set([...[...$("lib-file").options].map((o) => o.value).filter(Boolean), res.file])]);
+  $("lib-file").value = res.file;
+  openGames();
+});
 $("lib-remove").addEventListener("click", async () => {
   if (G.selected === null) return;
   // two clicks, no dialog: the first arms it, the second removes

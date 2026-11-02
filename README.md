@@ -3,8 +3,9 @@
 An offline chess coach that explains your games the way an annotated games
 book does: few comments, on the moments that matter, in plain language.
 
-Everything runs on your own machine. No internet, no accounts; the one
-exception is optional: the opening explorer can ask Lichess when you choose it.
+Everything runs on your own machine. No internet, no accounts; the
+exceptions are optional and only when you ask: the opening explorer can ask
+Lichess, and Import downloads your own games from Lichess or Chess.com.
 
 ## Features
 
@@ -58,6 +59,8 @@ exception is optional: the opening explorer can ask Lichess when you choose it.
 **Your games**
 - Every game you play or review is kept as ordinary PGN files, searchable
   and sortable; a reviewed game opens with its review
+- **Import** your games from Lichess and Chess.com (new ones only, each
+  time), ready to review; your names there count as you
 - Copy a position (FEN) or a game (PGN); paste or Ctrl+V a PGN or FEN to
   open it
 

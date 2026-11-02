@@ -286,3 +286,15 @@ def test_the_explorer_can_ask_lichess(api, monkeypatch, tmp_path):
     assert out["moves"][0]["san"] == "c5" and out["moves"][0]["score"] == round(100 * 2.5 / 6)
     assert out["opening"]["name"] == "King's Pawn Game" and out["label"] == "Lichess masters"
     assert out["line"] == "1. e4" and "book" in out
+
+
+def test_import_remembers_your_name_there(api, monkeypatch, tmp_path):
+    from chesscoach import online_games
+    config.settings.library_dir = str(tmp_path)
+    pgn = ('[Site "https://lichess.org/zz"]\n[White "youamer"]\n[Black "b"]\n[Result "*"]\n\n'
+           '1. e4 e5 *\n')
+    monkeypatch.setattr(online_games, "get_text", lambda url, tok="": pgn)
+    out = api.import_games("lichess", "youamer", "month")
+    assert out["added"] == 1 and config.settings.lichess_user == "youamer"
+    assert "youamer" in api.get_settings()["my_names"]
+    assert "error" in api.import_games("lichess", "bad name", "new")

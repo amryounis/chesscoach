@@ -218,14 +218,15 @@ def _query(folder, text, file, result, mine, reviewed, sort, desc, limit) -> dic
         args += [like] * 5
     if result in ("1-0", "0-1", "1/2-1/2", "*"):
         where.append("result = ?"); args.append(result)
-    name = (config.settings.player_name or "").strip()
-    if mine and name:
+    names = config.my_names()
+    if mine and names:
+        marks = ",".join("?" * len(names))
         if mine == "white":
-            where.append("white = ? COLLATE NOCASE"); args.append(name)
+            where.append(f"LOWER(white) IN ({marks})"); args += names
         elif mine == "black":
-            where.append("black = ? COLLATE NOCASE"); args.append(name)
+            where.append(f"LOWER(black) IN ({marks})"); args += names
         else:
-            where.append("(white = ? COLLATE NOCASE OR black = ? COLLATE NOCASE)"); args += [name, name]
+            where.append(f"(LOWER(white) IN ({marks}) OR LOWER(black) IN ({marks}))"); args += names * 2
     if reviewed:
         where.append("gid IN (SELECT gid FROM reviews)")
     sql_where = (" WHERE " + " AND ".join(where)) if where else ""
@@ -401,11 +402,12 @@ def explore(board: chess.Board, mine: str = "", file: str = "",
     folder = folder or library_dir()
     con = refresh(folder)
     where, args = ["p.epd = ?"], [board.epd()]
-    name = (config.settings.player_name or "").strip()
-    if mine and name:
-        col = {"white": "g.white = ? COLLATE NOCASE", "black": "g.black = ? COLLATE NOCASE"}.get(
-            mine, "(g.white = ? COLLATE NOCASE OR g.black = ? COLLATE NOCASE)")
-        where.append(col); args += [name] * col.count("?")
+    names = config.my_names()
+    if mine and names:
+        marks = ",".join("?" * len(names))
+        col = {"white": f"LOWER(g.white) IN ({marks})", "black": f"LOWER(g.black) IN ({marks})"}.get(
+            mine, f"(LOWER(g.white) IN ({marks}) OR LOWER(g.black) IN ({marks}))")
+        where.append(col); args += names * (2 if mine not in ("white", "black") else 1)
     if file:
         where.append("g.file = ?"); args.append(file)
     else:

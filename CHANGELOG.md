@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.24.0 — unreleased
+
+- **Import your games from Lichess and Chess.com** (Games tab, Import…, or
+  `chesscoach import lichess <name>`): new since the last import, the last
+  month, the last year, or everything (the newest 2,000). They go to
+  Lichess.pgn / Chess.com.pgn in your games folder, in the order they were
+  played; a game already there (same game link) is skipped, so importing
+  again adds only new games. Lichess games come with clock times and the
+  opening name; a Lichess token in Settings, if there is one, makes the
+  download faster. Online only when you press Import
+- **Your online names are you.** The name you import under is kept in
+  Settings (lichess_user, chesscom_user), and games under it count as
+  yours everywhere your Settings name does: "My games" in Games and
+  Openings, which side to comment on, the history, patterns and practice
+- FICS has no download service (ficsgames.org is a search form, up to
+  5,000 games a query): save your games there and bring them in with
+  Add PGN file, as before
+
 ## 0.23.0 — unreleased
 
 - **Openings has its own tab** (Review, Play, Practice, Openings, Games):

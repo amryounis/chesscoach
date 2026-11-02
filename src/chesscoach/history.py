@@ -39,12 +39,12 @@ def player_color(review, player_name: str = "") -> Optional[str]:
     side = _get(review, "side")
     if side in ("white", "black"):
         return side
-    name = (player_name or "").strip().lower()
+    from .config import my_names
+    names = [n for n in [(player_name or "").strip().lower()] + my_names() if n]
     h = _get(review, "headers") or {}
-    if name:
-        for color in ("white", "black"):
-            if h.get(color.capitalize(), "").strip().lower() == name:
-                return color
+    for color in ("white", "black"):
+        if h.get(color.capitalize(), "").strip().lower() in names:
+            return color
     return None
 
 
