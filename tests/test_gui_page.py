@@ -4,6 +4,7 @@ Skipped unless Playwright (and its Chromium) is installed:
     pip install playwright && playwright install chromium
 """
 import asyncio
+import re
 import sys
 import warnings
 
@@ -625,7 +626,10 @@ def test_import_your_games(page, monkeypatch, tmp_path):
     from chesscoach import online_games
     config.settings.library_dir = str(tmp_path)
     pgn = ('[Site "https://lichess.org/zz"]\n[Date "2026.10.30"]\n[White "youamer"]\n[Black "b"]\n'
-           '[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0\n')
+           '[Result "1-0"]\n[TimeControl "600+0"]\n[Opening "Scholar\'s mate"]\n\n'
+           '1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0\n\n'
+           '[Site "https://lichess.org/yy"]\n[Date "2026.10.29"]\n[White "c"]\n[Black "youamer"]\n'
+           '[Result "0-1"]\n[TimeControl "180+2"]\n\n1. f3 e5 2. g4 Qh4# 0-1\n')
     monkeypatch.setattr(online_games, "get_text", lambda url, tok="": pgn)
     page.click("#tab-games")
     page.click("#lib-import")
@@ -633,17 +637,98 @@ def test_import_your_games(page, monkeypatch, tmp_path):
     assert page.input_value("#import-user") == "Homer"               # your name, until you change it
     page.fill("#import-user", "youamer")
     page.select_option("#import-period", "month")
+    page.click("#import-go")                                          # step 1: find them
+    page.wait_for_selector("#import-rows tr")
+    assert page.locator("#import-rows tr").count() == 2
+    assert "2 games found on Lichess, 2 new" in page.inner_text("#import-found")
+    assert page.inner_text("#import-go") == "Import 2 games"
+    rows = page.inner_text("#import-rows")
+    assert "rapid" in rows and "blitz" in rows and "Scholar's mate" in rows
+    page.fill("#import-filter", "blitz")                              # the filter
+    assert page.locator("#import-rows tr").count() == 1
+    page.fill("#import-filter", "")
+    page.locator("#import-rows tr >> nth=1 >> input").uncheck()       # keep one only
+    assert page.inner_text("#import-go") == "Import 1 game"
     import os
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "import.png"))
-    page.click("#import-go")
+    page.click("#import-go")                                          # step 2: import the one picked
     page.wait_for_function("document.querySelector('#toast').textContent.includes('Added 1 game')")
     assert not page.is_visible("#import-dialog")
     page.wait_for_selector("#lib-rows tr")
-    assert "youamer" in page.inner_text("#lib-rows") and page.input_value("#lib-file") == "Lichess.pgn"
-    page.click("#lib-import")                                           # it remembers the name
+    assert page.locator("#lib-rows tr").count() == 1 and page.input_value("#lib-file") == "Lichess.pgn"
+    # again: it remembers the name, marks the game already there, and Review opens one
+    page.click("#lib-import")
     assert page.input_value("#import-user") == "youamer"
+    page.click("#import-go")
+    page.wait_for_selector("#import-rows tr.have")
+    assert "1 new" in page.inner_text("#import-found")
+    page.click("#import-rows tr:not(.have) .rv")
+    page.wait_for_selector("#panel-review:not([hidden])")
+    assert page.inner_text("#game-title") == "c – youamer"
+    assert page.input_value("#review-side") == "black"                 # your side, by your Lichess name
+    page.click("#tab-games")
+    page.click("#lib-import")
     page.fill("#import-user", "bad name")
     page.click("#import-go")
     page.wait_for_selector("#import-error:not([hidden])")
+    assert page.errors == []
+
+
+SPEECH_STUB = """
+window.__said = [];
+window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+  speak: (u) => window.__said.push(u.text), cancel: () => window.__said.push('<cancel>'),
+  getVoices: () => [{ name: 'Test voice', lang: 'en-US' }], onvoiceschanged: null } });
+"""
+
+
+def test_moves_are_said_in_words(page):
+    cases = {
+        "Nf3": "knight f3", "12...Nxe5+": "knight takes e5, check", "exd5": "e takes d5",
+        "O-O": "castles kingside", "O-O-O#": "castles queenside, checkmate",
+        "e8=Q+": "e8 promotes to queen, check", "Qxf7#": "queen takes f7, checkmate",
+        "3. Bb5 a6": "bishop b5 a6", "♘c3": "knight c3",
+        "The pawn on e4 is weak.": "The pawn on e4 is weak.",
+        "**Better was**: Rd1": "Better was: rook d1",
+    }
+    for text, want in cases.items():
+        assert page.evaluate("t => window.__spoken(t)", text) == want, text
+
+
+def test_comments_are_read_aloud(page):
+    page.add_init_script(SPEECH_STUB)
+    page.reload()
+    page.wait_for_timeout(400)
+    page.evaluate("localStorage.removeItem('readComments')")
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    page.click("#moments button >> nth=1")
+    assert page.get_attribute("#speak-comments", "aria-pressed") == "false"
+    page.wait_for_timeout(50)
+    assert [s for s in page.evaluate("window.__said") if s != "<cancel>"] == []   # off: silent
+    page.click("#speak-comments")                                # on: the comment here, at once
+    assert page.get_attribute("#speak-comments", "aria-pressed") == "true"
+    page.wait_for_function("window.__said.some((s) => s.includes('A reason.'))")
+    said = [s for s in page.evaluate("window.__said") if s != "<cancel>"][-1]
+    assert "Better was: Something else." in said
+    assert "Assessment" not in said and "**" not in said
+    assert not re.search(r"\b[KQRBN]x?[a-h][1-8]", said)           # moves in words
+    # Stepping to another reviewed move reads its comment; clicking the same one again doesn't.
+    page.evaluate("window.__said = []")
+    page.click("#moments button >> nth=2")
+    page.wait_for_function("window.__said.some((s) => s.includes('A reason.'))")
+    page.evaluate("window.__said = []")
+    page.click("#moments button >> nth=2")
+    page.wait_for_timeout(100)
+    assert [s for s in page.evaluate("window.__said") if s != "<cancel>"] == []
+    # Off: speech stops, and the choice is remembered.
+    page.click("#speak-comments")
+    assert page.evaluate("window.__said").pop() == "<cancel>"
+    assert page.evaluate("localStorage.getItem('readComments')") == "0"
+    # The voice list offers the computer's voices.
+    page.click("#open-settings")
+    assert page.inner_text("#voice-pick") == "Test voice"
     assert page.errors == []

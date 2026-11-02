@@ -316,14 +316,92 @@ $("speak-openings").addEventListener("click", () => {
   try { localStorage.setItem("speakOpenings", OPEN.speak ? "1" : "0"); } catch (e) { /* storage off */ }
   if (OPEN.speak && OPEN.shown) say(OPEN.shown);
 });
-function say(text) {
+// ---- speech (Windows' own voices, offline). Everything said for one step
+// (a new opening, then the comment) is queued together; the next step
+// interrupts it. Moves are said in words: "Nxe5+" -> "knight takes e5, check".
+const SPEECH = { pending: [], timer: null };
+const PIECE_WORDS = { K: "king", Q: "queen", R: "rook", B: "bishop", N: "knight" };
+const FIG_LETTER = { "♔": "K", "♕": "Q", "♖": "R", "♗": "B", "♘": "N", "♚": "K", "♛": "Q", "♜": "R", "♝": "B", "♞": "N" };
+function spoken(text) {
+  return String(text)
+    .replace(/[♔♕♖♗♘♚♛♜♝♞]/g, (c) => FIG_LETTER[c])
+    .replace(/\*\*/g, "")
+    .replace(/\b\d+\.(\.\.)?\s*(?=[KQRBNa-hO])/g, "")              // move numbers
+    .replace(/\bO-O-O\b([+#]?)/g, (_, c) => "castles queenside" + (c === "#" ? ", checkmate" : c ? ", check" : ""))
+    .replace(/\bO-O\b([+#]?)/g, (_, c) => "castles kingside" + (c === "#" ? ", checkmate" : c ? ", check" : ""))
+    .replace(/\b([KQRBN])?([a-h])?([1-8])?(x)?([a-h][1-8])(?:=([QRBN]))?([+#])?(?![\w])/g,
+      (m, p, f, r, x, to, promo, chk) => {
+        if (!p && !x && !promo && !chk && !f) return m;                  // a bare square stays as it is
+        const who = p ? PIECE_WORDS[p] : (f && x ? f : "");
+        const words = [who, x ? "takes" : "", to, promo ? `promotes to ${PIECE_WORDS[promo]}` : ""]
+          .filter(Boolean).join(" ");
+        return words + (chk === "#" ? ", checkmate" : chk === "+" ? ", check" : "");
+      });
+}
+window.__spoken = spoken;                    // for the page tests
+function pickVoice() {
   try {
-    if (!window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices();
+    let want = "";
+    try { want = localStorage.getItem("voice") || ""; } catch (e) { /* storage off */ }
+    return voices.find((v) => v.name === want)
+      || voices.find((v) => /^en/i.test(v.lang) && /natural|aria|jenny|guy/i.test(v.name))
+      || voices.find((v) => /^en/i.test(v.lang)) || null;
+  } catch (e) { return null; }
+}
+function say(text) {
+  if (!text) return;
+  SPEECH.pending.push(spoken(text));
+  SPEECH.last = SPEECH.pending.join(" ");           // what is about to be said (tests read it)
+  if (!window.speechSynthesis) return;
+  clearTimeout(SPEECH.timer);
+  SPEECH.timer = setTimeout(flushSpeech, 0);
+}
+function flushSpeech() {
+  SPEECH.timer = null;
+  try {
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-US";
-    window.speechSynthesis.speak(u);
-  } catch (e) { /* no voice: the name is still on screen */ }
+    const voice = pickVoice();
+    for (const t of SPEECH.pending.splice(0)) {
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = voice ? voice.lang : "en-US";
+      if (voice) u.voice = voice;
+      window.speechSynthesis.speak(u);
+    }
+  } catch (e) { SPEECH.pending = []; /* no voice: the text is on screen */ }
+}
+function hush() {
+  SPEECH.pending = [];
+  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+}
+
+// ---- the coach's comments read aloud (Review), as chess.com's game review does
+const READ = { on: false, game: null, cursor: -2 };
+try { READ.on = localStorage.getItem("readComments") === "1"; } catch (e) { /* storage off */ }
+function commentSpeech(mv) {
+  const text = Object.values(mv.annotations || {})[0];
+  if (!text) return "";
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean)
+    .filter((l) => !/^\*\*assessment/i.test(l))
+    .map((l) => l.replace(/^\*\*what happened\*\*:?\s*/i, "").replace(/^\*\*(.+?)\*\*:?\s*/, "$1: "));
+  const label = JUDGMENT_TEXT[mv.label] || mv.label || "";
+  const d = mv.difficulty && mv.difficulty.text ? [mv.difficulty.text] : [];
+  return [`${mv.move_label}. ${label}.`, ...lines, ...d].join(" ");
+}
+function readComment(force = false) {
+  if (!READ.on || !R.game || !R.reviewed || R.node !== null || R.cursor < 0) return;
+  const mv = R.game.moves[R.cursor];
+  if (!mv || (!force && READ.game === R.game && READ.cursor === R.cursor)) return;
+  READ.game = R.game;
+  READ.cursor = R.cursor;
+  const text = commentSpeech(mv);
+  if (text) say(text);
+}
+function setRead(on) {
+  READ.on = on;
+  $("speak-comments").setAttribute("aria-pressed", String(on));
+  try { localStorage.setItem("readComments", on ? "1" : "0"); } catch (e) { /* storage off */ }
+  if (on) readComment(true); else hush();
 }
 function showOpening(op, announce) {
   const el = $("opening-now");
@@ -529,6 +607,7 @@ function renderAnnotation(text) {
 }
 
 function renderCoach() {
+  readComment();
   const el = $("coach");
   if (!R.game) {
     el.innerHTML = `<p class="empty">The coach comments on the moments that decided the game: where you left the opening, your mistakes and what was better, and the moves you got right.</p>`;
@@ -1127,6 +1206,7 @@ async function askCoach(question) {
   const res = question ? await call("ask_coach", ply, question)
                        : await call("explain_position", ply);
   R.asking = false;
+  if (res && READ.on && R.cursor === ply && res.text) say(res.text);
   if (res) Object.assign(entry, res, { pending: false });
   else R.answers[ply] = R.answers[ply].filter((a) => a !== entry);
   if (R.cursor === ply) { renderAsk(); showLatestAnswer(); }
@@ -1141,6 +1221,8 @@ function showLatestAnswer() {
 }
 
 $("explain-btn").addEventListener("click", () => askCoach(""));
+$("speak-comments").setAttribute("aria-pressed", String(READ.on));
+$("speak-comments").addEventListener("click", () => setRead(!READ.on));
 $("ask-form").addEventListener("submit", (ev) => {
   ev.preventDefault();
   const q = $("ask-q").value.trim();
@@ -1588,6 +1670,24 @@ $("open-settings").addEventListener("click", async () => {
   $("settings-error").hidden = true;
   $("settings").showModal();
 });
+// the voice for reading aloud: kept in this browser (it belongs to this computer)
+function fillVoices() {
+  const sel = $("voice-pick");
+  let voices = [];
+  try { voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : []; } catch (e) { voices = []; }
+  const en = voices.filter((v) => /^en/i.test(v.lang));
+  const cur = pickVoice();
+  sel.innerHTML = (en.length ? en : voices).map((v) => `<option>${esc(v.name)}</option>`).join("")
+    || `<option value="">No voice on this computer</option>`;
+  if (cur) sel.value = cur.name;
+}
+try { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = fillVoices; } catch (e) { /* no speech */ }
+$("voice-pick").addEventListener("change", () => {
+  try { localStorage.setItem("voice", $("voice-pick").value); } catch (e) { /* storage off */ }
+  say("This is how the coach will sound.");
+});
+$("open-settings").addEventListener("click", fillVoices);
+
 // the look changes as you pick it; Cancel puts the saved one back
 $("theme-pick").addEventListener("change", () => applyTheme($("theme-pick").value));
 $("settings").addEventListener("close", () => applyTheme((settingsCache && settingsCache.theme) || "auto"));
@@ -1828,40 +1928,109 @@ $("lib-add").addEventListener("click", async () => {
 });
 $("lib-open").addEventListener("click", () => G.selected !== null && openFromLibrary(G.selected));
 
-// ---- Import: your games from Lichess or Chess.com (online, on request)
+// ---- Import: your games from Lichess or Chess.com (online, on request).
+// Step 1 finds them; step 2 lists them to pick from (all new ones ticked),
+// or opens one straight in Review.
+const IMP = { rows: [], picked: new Set() };
 function importUser() {
   const s = settingsCache || {};
   return ($("import-site").value === "lichess" ? s.lichess_user : s.chesscom_user) || s.player_name || "";
 }
-$("lib-import").addEventListener("click", () => {
-  $("import-user").value = importUser();
+function importStep(n) {
+  $("import-step1").hidden = n !== 1;
+  $("import-step2").hidden = n !== 2;
+  $("import-back").hidden = n !== 2;
   $("import-error").hidden = true;
   $("import-go").disabled = false;
-  $("import-go").textContent = "Import";
+  importLabel();
+}
+function importLabel() {
+  if (!$("import-step2").hidden) {
+    const n = IMP.picked.size;
+    $("import-go").textContent = n ? `Import ${n} game${n === 1 ? "" : "s"}` : "Nothing picked";
+    $("import-go").disabled = !n;
+  } else {
+    $("import-go").textContent = "Find games";
+  }
+}
+function importVisible() {
+  const q = $("import-filter").value.trim().toLowerCase();
+  return IMP.rows.filter((g) => !q || [g.white, g.black, g.opening, g.speed, g.date, g.result]
+    .join(" ").toLowerCase().includes(q));
+}
+function renderImport() {
+  const rows = importVisible();
+  $("import-rows").innerHTML = rows.map((g) => {
+    const name = (n, elo) => `${esc(n)}${elo ? ` <span class="sub">${esc(elo)}</span>` : ""}`;
+    return `<tr data-key="${esc(g.key)}" class="${g.have ? "have" : ""}">`
+      + `<td>${g.have ? "" : `<input type="checkbox" ${IMP.picked.has(g.key) ? "checked" : ""} aria-label="Import this game">`}</td>`
+      + `<td>${esc(g.date)}</td><td>${name(g.white, g.white_elo)}</td><td>${name(g.black, g.black_elo)}</td>`
+      + `<td>${esc(g.result)}</td><td>${esc(g.speed)}</td><td title="${esc(g.opening)}">${esc(g.opening)}</td>`
+      + `<td class="num">${g.moves}</td>`
+      + `<td><button type="button" class="rv" title="${g.have ? "Open it in Review" : "Import this game and open it in Review"}">Review</button></td></tr>`;
+  }).join("");
+  $("import-rows").querySelectorAll("tr").forEach((tr) => {
+    const key = tr.dataset.key;
+    const box = tr.querySelector("input");
+    if (box) box.addEventListener("change", () => {
+      if (box.checked) IMP.picked.add(key); else IMP.picked.delete(key);
+      importLabel();
+    });
+    tr.querySelector(".rv").addEventListener("click", async () => {
+      const s = await call("import_review", key);
+      if (!s) return;
+      $("import-dialog").close();
+      settingsCache = await api().get_settings();
+      showTab("review");
+      loadSummary(s);
+    });
+  });
+  const fresh = rows.filter((g) => !g.have);
+  $("import-all").checked = fresh.length > 0 && fresh.every((g) => IMP.picked.has(g.key));
+  importLabel();
+}
+$("import-filter").addEventListener("input", renderImport);
+$("import-all").addEventListener("change", () => {
+  for (const g of importVisible()) if (!g.have) {
+    if ($("import-all").checked) IMP.picked.add(g.key); else IMP.picked.delete(g.key);
+  }
+  renderImport();
+});
+$("lib-import").addEventListener("click", () => {
+  $("import-user").value = importUser();
+  importStep(1);
   $("import-dialog").showModal();
 });
 $("import-site").addEventListener("change", () => { $("import-user").value = importUser(); });
+$("import-back").addEventListener("click", () => importStep(1));
 $("import-form").addEventListener("submit", async (e) => {
   if (e.submitter && e.submitter.value === "cancel") return;
   e.preventDefault();
-  const site = $("import-site").value, user = $("import-user").value.trim();
-  $("import-go").disabled = true;
-  $("import-go").textContent = "Downloading…";
-  $("import-error").hidden = true;
-  const res = await api().import_games(site, user, $("import-period").value);
-  $("import-go").disabled = false;
-  $("import-go").textContent = "Import";
-  if (res.error) {
-    $("import-error").textContent = res.error;
-    $("import-error").hidden = false;
+  const fail = (msg) => { $("import-error").textContent = msg; $("import-error").hidden = false; };
+  if (!$("import-step1").hidden) {                          // step 1: find them
+    const site = $("import-site").value, user = $("import-user").value.trim();
+    if (!user) return fail("Type your name on that site.");
+    $("import-go").disabled = true;
+    $("import-go").textContent = "Downloading…";
+    $("import-error").hidden = true;
+    const res = await api().import_find(site, user, $("import-period").value);
+    if (res.error) { importStep(1); return fail(res.error); }
+    IMP.rows = res.games;
+    IMP.picked = new Set(res.games.filter((g) => !g.have).map((g) => g.key));
+    $("import-found").textContent = `${res.games.length} game${res.games.length === 1 ? "" : "s"} found on ${res.site}`
+      + `, ${res.new} new` + (res.games.length > res.new ? ` (the others are already in your games)` : "");
+    $("import-filter").value = "";
+    importStep(2);
+    renderImport();
     return;
   }
+  // step 2: add the ones picked
+  $("import-go").disabled = true;
+  const res = await api().import_add([...IMP.picked]);
+  if (res.error) { $("import-go").disabled = false; return fail(res.error); }
   $("import-dialog").close();
   settingsCache = await api().get_settings();              // the name is now known as yours
-  toast(res.added
-    ? `Added ${res.added} game${res.added === 1 ? "" : "s"} from ${res.site} to ${res.file}`
-      + (res.skipped ? ` (${res.skipped} already there).` : ".")
-    : `No new games from ${res.site}` + (res.skipped ? ` (${res.skipped} already there).` : "."), 5000);
+  toast(`Added ${res.added} game${res.added === 1 ? "" : "s"} from ${res.site} to ${res.file}.`, 5000);
   fillFiles([...new Set([...[...$("lib-file").options].map((o) => o.value).filter(Boolean), res.file])]);
   $("lib-file").value = res.file;
   openGames();

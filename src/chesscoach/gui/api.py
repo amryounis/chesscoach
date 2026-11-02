@@ -295,14 +295,61 @@ class Api:
             out = online_games.import_games(site, user, period)
         except online_games.OnlineError as e:
             raise ValueError(str(e)) from None
+        self._remember_user(site, out["user"])
+        return out
+
+    def _remember_user(self, site: str, user: str) -> None:
+        """The name imported under is yours from now on (Settings)."""
         field = {"lichess": "lichess_user", "chesscom": "chesscom_user"}[site]
-        if getattr(config.settings, field) != out["user"]:
-            setattr(config.settings, field, out["user"])
+        if getattr(config.settings, field) != user:
+            setattr(config.settings, field, user)
             try:
                 config.save_settings(config.settings)
             except OSError:
                 log_error("saving the imported player's name")
+
+    @_safe
+    def import_find(self, site: str, user: str, period: str = "new") -> dict:
+        """Step 1 of Import: the games found online, newest first, each
+        marked if it is already in your games. Nothing is written yet."""
+        from .. import online_games
+        try:
+            games = online_games.download(site, user, period)
+        except online_games.OnlineError as e:
+            raise ValueError(str(e)) from None
+        known = online_games.have(site)
+        self._found = {"site": site, "user": user.strip(),
+                       "games": {online_games.game_key(g): g for g in games}}
+        rows = [online_games.summary(g, known) for g in reversed(games)]
+        return {"site": online_games.SITES[site], "user": user.strip(), "games": rows,
+                "new": sum(not r["have"] for r in rows)}
+
+    def _found_games(self, keys: list) -> tuple:
+        found = getattr(self, "_found", None)
+        if not found:
+            raise ValueError("Find the games first.")
+        games = [found["games"][k] for k in keys if k in found["games"]]
+        return found, games
+
+    @_safe
+    def import_add(self, keys: list) -> dict:
+        """Step 2: add the games picked from the list."""
+        from .. import online_games
+        found, games = self._found_games(list(keys or []))
+        out = online_games.add(found["site"], found["user"], games)
+        self._remember_user(found["site"], found["user"])
         return out
+
+    @_safe
+    def import_review(self, key: str) -> dict:
+        """One game from the list: added to your games, and opened in Review."""
+        from .. import online_games
+        found, games = self._found_games([key])
+        if not games:
+            raise ValueError("That game is no longer in the list.")
+        online_games.add(found["site"], found["user"], games)
+        self._remember_user(found["site"], found["user"])
+        return self.load_pgn_text(str(games[0]))
 
     @_safe
     def library_remove(self, game_row: int) -> dict:

@@ -298,3 +298,22 @@ def test_import_remembers_your_name_there(api, monkeypatch, tmp_path):
     assert out["added"] == 1 and config.settings.lichess_user == "youamer"
     assert "youamer" in api.get_settings()["my_names"]
     assert "error" in api.import_games("lichess", "bad name", "new")
+
+
+def test_import_find_pick_and_review(api, monkeypatch, tmp_path):
+    from chesscoach import online_games
+    config.settings.library_dir = str(tmp_path)
+    pgn = ('[Site "https://lichess.org/aa"]\n[UTCDate "2026.10.30"]\n[White "me1"]\n[Black "b"]\n'
+           '[Result "1-0"]\n[TimeControl "60+0"]\n\n1. e4 e5 *\n\n'
+           '[Site "https://lichess.org/bb"]\n[UTCDate "2026.10.31"]\n[White "c"]\n[Black "me1"]\n'
+           '[Result "0-1"]\n[TimeControl "1800+20"]\n\n1. d4 d5 *\n')
+    monkeypatch.setattr(online_games, "get_text", lambda url, tok="": pgn)
+    found = api.import_find("lichess", "me1", "month")
+    assert [g["date"] for g in found["games"]] == ["2026-10-31", "2026-10-30"]      # newest first
+    assert [g["speed"] for g in found["games"]] == ["classical", "bullet"] and found["new"] == 2
+    assert api.import_add([found["games"][1]["key"]])["added"] == 1
+    again = api.import_find("lichess", "me1", "month")
+    assert [g["have"] for g in again["games"]] == [False, True]
+    out = api.import_review(again["games"][0]["key"])
+    assert out["headers"]["White"] == "c" and config.settings.lichess_user == "me1"
+    assert online_games.have("lichess") == {"https://lichess.org/aa", "https://lichess.org/bb"}

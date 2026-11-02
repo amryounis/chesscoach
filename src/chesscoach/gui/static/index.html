@@ -110,6 +110,7 @@
       <div class="ask-row">
         <button id="explain-btn">Explain this position</button>
         <button id="all-moves-btn" title="Every legal move here with a short verdict from the engine: why not my move?">All moves</button>
+        <button class="speak-btn" id="speak-comments" aria-pressed="false" title="Read the coach's comments aloud as you step through the game (and its answers when you ask)">&#x1F508; Read aloud</button>
         <form id="ask-form" class="ask-form">
           <input id="ask-q" maxlength="300" autocomplete="off"
                  placeholder="Ask about this position, e.g. &ldquo;Why not Nd2?&rdquo;">
@@ -294,30 +295,46 @@
   </div>
 </div>
 
-<dialog id="import-dialog">
+<dialog id="import-dialog" class="wide">
   <form method="dialog" id="import-form">
     <h2>Import your games</h2>
-    <p class="sub">Downloads your games (online) into your games folder, ready to review. Games already there are skipped, so importing again adds only new ones.</p>
-    <label>From
-      <select id="import-site">
-        <option value="lichess">Lichess</option>
-        <option value="chesscom">Chess.com</option>
-      </select>
-    </label>
-    <label>Your name there <input id="import-user" autocomplete="off" spellcheck="false" required></label>
-    <label>Which games
-      <select id="import-period">
-        <option value="new">New since the last import</option>
-        <option value="month">The last month</option>
-        <option value="year">The last year</option>
-        <option value="all">Everything (the newest 2,000)</option>
-      </select>
-    </label>
-    <p class="sub">FICS has no download service: save your games from ficsgames.org and use Add PGN file.</p>
+    <div id="import-step1">
+      <p class="sub">Finds your games online, then you choose which to keep in your games folder. Games already there are marked.</p>
+      <label>From
+        <select id="import-site">
+          <option value="lichess">Lichess</option>
+          <option value="chesscom">Chess.com</option>
+        </select>
+      </label>
+      <label>Your name there <input id="import-user" autocomplete="off" spellcheck="false"></label>
+      <label>Which games
+        <select id="import-period">
+          <option value="new">New since the last import</option>
+          <option value="month">The last month</option>
+          <option value="year">The last year</option>
+          <option value="all">Everything (the newest 2,000)</option>
+        </select>
+      </label>
+      <p class="sub">FICS has no download service: save your games from ficsgames.org and use Add PGN file.</p>
+    </div>
+    <div id="import-step2" hidden>
+      <div class="import-bar">
+        <span class="sub" id="import-found"></span>
+        <input id="import-filter" type="search" placeholder="Filter: opponent, opening, blitz…" aria-label="Filter the games">
+        <label class="check"><input type="checkbox" id="import-all" checked> All</label>
+      </div>
+      <div class="lib-table-wrap import-wrap">
+        <table class="lib-table import-table">
+          <thead><tr><th></th><th>Date</th><th>White</th><th>Black</th><th>Result</th><th>Speed</th><th>Opening</th><th class="num">Mv</th><th></th></tr></thead>
+          <tbody id="import-rows"></tbody>
+        </table>
+      </div>
+    </div>
     <p class="error" id="import-error" hidden></p>
     <div class="dialog-actions">
       <button value="cancel" formnovalidate>Cancel</button>
-      <button value="import" class="primary" id="import-go">Import</button>
+      <button type="button" id="import-back" hidden>Back</button>
+      <button value="go" class="primary" id="import-go">Find games</button>
     </div>
   </form>
 </dialog>
@@ -350,6 +367,9 @@
     <label>Games folder <input name="library_dir" placeholder="default: &ldquo;games&rdquo; next to the settings file"></label>
     <label class="check"><input type="checkbox" name="autosave"> Keep every game I play or review in my games</label>
     <label class="check"><input type="checkbox" name="start_maximized"> Open the app maximized (otherwise centred; from the next start)</label>
+    <label>Voice for reading aloud
+      <select id="voice-pick" title="Windows' own voices; more can be added in Windows Settings, Time and language, Speech"></select>
+    </label>
     <label>Look
       <select name="theme" id="theme-pick">
         <option value="auto">As Windows is set (light or dark)</option>

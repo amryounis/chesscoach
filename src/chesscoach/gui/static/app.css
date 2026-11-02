@@ -738,3 +738,15 @@ table.all-moves tr.j-Blunder td:last-child { color: var(--j-blunder); }
 .summary-view .summary { margin-top: 0; }
 
 .lib-head-actions { display: flex; gap: 8px; align-items: flex-start; }
+
+/* Import: the games found, to pick from */
+dialog.wide { width: min(980px, 94vw); }
+.import-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.import-bar input[type=search] { flex: 1; }
+.import-wrap { max-height: min(52vh, 460px); }
+.import-table td:first-child, .import-table th:first-child { width: 28px; }
+.import-table tr.have td { color: var(--muted); }
+.import-table .rv { padding: 1px 8px; font-size: 12px; }
+
+.import-bar label.check { flex-direction: row; align-items: center; gap: 4px; }
+.speak-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }

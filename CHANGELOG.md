@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.25.0 — unreleased
+
+- **Pick which games to import.** Import… now shows the games it found
+  (date, players and ratings, result, time control, opening, length) before
+  anything is added: the new ones are ticked, ones already in your games are
+  greyed out, a filter narrows the list (an opening, an opponent, "blitz"),
+  and each row has Review, which adds that one game and opens it in Review.
+  `chesscoach import` still adds every new game
+- **The coach's comments read aloud**, as chess.com's game review does:
+  Read aloud (beside All moves) speaks the comment of each reviewed move as
+  you step onto it, with the move's mark and how hard the better move was
+  to see; Explain and Ask answers are read when they arrive. Moves are said
+  in words ("knight takes e5, check"), not letters. Windows' own voices,
+  offline; choose one in Settings
+- Speech is queued per step: the opening name and the comment no longer
+  cut each other off, and stepping on stops what was being said
+
 ## 0.24.0 — unreleased
 
 - **Import your games from Lichess and Chess.com** (Games tab, Import…, or

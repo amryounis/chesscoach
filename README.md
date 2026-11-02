@@ -27,6 +27,9 @@ Lichess, and Import downloads your own games from Lichess or Chess.com.
 - **Explain this position**, **Ask the coach** ("Why not Nd2?") and **All
   moves**: every legal move with a short verdict ("Blunder: loses a knight
   (after 5...exd5)")
+- **Read aloud**: the coach's comment is spoken as you step onto each move,
+  moves said in words ("knight takes e5, check"), with the Windows voice you
+  choose; its answers too
 - Annotated PGNs (Lucas Chess, ChessBase) open with their own notes, in
   English, German or both
 - Save the reviewed game as a PGN with marks, evaluations, the coach's
@@ -59,8 +62,9 @@ Lichess, and Import downloads your own games from Lichess or Chess.com.
 **Your games**
 - Every game you play or review is kept as ordinary PGN files, searchable
   and sortable; a reviewed game opens with its review
-- **Import** your games from Lichess and Chess.com (new ones only, each
-  time), ready to review; your names there count as you
+- **Import** your games from Lichess and Chess.com: a list of the games
+  found, to pick from (new ones ticked) or review one at once; your names
+  there count as you
 - Copy a position (FEN) or a game (PGN); paste or Ctrl+V a PGN or FEN to
   open it
 
@@ -192,6 +196,14 @@ chesscoach gui
 - **The opening** the game is in is named above the board at every move,
   in Review and in Play, by position, so transpositions are named right;
   the speaker button beside it says each new name aloud.
+- **Read aloud**: with the button beside All moves on, the coach's comment
+  is spoken as you step onto a reviewed move: the move and its mark, the
+  comment, and how hard the better move was to see. Moves are said in words
+  ("knight takes e5, check"; "castles kingside"). Explain this position and
+  Ask the coach answers are read when they arrive. Stepping on interrupts;
+  the opening name and the comment are said one after the other. The voice
+  is chosen in Settings (Windows' own voices, offline; more can be added in
+  Windows Settings, Time and language, Speech).
 - **Copy and paste**: under the board, *FEN* and *PGN* copy the position and
   the game (after a review, with the coach's notes); *Paste* or Ctrl+V
   opens a PGN or a FEN from the clipboard. A pasted position opens in Review,

@@ -159,12 +159,11 @@ def _since(period: str, last: Optional[float], now: datetime.datetime) -> Option
     return None                                         # everything (newest MAX_GAMES)
 
 
-def import_games(site: str, user: str, period: str = "new", folder: Optional[Path] = None,
-                 fetch: Optional[Callable] = None, fetch_json: Optional[Callable] = None,
-                 now: Optional[datetime.datetime] = None) -> dict:
-    """Download `user`'s games from `site` ("lichess" / "chesscom") and add
-    the new ones to that site's file in the games folder.
-    -> {file, added, skipped, user, site}"""
+def download(site: str, user: str, period: str = "new", folder: Optional[Path] = None,
+          fetch: Optional[Callable] = None, fetch_json: Optional[Callable] = None,
+          now: Optional[datetime.datetime] = None) -> list:
+    """Download `user`'s games from `site` ("lichess" / "chesscom") for the
+    period; nothing is written. -> [chess.pgn.Game], in the order played."""
     from . import library
     if site not in SITES:
         raise ValueError(f"Unknown site: {site}")
@@ -172,37 +171,88 @@ def import_games(site: str, user: str, period: str = "new", folder: Optional[Pat
     if not user or any(c in user for c in "/?#&% "):
         raise OnlineError("Type the player's name on that site.")
     folder = folder or library.library_dir()
-    folder.mkdir(parents=True, exist_ok=True)
     now = now or datetime.datetime.now()
-    key = f"{site}:{user.lower()}"
-    state = _state(folder)
-    since = _since(period, (state.get(key) or {}).get("last"), now)
+    since = _since(period, (_state(folder).get(f"{site}:{user.lower()}") or {}).get("last"), now)
     if site == "lichess":
         text = lichess_pgn(user, since, token=(config.settings.lichess_token or "").strip(),
                            fetch=fetch or get_text)
     else:
         text = chesscom_pgn(user, since, fetch_json=fetch_json or get_json, fetch=fetch or get_text)
     games = _games(text)
+    # in the order they were played (Lichess sends newest first)
+    games.sort(key=lambda g: (g.headers.get("UTCDate") or g.headers.get("Date", ""),
+                              g.headers.get("UTCTime") or g.headers.get("StartTime", "")))
+    return games
+
+
+def have(site: str, folder: Optional[Path] = None) -> set:
+    """The keys of the games already in that site's file."""
+    from . import library
+    path = (folder or library.library_dir()) / FILES[site]
+    return {game_key(g) for g in library._games_in(path)} if path.exists() else set()
+
+
+def add(site: str, user: str, games: list, folder: Optional[Path] = None,
+        now: Optional[datetime.datetime] = None) -> dict:
+    """Add the games not already there to the site's file, and remember the
+    import (for "new since the last import"). -> {file, added, skipped, user, site}"""
+    from . import library
+    folder = folder or library.library_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    now = now or datetime.datetime.now()
     path = folder / FILES[site]
     with library._LOCK:
-        have = {game_key(g) for g in library._games_in(path)} if path.exists() else set()
+        known = have(site, folder)
         new = []
         for g in games:
             k = game_key(g)
-            if k not in have:
-                have.add(k)
+            if k not in known:
+                known.add(k)
                 new.append(g)
-        # the file in the order the games were played (Lichess sends newest first)
-        new.sort(key=lambda g: (g.headers.get("UTCDate") or g.headers.get("Date", ""),
-                                g.headers.get("UTCTime") or g.headers.get("StartTime", "")))
         if new:
             with open(path, "a", encoding="utf-8", newline="\n") as f:
                 for g in new:
                     f.write(str(g) + "\n\n")
-    state[key] = {"last": time.mktime(now.timetuple()), "user": user}
+    state = _state(folder)
+    state[f"{site}:{user.strip().lower()}"] = {"last": time.mktime(now.timetuple()), "user": user.strip()}
     try:
         _state_path(folder).write_text(json.dumps(state, indent=1), encoding="utf-8")
     except OSError:
         pass
     return {"file": FILES[site], "added": len(new), "skipped": len(games) - len(new),
-            "user": user, "site": SITES[site]}
+            "user": user.strip(), "site": SITES[site]}
+
+
+def import_games(site: str, user: str, period: str = "new", folder: Optional[Path] = None,
+                 fetch: Optional[Callable] = None, fetch_json: Optional[Callable] = None,
+                 now: Optional[datetime.datetime] = None) -> dict:
+    """Download and add every new game (the command line's import)."""
+    games = download(site, user, period, folder, fetch, fetch_json, now)
+    return add(site, user, games, folder, now)
+
+
+def _speed(tc: str) -> str:
+    """'180+2' -> 'blitz' (Lichess's bands, from the estimated game time)."""
+    try:
+        base, _, inc = (tc or "").partition("+")
+        if "/" in base:                              # daily: '1/259200'
+            return "daily"
+        t = int(base) + 40 * int(inc or 0)
+    except ValueError:
+        return ""
+    return ("bullet" if t < 180 else "blitz" if t < 480 else "rapid" if t < 1500 else "classical")
+
+
+def summary(game: chess.pgn.Game, known: set) -> dict:
+    """One row of the import list."""
+    h = game.headers
+    opening = h.get("Opening", "")
+    if not opening and "openings/" in h.get("ECOUrl", ""):
+        opening = h["ECOUrl"].rsplit("/", 1)[-1].replace("-", " ")
+    date = (h.get("UTCDate") or h.get("Date") or "").replace(".", "-")
+    plies = sum(1 for _ in game.mainline_moves())
+    return {"key": game_key(game), "date": date, "white": h.get("White", "?"),
+            "black": h.get("Black", "?"), "white_elo": h.get("WhiteElo", ""),
+            "black_elo": h.get("BlackElo", ""), "result": h.get("Result", "*"),
+            "time": h.get("TimeControl", ""), "speed": _speed(h.get("TimeControl", "")),
+            "opening": opening, "moves": (plies + 1) // 2, "have": game_key(game) in known}
