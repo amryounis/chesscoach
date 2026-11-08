@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.26.0 — unreleased
+
+- **Advanced analysis.** An Analyzer button under the board opens
+  uciboard, the advanced analyzer (github.com/amryounis/advanced-chess-analayzer),
+  in its own window, on the game in Review at the move on the board, on the
+  game in Play, or on the position in Practice, Openings or a side line:
+  the engine's UCI output, tactics and pawn-structure overlays, square
+  control, the Evolution graph, the ChessY measures and its engine list.
+  It runs on chesscoach's Stockfish with its engine off until Analyse is
+  pressed; one window, reused; it closes with chesscoach
+- uciboard stays its own package, installed with the new `advanced` extra
+  (`pip install -e ".[gui,advanced]"`); chesscoach copies none of its code.
+  Without it, the button says how to install it
+
 ## 0.25.0 — unreleased
 
 - **Pick which games to import.** Import… now shows the games it found

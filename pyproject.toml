@@ -31,6 +31,8 @@ dependencies = [
 
 [project.optional-dependencies]
 gui = ["pywebview>=5"]
+# The advanced analyzer (its own program, opened in a second window):
+advanced = ["uciboard @ git+https://github.com/amryounis/advanced-chess-analayzer.git"]
 dev = ["pytest>=8", "ruff>=0.5", "playwright>=1.40"]
 
 [project.scripts]
@@ -42,6 +44,9 @@ chesscoach-app = "chesscoach.gui.app:main"
 [project.urls]
 Homepage = "https://github.com/amryounis/chesscoach"
 Issues = "https://github.com/amryounis/chesscoach/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true    # the analyzer comes from its GitHub repository
 
 [tool.hatch.version]
 path = "src/chesscoach/__init__.py"

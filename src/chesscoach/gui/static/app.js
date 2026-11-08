@@ -1427,6 +1427,17 @@ $("copy-pgn").addEventListener("click", async () => {
   if (res) copyText(res.text, tab !== "play" && R.reviewed ? "Game with the coach's notes (PGN)" : "Game (PGN)");
 });
 
+// The advanced analyzer (uciboard) in its own window, on what is on the board here.
+$("analyzer-btn").addEventListener("click", async () => {
+  let where = "position", ply = null;
+  if (tab === "play" && P.state && P.state.moves && P.state.moves.length) where = "play";
+  else if (tab === "review" && R.game && R.node === null) { where = "review"; ply = R.cursor + 1; }
+  const res = await call("open_analyzer", where, ply, currentFen() || "");
+  if (!res) return;
+  toast(res.message || (res.reused ? "The analyzer window shows this game now."
+    : "The analyzer opened in its own window. Its engine is off until you press Analyse there."), 5000);
+});
+
 async function openPasted(text) {
   const s = await call("paste_text", text);
   if (!s) return;

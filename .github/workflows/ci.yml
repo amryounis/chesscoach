@@ -24,7 +24,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y stockfish
       - name: Install package
         run: |
-          pip install -e ".[dev]"
+          pip install -e ".[dev,advanced]"
           python -m playwright install --with-deps chromium
       - name: Lint
         run: ruff check src tests
@@ -49,7 +49,7 @@ jobs:
           python-version: "3.13"
       - name: Install package with the GUI
         run: |
-          pip install -e ".[dev,gui]"
+          pip install -e ".[dev,gui,advanced]"
           python -m playwright install chromium
       - name: The window code imports
         run: python -c "import webview; from chesscoach.gui import app, api; from chesscoach.gui.api import _dialog_kind; _dialog_kind('OPEN')"

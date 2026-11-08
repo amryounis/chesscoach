@@ -120,6 +120,8 @@ def _patterns_after(review) -> list:
 class Api:
     def __init__(self):
         self._window = None                 # set by the app after the window exists
+        from .advanced import Analyzer
+        self._analyzer = Analyzer()          # the advanced analyzer's window (uciboard)
         self._game: Optional[chess.pgn.Game] = None
         self._games: list = []                # every game in the file opened last
         self._game_path: str = ""
@@ -591,6 +593,21 @@ class Api:
         return {"text": str(self._game)}
 
     @_safe
+    def open_analyzer(self, where: str = "review", ply=None, fen: str = "") -> dict:
+        """The advanced analyzer (uciboard) in its own window: on the game in
+        Review at `ply` moves, on the game in Play, or on the position `fen`
+        (Practice, Openings, or a side line in Review)."""
+        pgn = ""
+        if where == "review" and self._game is not None:
+            exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=False)
+            pgn = self._game.accept(exporter)
+        elif where == "play" and self._play and self._play.board.move_stack:
+            pgn, ply = self._play.pgn(), None
+        if not pgn and not fen:
+            raise ValueError("Open a game or set up a position first.")
+        return self._analyzer.open(pgn=pgn, ply=None if ply is None else int(ply), fen=fen)
+
+    @_safe
     def paste_text(self, text: str) -> dict:
         """Open pasted text: a FEN opens that position in Review (no moves:
         Explain this position and Ask the coach work on it), anything else
@@ -875,6 +892,7 @@ class Api:
 
     def shutdown(self) -> None:
         self._cancel.set()
+        self._analyzer.close()
         if self._practice_sf is not None:
             try:
                 self._practice_sf.quit()

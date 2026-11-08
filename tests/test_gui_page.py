@@ -4,6 +4,7 @@ Skipped unless Playwright (and its Chromium) is installed:
     pip install playwright && playwright install chromium
 """
 import asyncio
+import os
 import re
 import sys
 import warnings
@@ -732,3 +733,44 @@ def test_comments_are_read_aloud(page):
     page.click("#open-settings")
     assert page.inner_text("#voice-pick") == "Test voice"
     assert page.errors == []
+
+
+def test_analyzer_opens_on_the_move_in_review(page, browser):
+    pytest.importorskip("uciboard")
+    from chesscoach.gui import advanced
+    made = []
+
+    class Win:
+        def __init__(self, title, url, js_api, **kw):
+            self.url, self.js_api = url, js_api
+            hook = type("Hook", (list,), {"__iadd__": lambda h, fn: (h.append(fn), h)[1]})
+            self.events = type("E", (), {"closing": hook()})()
+            made.append(self)
+
+        def evaluate_js(self, code):
+            pass
+
+    page.api._analyzer = advanced.Analyzer(create_window=Win)
+    page.click("#open-pgn")
+    page.wait_for_timeout(500)
+    for _ in range(4):
+        page.click("#nav button[data-nav='next']")
+    page.click("#analyzer-btn")
+    page.wait_for_function("document.getElementById('toast').textContent.includes('own window')")
+    (w,) = made
+    # The analyzer's own page, on its own Api, shows the game at that move.
+    ctx = browser.new_context(viewport={"width": 1240, "height": 820})
+    other = ctx.new_page()
+    errors = []
+    other.on("pageerror", lambda e: errors.append(str(e)))
+    other.expose_function("__py", lambda name, args: getattr(w.js_api, name)(*args))
+    other.add_init_script(BRIDGE)
+    other.goto(w.url)
+    other.wait_for_timeout(1500)
+    st = w.js_api.state()
+    assert st["ply"] == 4 and len(st["moves"]) == 78
+    assert other.locator("cg-board piece").count() == 32           # nothing taken by move 4
+    if os.environ.get("CC_SHOTS"):
+        other.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "analyzer.png"))
+    ctx.close()
+    assert errors == [] and page.errors == []

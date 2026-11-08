@@ -68,6 +68,14 @@ Lichess, and Import downloads your own games from Lichess or Chess.com.
 - Copy a position (FEN) or a game (PGN); paste or Ctrl+V a PGN or FEN to
   open it
 
+**Advanced analysis** (optional: the `advanced` extra)
+- **Analyzer**, under the board: the game or position in hand opens in
+  [uciboard](https://github.com/amryounis/advanced-chess-analayzer) in its own
+  window: the engine's UCI output, tactics overlays (loose pieces, pins and
+  skewers, defenders, king safety, safe squares), pawn structure, square
+  control, the Evolution graph (Lu, Wang, Lin 2014), the ChessY positional
+  measures, and any UCI engine you add
+
 **The app**
 - Looks: as Windows is set, Classic, Night, or Parchment (a study book)
 - Opens maximized (or centred, if you prefer)
@@ -145,7 +153,11 @@ every comment.
 git clone https://github.com/amryounis/chesscoach
 cd chesscoach
 pip install -e ".[gui]"      # or just  pip install -e .  for the command line only
+pip install -e ".[gui,advanced]"   # with the advanced analyzer (uciboard), from GitHub
 ```
+
+If you develop uciboard too, install your own copy of it instead
+(`pip install -e ..\advanced-chess-analayzer`): chesscoach then opens that one.
 
 ## Configure
 
@@ -252,6 +264,19 @@ chesscoach gui
   allowed or missed (fork, pin, skewer…) are in the review and the PGN.
 - **Settings**: engine paths, model, your name and rating, the games
   folder, saved to the user config file.
+- **Analyzer** (under the board, with the `advanced` extra installed):
+  opens the advanced analyzer,
+  [uciboard](https://github.com/amryounis/advanced-chess-analayzer), in a
+  window of its own: on the game in Review at the move on the board, on the
+  game in Play, or on the position in Practice, Openings or a side line.
+  Pressing it again loads the new game into the same window; closing
+  chesscoach closes it too. It uses chesscoach's Stockfish, and its engine
+  is off until you press Analyse there, so an open window costs no CPU.
+  uciboard is a separate program and package: what it shows and the papers
+  behind it (the Evolution graph of Lu, Wang and Lin, IEEE TVCG 2014; the
+  ChessY measures of Rudolph-Lilith, SoftwareX 2019) are described in its
+  README. chesscoach copies none of it, so a newer uciboard is picked up by
+  reinstalling it.
 
 The board is [chessground](https://github.com/lichess-org/chessground)
 (Lichess's board), bundled so the app works offline.
