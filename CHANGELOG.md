@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.27.3 — unreleased
+
+What the 0.27.2 reviews of the same game (qwen3:14b and Gemini) still got
+past the check, and what it removed that was true. For every model.
+
+- Caught now:
+  - "h3 … weakening White's king's shelter" when the shelter changes only
+    with White's own later move in the line (the facts already said so;
+    qwen wrote it anyway)
+  - "the pawn on a4, which was left undefended" (the check read "was
+    undefended" but not "was left undefended"; the bishop defended a4)
+  - "the pawn on d4 can take the bishop back" and "leaving the bishop
+    hanging" when taking it loses material (dxe5 runs into Rxd2): judged on
+    the position before the move and right after it
+- No longer removed (both were true):
+  - "removes a pin on the d4 pawn": the check now reads "the d4 pawn", and
+    the pin is to the queen, not the king
+  - "the bishop was left undefended after capturing White's pawn on e5": a
+    piece taken earlier, named in the past tense
+
 ## 0.27.2 — unreleased
 
 Three fixes found by reviewing one game (youamer vs HYPEMAXIMALIST) with

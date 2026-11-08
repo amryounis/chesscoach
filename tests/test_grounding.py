@@ -409,7 +409,9 @@ def test_captured_piece_spoken_of_as_still_in_play():
     bad = ("**What happened**: It fails to address the danger posed by Black's pawn on "
            "d4, which now has a clear path to attack White's pieces.")
     ok = "**What happened**: White captures the pawn on d4, which was attacking c3 and e3."
-    past = ("**What happened**: It captures the pawn on d4, which was left undefended "
+    # (0.27.3: "which was left undefended" is now checked too, and the knight
+    # on c6 defends d4, so the past-tense example says something true)
+    past = ("**What happened**: It captures the pawn on d4, which was blocking the d-file "
             "and still attacking c3.")
     assert ground(past, [b] + after, mv, played=after) == []
     assert [f.kind for f in ground(bad, [b] + after, mv, played=after)] == ["captured"]
@@ -668,3 +670,76 @@ def test_capture_gain_plays_out_the_captures():
     b = chess.Board("r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B2P/1PPQ2P1/3K3R b - - 0 17")
     assert capture_gain(b, chess.A4) == 1
     assert capture_gain(chess.Board(), chess.E2) is None                # nothing takes it
+
+
+# --- 0.27.3: what the 0.27.2 reviews of the same game still got past the
+# check, and what it removed that was true
+
+H3_BEFORE = "r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B3/1PPQ2PP/3K3R w - - 1 17"
+H3_AFTER = "r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B2P/1PPQ2P1/3K3R b - - 0 17"
+H4_BEFORE = "3r1r2/2p1ppbk/1pq4p/p3PPp1/n2P2P1/1B2B2P/1PPQ1N2/2K4R w - - 0 22"
+HXG5_AFTER = "3r1r2/2p1pp1k/1pq4p/p3bPP1/n2P2P1/1B2B3/1PPQ1N2/2K4R b - - 0 23"
+
+
+def _played(fen, *sans):
+    b = chess.Board(fen)
+    out = []
+    for san in sans:
+        b.push_san(san)
+        out.append(b.copy())
+    return chess.Board(fen), out
+
+
+def test_a_shelter_change_made_later_is_not_the_moves_doing():
+    # qwen on 17.h3: White's king on d1 loses its shield pawn to White's own
+    # c2-c4 further along the line, not to h3
+    before, played = _played(H3_BEFORE, "h3", "Nxa4", "c4", "f5", "Nc5")
+    s = ("**What happened**: By playing h3, White allows Black to gain material and improve "
+         "their position, while also weakening White's king's shelter.")
+    found = ground(s, [before] + played, before.parse_san("h3"), played=played)
+    assert [f.kind for f in found] == ["shelter"]
+    assert "changes only with a later move by White" in found[0].correction
+    # a shelter really lost to the opponent's capture stays true: 8...Bg4 hxg6 fxg6
+    before, played = _played("rn1qkb1r/pp2pp1p/2p2np1/3p3P/2PP2b1/2N2N2/PP2PPP1/R1BQKB1R w KQkq - 1 6",
+                           "hxg6", "fxg6", "e3")
+    s2 = "**What happened**: The move lets White weaken Black's king shelter."
+    assert not [f for f in ground(s2, [before] + played, None, played=played)
+                if f.kind == "shelter" and "later move" in f.correction]
+
+
+def test_left_undefended_is_read_and_checked():
+    # qwen on 17...Nxa4: the bishop on b3 defended a4 before and after h3
+    b = chess.Board(H3_AFTER)
+    s = "Black captures the pawn on a4, which was left undefended after White's move h3."
+    assert [f.correction for f in check_sentence(s, [b])] == ["the pawn on a4 is defended"]
+
+
+def test_can_take_it_back_and_hanging_are_checked():
+    after = chess.Board(AFTER_BXE5)
+    s = "It takes the pawn, but the pawn on d4 can take the bishop back: a bishop for a pawn."
+    found = check_sentence(s, [after], None, [after])
+    assert [f.kind for f in found] == ["winnable"]
+    assert "the pawn on d4 taking the bishop on e5 does not win material" in found[0].correction
+    hxg5 = chess.Board(HXG5_AFTER)
+    s = "It takes advantage of Black's mistake of leaving the bishop undefended and hanging."
+    assert [f.kind for f in check_sentence(s, [after, hxg5], None, [hxg5])] == ["winnable"]
+    # a piece that really is hanging stays: after 17.h3 the knight takes on a4 and wins a pawn
+    b = chess.Board(H3_AFTER)
+    assert not check_sentence("The pawn on a4 can be won by the knight on b6.", [b], None, [b])
+    assert not check_sentence("The knight on b6 can take the pawn on a4.", [b], None, [b])
+
+
+def test_true_sentences_the_check_used_to_remove():
+    # qwen on 22.h4: d4 is pinned to the queen by the rook on d8 (not to the king)
+    b = chess.Board(H4_BEFORE)
+    s = ("While it attacks the Black pawn on g5, it does not improve White's position, while the "
+         "engine's choice removes a pin on the d4 pawn.")
+    assert not check_sentence(s, [b])
+    # a pin that isn't there is still caught
+    assert check_sentence("It removes a pin on the c3 pawn.", [chess.Board()])
+    # qwen on 23.hxg5: a pawn captured earlier, in the past tense
+    hxg5 = chess.Board(HXG5_AFTER)
+    s = ("This move takes advantage of Black's previous mistake, where the bishop on e5 was left "
+         "undefended after capturing White's pawn on e5.")
+    assert not [f for f in check_sentence(s, [hxg5]) if f.kind == "placement"]
+    assert check_sentence("White's pawn on e5 attacks the rook.", [hxg5])      # present: caught

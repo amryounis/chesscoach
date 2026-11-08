@@ -46,6 +46,8 @@ _PIECE = r"\b(pawn|knight|bishop|rook|queen|king)s?"
 # A piece with its square: "White's knight on f3", "the pawn from e5".
 REF = _SIDE + _PIECE + r" (?:on|from|at) \**([a-h][1-8])\b"
 REF_RE = re.compile(REF, re.I)
+# "the d4 pawn", "White's e5 pawn": the square first (read by some checks only)
+SQ_FIRST_RE = re.compile(r"\b([a-h][1-8])[- ](pawn|knight|bishop|rook|queen)\b", re.I)
 
 
 @dataclass
@@ -151,12 +153,21 @@ def split_sentences(text: str) -> list:
 
 # --- Claim checks ---------------------------------------------------------
 
+_TAKEN_BEFORE = re.compile(r"\b(?:after|having|had|was|were|been)\s+(?:\w+\s+){0,2}?"
+                           r"(?:captur\w*|took|taken|won|grabbed|exchanged)\s+$", re.I)
+
+
 def _check_placement(s: str, boards: list) -> list:
     out = []
     for m in REF_RE.finditer(s):
         name, sq = m.group(1).lower(), m.group(2)
         # "the pawn from e5" names where a piece came from: fine on any board.
         if not any(_piece(b, chess.parse_square(sq), name) for b in boards):
+            # "the bishop on e5 was left undefended after capturing White's
+            # pawn on e5" (23.hxg5, qwen): a piece taken earlier, in the past
+            # tense, is not on any board looked at, and need not be.
+            if _TAKEN_BEFORE.search(s[max(0, m.start() - 40):m.start()]):
+                continue
             actual = boards[-1].piece_at(chess.parse_square(sq))
             what = (f"a {PIECE_NAMES[actual.piece_type]}" if actual else "nothing")
             out.append(Failure("placement", m.group(0),
@@ -278,7 +289,8 @@ def _check_lost_defence(s: str, boards: list, move: Optional[chess.Move]) -> lis
 
 
 _UNDEF = re.compile(
-    REF + r"(?:,? which)? (?:is|was|remains|stays|becomes|left|now)? ?(?:now |still |completely |totally )?"
+    REF + r"(?:,? which)? (?:(?:is|was|has been|had been|got) left|is|was|remains|stays|becomes|left|now)? ?"
+    r"(?:now |still |completely |totally )?"
     r"(?:undefended|unprotected|hanging|loose|without (?:a |any )?(?:defender|defence|defense|protection))"
     r"|(?:undefended|unprotected|hanging|loose) " + _PIECE + r" on \**([a-h][1-8])\b"
     r"|leaves?[^.;:]{0,10}?" + REF + r" (?:undefended|unprotected|hanging|without (?:a |any )?(?:defender|protection))",
@@ -312,7 +324,12 @@ def _check_undefended(s: str, boards: list, conseq: Optional[list] = None) -> li
 # gains material once the captures that follow are played out.
 _WINNABLE = re.compile(
     r"(?:can|could) (?:now |then |simply |easily |immediately )?be "
-    r"(?:captured|taken|won|picked up|collected|snapped up)\b", re.I)
+    r"(?:captured|taken|won|picked up|collected|snapped up)\b"
+    r"|\b(?:and |is |was |left |leaving it |now )hanging\b|\ben prise\b", re.I)
+# "the pawn on d4 can take the bishop back" (22...Bxe5, Gemini)
+_CAN_TAKE = re.compile(REF + r"[^.;:]{0,20}?\b(?:can|could) (?:now |then |simply |easily )?"
+                       r"(?:take|capture|win|grab|recapture)(?: back)? (?:the|its|that|this) "
+                       r"(?:(?:white|black)(?:'s)? )?" + _PIECE + r"(?: on \**([a-h][1-8])\b)?", re.I)
 _NAMED = re.compile(r"\b(?:the|a|an|its|their|this|that|his) (?:(?:white|black)(?:'s)? )?"
                     + _PIECE + r"(?: (?:on|at) \**([a-h][1-8])\b)?", re.I)
 QS_DEPTH = 6
@@ -340,9 +357,10 @@ def _qsearch(b: chess.Board, depth: int) -> int:
     return best
 
 
-def capture_gain(board: chess.Board, sq: int) -> Optional[int]:
+def capture_gain(board: chess.Board, sq: int, frm: Optional[int] = None) -> Optional[int]:
     """The most material the other side wins by taking the piece on `sq`
-    (captures played out), or None when nothing can take it."""
+    (captures played out), or None when nothing can take it. `frm`: only
+    captures by the piece on that square."""
     p = board.piece_at(sq)
     if p is None:
         return None
@@ -354,7 +372,7 @@ def capture_gain(board: chess.Board, sq: int) -> Optional[int]:
         b.ep_square = None
     best = None
     for mv in b.legal_moves:
-        if mv.to_square != sq or not b.is_capture(mv):
+        if mv.to_square != sq or not b.is_capture(mv) or (frm is not None and mv.from_square != frm):
             continue
         gain = VALUES.get(p.piece_type, 0)
         b.push(mv)
@@ -382,7 +400,7 @@ def _check_winnable(s: str, conseq: list) -> list:
             continue
         said = re.search(r"\b(white|black)", m.group(0), re.I)
         tried, wins = [], False
-        for b in conseq[:3]:
+        for b in conseq:
             squares = ([chess.parse_square(m.group(2))] if m.group(2) else
                        [q for q in chess.SquareSet(b.pieces_mask(kind, chess.WHITE)
                                                    | b.pieces_mask(kind, chess.BLACK))
@@ -403,6 +421,31 @@ def _check_winnable(s: str, conseq: list) -> list:
             out.append(Failure("winnable", m.group(0) + " … " + w.group(0),
                                f"taking the {name} on {chess.square_name(q)} does not win "
                                f"material: the captures that follow give it back"))
+    for m in _CAN_TAKE.finditer(s):
+        if _NEG.search(m.group(0)):
+            continue
+        name, frm_sq, target = m.group(1).lower(), m.group(2), m.group(3).lower()
+        kind = NAME_TO_TYPE.get(target)
+        if kind is None or kind == chess.KING:
+            continue
+        frm = chess.parse_square(frm_sq)
+        tried, wins = [], False
+        for b in conseq:
+            if not _piece(b, frm, name):
+                continue
+            squares = ([chess.parse_square(m.group(4))] if m.group(4) else
+                       [q for q in b.attacks(frm) if b.piece_type_at(q) == kind
+                        and b.color_at(q) != b.color_at(frm)])
+            for q in squares:
+                g = capture_gain(b, q, frm)
+                if g is not None:
+                    tried.append(q)
+                    wins = wins or g > 0
+        if tried and not wins:
+            out.append(Failure("winnable", m.group(0),
+                               f"the {name} on {frm_sq} taking the {target} on "
+                               f"{chess.square_name(tried[0])} does not win material: the "
+                               f"captures that follow give it back"))
     return out
 
 
@@ -410,6 +453,9 @@ def _check_pins(s: str, boards: list) -> list:
     if not re.search(r"\bpin(?:s|ned|ning)?\b", s, re.I):
         return []
     refs = [(m.group(1).lower(), chess.parse_square(m.group(2))) for m in REF_RE.finditer(s)]
+    # "removes a pin on the d4 pawn" (22.h4, qwen): the square before the piece
+    refs += [(m.group(2).lower(), chess.parse_square(m.group(1).lower()))
+             for m in SQ_FIRST_RE.finditer(s)]
     any_pin = any(_relatively_pinned(b, sq) for b in boards for sq in b.piece_map())
     if refs:
         ok = any(_piece(b, sq, n) and _relatively_pinned(b, sq)
@@ -929,6 +975,21 @@ def _check_shelter(s: str, before: Optional[chess.Board], conseq: list,
             out.append(Failure("shelter", m.group(0),
                                f"{'White' if white else 'Black'}'s king keeps its pawn shelter "
                                f"after that move ({start} shield pawns throughout its line)"))
+            continue
+        # 17.h3 (king on d1), qwen: "...while also weakening White's king's
+        # shelter". It shrinks only with White's own free later move (c2-c4
+        # or Kc1) in the line; the facts said so, the sentence blames h3.
+        from .features import _made_later
+        side = "White" if white else "Black"
+        path = [before] + list(conseq)
+        try:
+            later = _made_later(path, f"{side}'s king shelter", before.turn)
+        except (IndexError, AssertionError):
+            later = ""
+        if later:
+            out.append(Failure("shelter", m.group(0),
+                               f"the move itself does not change {side}'s king shelter; it "
+                               f"changes only with a later move by {later} in the line"))
     return out
 
 
@@ -1039,7 +1100,9 @@ def check_sentence(s: str, boards: list, move: Optional[chess.Move] = None,
     out += _check_defences(s, boards)
     out += _check_lost_defence(s, boards, move)
     out += _check_undefended(s, boards, conseq)
-    out += _check_winnable(s, conseq)
+    # "can be captured", "hanging": about the moment, so the position before the
+    # move and right after it, not further along a line where things change
+    out += _check_winnable(s, boards[:1] + conseq[:1])
     out += _check_pins(s, boards)
     out += _check_forks(s, boards)
     out += _check_material(s, boards)
