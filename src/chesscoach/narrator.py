@@ -9,7 +9,7 @@ from typing import Optional
 import chess
 import ollama
 
-from . import config
+from . import config, llm
 from .assessment import compute_assessment
 from .describe import side_name, PIECE_NAMES, describe_move
 from .engine import EngineAnalysis, MaiaPrediction
@@ -221,7 +221,8 @@ def tidy_annotation(text: str, prep: dict) -> str:
 _DEFAULT = object()
 
 
-def call_llm(model: str, messages: list, system=_DEFAULT) -> tuple:
+def call_llm(model: str, messages: list, system=_DEFAULT,
+             max_tokens: Optional[int] = None) -> tuple:
     """
     One chat call with thinking turned off (Qwen3 etc.): we want narration
     of the given facts, not private reasoning. Returns (text, error).
@@ -233,6 +234,15 @@ def call_llm(model: str, messages: list, system=_DEFAULT) -> tuple:
     system = SYSTEM_PROMPT if system is _DEFAULT else system
     full = ([{"role": "system", "content": system}] if system else []) + messages
     first_user = 1 if system else 0
+    if llm.is_online(model):
+        try:
+            resp = llm.chat(model, full, max_tokens=max_tokens)
+        except (llm.LLMError, config.ConfigError) as e:
+            return None, str(e)
+        text = resp["message"]["content"]
+        return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S).strip(), None
+    if max_tokens:
+        options["num_predict"] = max_tokens
     try:
         try:
             resp = ollama.chat(model=model, messages=full, options=options,
@@ -308,6 +318,99 @@ def narrate(model: str, prep: dict) -> dict:
             "first_fails": first_fails, "secs": time.time() - t0}
 
 
+BATCH_HEAD = re.compile(r"^\s*#{2,4}\s*MOVE\s+(\d+)\b[^\n]*$", re.M | re.I)
+
+
+def _batch_prompt(preps: list) -> str:
+    n = len(preps)
+    head = (f"Annotate each of the {n} moves below, separately. Each move has its own facts: "
+            "use only that move's facts for its annotation, and follow every rule for each "
+            f"one. Answer with exactly {n} sections, in order, each starting with a line "
+            "`### MOVE k` (k = 1 to " + str(n) + ") and then that move's annotation in the "
+            "usual format. Write nothing else.\n\n")
+    return head + "\n\n".join(f"### MOVE {k}\n{p['prompt']}" for k, p in enumerate(preps, 1))
+
+
+def _split_batch(text: str, n: int) -> dict:
+    """{k: annotation} from an answer with ### MOVE k sections."""
+    out = {}
+    heads = list(BATCH_HEAD.finditer(text or ""))
+    for j, h in enumerate(heads):
+        k = int(h.group(1))
+        end = heads[j + 1].start() if j + 1 < len(heads) else len(text)
+        body = text[h.end():end].strip()
+        if 1 <= k <= n and body and k not in out:
+            out[k] = body
+    return out
+
+
+def narrate_batch(model: str, preps: list) -> list:
+    """Annotate several moves in one request, for online models with small
+    free quotas: the comments in one call, the checks on each comment as in
+    narrate(), and one more call for all the rewrites they ask for. Then a
+    false claim still left is removed with its sentence. -> narrate()'s
+    results, one per prep."""
+    t0 = time.time()
+    n = len(preps)
+    if not n:
+        return []
+    budget = config.settings.num_predict * n + 200
+    msgs = [{"role": "user", "content": _batch_prompt(preps)}]
+    text, err = call_llm(model, msgs, max_tokens=budget)
+    if err:
+        return [{"text": None, "err": err, "issues": [], "first_issues": 0, "removed": [],
+                 "first_fails": [], "secs": time.time() - t0} for _ in preps]
+    parts = _split_batch(text, n)
+    state = {}
+    for k, prep in enumerate(preps, 1):
+        if k in parts:
+            issues, fails = review_text(parts[k], prep)
+            state[k] = [parts[k], issues, fails, len(issues) + len(fails)]
+    redo = [k for k, st in state.items() if st[3]]
+    if redo:
+        fix = ["Some annotations have problems. Rewrite only these moves, each under its own "
+               "`### MOVE k` line, in the same format, fixing only the problems named. If you "
+               "cannot state a point correctly from that move's facts, leave it out. Do not "
+               "add anything new."]
+        for k in redo:
+            _, issues, fails, _ = state[k]
+            fix.append(f"### MOVE {k}")
+            if issues:
+                fix.append("Rules broken:\n" + "\n".join(f"- {w}" for w in issues))
+            if fails:
+                fix.append("Statements that are false on the board:\n" + correction_text(fails))
+        text2, err2 = call_llm(model, msgs + [{"role": "assistant", "content": text},
+                                              {"role": "user", "content": "\n\n".join(fix)}],
+                               max_tokens=config.settings.num_predict * len(redo) + 200)
+        if not err2:
+            for k, body in _split_batch(text2, n).items():
+                if k in redo:
+                    issues2, fails2 = review_text(body, preps[k - 1])
+                    if len(issues2) + len(fails2) < state[k][3]:
+                        state[k][:3] = [body, issues2, fails2]
+    secs = (time.time() - t0) / n
+    out = []
+    for k, prep in enumerate(preps, 1):
+        if k not in state:
+            out.append({"text": None, "err": "The online model left this move out of its answer.",
+                        "issues": [], "first_issues": 0, "removed": [], "first_fails": [],
+                        "secs": secs})
+            continue
+        body, issues, fails, first = state[k]
+        removed = []
+        if fails:
+            body = remove_failed(body, fails)
+            seen = {}
+            for f in fails:
+                seen.setdefault(f.sentence, f.correction)
+            removed = [f"{s} [{c}]" for s, c in seen.items()]
+            issues = issues + [f"sentence removed, {c}: \"{s}\"" for s, c in seen.items()]
+        out.append({"text": tidy_annotation(body, prep), "err": None, "issues": issues,
+                    "first_issues": first, "removed": removed, "first_fails": [],
+                    "secs": secs})
+    return out
+
+
 class NarratorUnavailable(config.ConfigError):
     """Ollama can't narrate: not running, or the model isn't pulled."""
 
@@ -328,6 +431,12 @@ def check_ollama(model: str) -> None:
     """Fail early, in plain words, when the model can't narrate: before a
     review spends minutes on Stockfish, and again if Ollama goes away in
     the middle. Raises NarratorUnavailable."""
+    if llm.is_online(model):
+        try:
+            llm.check(model)
+        except config.ConfigError as e:
+            raise NarratorUnavailable(str(e)) from None
+        return
     try:
         names = _model_names(ollama.list())
     except Exception as e:
@@ -342,6 +451,8 @@ def check_ollama(model: str) -> None:
 
 def warm_up(model: str):
     """Ask Ollama to load the model and keep it loaded; no text generated."""
+    if llm.is_online(model):
+        return                       # nothing to load: the service has it
     try:
         ollama.chat(model=model, messages=[], keep_alive=config.settings.keep_alive,
                     options={"num_ctx": config.settings.num_ctx})

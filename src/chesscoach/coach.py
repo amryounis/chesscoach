@@ -29,7 +29,7 @@ from typing import Optional
 import chess
 import chess.engine
 
-from . import config
+from . import config, llm
 from .assessment import eval_phrase, win_pct
 from .concepts import _pv_captures, equal_alternative, threat
 from .describe import PIECE_NAMES, describe_move, describe_move_effects, side_name
@@ -315,14 +315,25 @@ def _chat(model: str, messages: list, tools: Optional[list] = None):
     if tools:
         kw["tools"] = tools
     t0 = time.time()
-    try:
-        resp = ollama.chat(think=False, **kw)
-    except TypeError:
-        resp = ollama.chat(**kw)
+    if llm.is_online(model):
+        resp = llm.chat(model, messages, tools=tools)
+    else:
+        try:
+            resp = ollama.chat(think=False, **kw)
+        except TypeError:
+            resp = ollama.chat(**kw)
     get = (resp.get if isinstance(resp, dict) else lambda k, d=None: getattr(resp, k, d))
     CALL_LOG.append((round(time.time() - t0, 1), get("prompt_eval_count", None),
                      get("eval_count", None)))
     return resp
+
+
+def _why(e: Exception, model: str, tools: bool = False) -> str:
+    """The error for the page: an online service's own words, or a hint about Ollama."""
+    if llm.is_online(model) or isinstance(e, (llm.LLMError, config.ConfigError)):
+        return str(e)
+    return (f"{e} (is '{model}' pulled" + (" and does it support tools" if tools else "")
+            + "? run: ollama list)")
 
 
 def _content(resp) -> str:
@@ -524,7 +535,7 @@ def explain(board: chess.Board, model: str, engine, history: str = "") -> Answer
         text = _content(_chat(model, messages))
         text = _grounded(model, messages, text, boards, fixed, ans)
     except Exception as e:
-        ans.error = f"{e} (is '{model}' pulled? run: ollama list)"
+        ans.error = _why(e, model)
         return ans
     m = re.search(r"(\*\*The position\*\*:?\s*)", text)
     if fixed.strip(" .") not in text:
@@ -593,7 +604,7 @@ def ask_agent(board: chess.Board, question: str, model: str, engine,
             text = ("I could not give an answer to that which checks out against the "
                     "board. Try asking it another way, or about one move at a time.")
     except Exception as e:
-        ans.error = f"{e} (is '{model}' pulled and does it support tools? run: ollama list)"
+        ans.error = _why(e, model, tools=True)
         return ans
     ans.text = text
     ans.secs = time.time() - t0
@@ -1013,7 +1024,7 @@ def ask_routed(board: chess.Board, question: str, model: str, engine,
         if fixed:                            # the re-answer can restate it too
             text = text.replace(fixed, "").strip()
     except Exception as e:
-        ans.error = f"{e} (is '{model}' pulled? run: ollama list)"
+        ans.error = _why(e, model)
         return ans
     text = (fixed + " " + text).strip() if fixed else text
     if not text.strip():
@@ -1041,4 +1052,3 @@ def board_from(fen: str = "", pgn_moves: str = "") -> tuple:
         history = chess.Board().variation_san(b.move_stack)
         return b, history
     return chess.Board(fen) if fen else chess.Board(), ""
-

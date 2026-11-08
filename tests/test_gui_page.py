@@ -774,3 +774,43 @@ def test_analyzer_opens_on_the_move_in_review(page, browser):
         other.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "analyzer.png"))
     ctx.close()
     assert errors == [] and page.errors == []
+
+
+def test_settings_choose_an_online_coach(page):
+    from test_llm import FakeService
+    svc = FakeService()
+    try:
+        page.click("#open-settings")
+        assert page.is_checked("input[name=coach_llm][value=ollama]")
+        assert page.is_disabled("#online-key") and page.is_enabled("input[name=model]")
+        page.check("input[name=coach_llm][value=online]")
+        assert page.is_enabled("#online-key") and page.is_disabled("input[name=model]")
+        assert page.input_value("#online-service") == "gemini"
+        assert "aistudio.google.com/apikey" in page.inner_text("#key-page")
+        note = page.inner_text("#online-privacy")
+        assert "people may read it" in note and "never the players' names" in note
+        assert "18" in note
+        page.select_option("#online-service", "custom")
+        page.fill("#online-url", svc.url)
+        page.fill("#online-key", "k-1")
+        page.click("#list-models")
+        page.wait_for_function("document.querySelectorAll('#online-models option').length === 2")
+        # no model chosen: the dialog says so and stays open
+        page.click("#save-settings")
+        page.wait_for_selector("#settings-error:not([hidden])")
+        assert "Choose which" in page.inner_text("#settings-error")
+        assert config.settings.coach_llm == "ollama"               # nothing changed
+        page.fill("#online-model", "gemini-flash-test")
+        if os.environ.get("CC_SHOTS"):
+            page.locator("fieldset.coach-llm").screenshot(
+                path=os.path.join(os.environ["CC_SHOTS"], "coach-online.png"))
+        page.click("#save-settings")
+        page.wait_for_function("!document.getElementById('settings').open")
+        s = config.settings
+        assert (s.coach_llm, s.online_service, s.online_model, s.online_key, s.online_url) == (
+            "online", "custom", "gemini-flash-test", "k-1", svc.url)
+        assert s.online_one_request is True
+        assert 'coach_llm = "online"' in config.user_config_path().read_text()
+        assert page.errors == []
+    finally:
+        svc.server.shutdown()

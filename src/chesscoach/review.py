@@ -17,11 +17,11 @@ import chess
 import chess.engine
 import chess.pgn
 
-from . import config
+from . import config, llm
 from .assessment import compute_assessment, eval_phrase, win_pct
 from .engine import EngineAnalysis, open_maia, run_maia, run_stockfish
 from .moments import moment_context, pick_critical
-from .narrator import check_ollama, narrate, prepare_move, warm_up
+from .narrator import check_ollama, narrate, narrate_batch, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
 from .accuracy import game_accuracy, move_accuracy
 from .classify import classify, stats as move_stats
@@ -195,6 +195,18 @@ def _mate_for(score_mate: Optional[int], white: bool) -> Optional[int]:
     return score_mate if white else -score_mate
 
 
+def _keep(mv, model: str, r: dict) -> None:
+    # An error is never stored as the comment: it would be shown, saved to
+    # the history and practised as the coach's words.
+    if r["err"]:
+        mv.errors[model] = r["err"]
+    else:
+        mv.annotations[model] = r["text"]
+    mv.issues[model] = r["issues"]
+    mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
+                       "removed": len(r.get("removed", []))}
+
+
 def load_game(pgn_path: str) -> chess.pgn.Game:
     with open(pgn_path, encoding="utf-8") as f:
         game = chess.pgn.read_game(f)
@@ -207,7 +219,9 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
                 every_move: bool = False, progress: Optional[Progress] = None,
                 should_stop: Optional[Callable[[], bool]] = None,
                 on_prompt: Optional[Callable[[str], None]] = None) -> GameReview:
-    models = models or [config.settings.model]
+    models = models or [llm.active_model()]
+    llm.keep_private(*(game.headers.get(t, "") for t in ("White", "Black", "Event", "Site",
+                                                         "Annotator")))
     progress = progress or (lambda *a: None)
     stop = should_stop or (lambda: False)
     t_start = time.time()
@@ -341,11 +355,15 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         # (also for how hard each error's better move was to find)
         concept_sf = (chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
                       if todo else None)
+        # Online models with small free quotas get every comment in one request.
+        batched = {model: [] for model in models if llm.one_request(model)}
         for k, i in enumerate(todo):
             if stop():
                 raise Cancelled()
             mv = review.moves[i]
-            progress("narrate", k, len(todo), f"Writing comment on {mv.move_label}", {"ply": i})
+            progress("narrate", k, len(todo),
+                     f"Gathering the facts for {mv.move_label}" if len(batched) == len(models)
+                     else f"Writing comment on {mv.move_label}", {"ply": i})
             maia = run_maia(boards[i], engine=maia_engine) if maia_engine else None
             note, prefix, focus = moment_context(i, picks[i], boards, moves, labels, book,
                                                 theory=theory)
@@ -369,18 +387,20 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
             if on_prompt:
                 on_prompt(prep["prompt"])
             for model in models:
+                if model in batched:
+                    batched[model].append((mv, prep))
+                    continue
                 r = narrate(model, prep)
                 if r["err"]:
                     check_ollama(model)     # Ollama went away mid-review: stop, say so
-                # An error is never stored as the comment: it would be shown,
-                # saved to the history and practised as the coach's words.
-                if r["err"]:
-                    mv.errors[model] = r["err"]
-                else:
-                    mv.annotations[model] = r["text"]
-                mv.issues[model] = r["issues"]
-                mv.stats[model] = {"secs": r["secs"], "first_issues": r["first_issues"],
-                                   "removed": len(r.get("removed", []))}
+                _keep(mv, model, r)
+        for model, items in batched.items():
+            if not items or stop():
+                continue
+            progress("narrate", 0, len(todo),
+                     f"Writing {len(items)} comments in one request to {llm.label(model)}", {})
+            for (mv, _), r in zip(items, narrate_batch(model, [p for _, p in items])):
+                _keep(mv, model, r)
         progress("narrate", len(todo), len(todo), "Done", {})
         timing["comments"] = round(time.time() - t_narrate, 1)
     finally:

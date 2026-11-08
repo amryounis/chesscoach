@@ -35,6 +35,9 @@ class ConfigError(Exception):
     """A required setting is missing or points nowhere."""
 
 
+SECRETS = ("lichess_token", "online_key")   # never printed, and kept out of the file when from the environment
+
+
 @dataclass
 class Settings:
     stockfish_path: str = ""          # Stockfish executable
@@ -42,6 +45,12 @@ class Settings:
     player_elo: int = 1500            # your rating: Maia predicts at this level
     player_name: str = "Player"       # your name in saved games
     model: str = "qwen3:14b"          # Ollama model that narrates
+    coach_llm: str = "ollama"         # who writes the coach's words: "ollama" (this computer) or "online"
+    online_service: str = "gemini"    # gemini, openai, groq, openrouter or custom (see llm.py)
+    online_url: str = ""              # the service's address; "" = the usual one for online_service
+    online_model: str = ""            # e.g. a Gemini Flash model: Settings' "List models" shows them
+    online_key: str = ""              # your API key for it (or CHESSCOACH_ONLINE_KEY)
+    online_one_request: bool = True   # a review's comments in one request (free quotas are small)
     depth: int = 18                   # Stockfish search depth
     max_seconds: float = 10.0         # cap per position: stop there even if the depth isn't reached
     multipv: int = 3                  # lines analysed per position
@@ -173,6 +182,23 @@ book_path = "{book}"
 # Ollama model that writes the annotations
 model = "qwen3:14b"
 
+# Who writes the coach's words: "ollama" (on this computer: nothing leaves
+# it) or "online": a service that speaks the OpenAI chat API, with your own
+# key. online_service: "gemini" (Google; a free key at aistudio.google.com),
+# "openai", "groq", "openrouter", or "custom" with online_url. On Google's
+# free tier Google may use what is sent and people may read it; chesscoach
+# sends positions, moves and facts, never the players' names. The words are
+# checked on the board the same way whichever model writes them.
+coach_llm = "ollama"
+online_service = "gemini"
+online_url = ""
+online_model = ""
+# Your key (or set CHESSCOACH_ONLINE_KEY instead of writing it here)
+online_key = ""
+# Ask for all of a review's comments in one request (free quotas allow only
+# tens of requests a day); false = one request per comment.
+online_one_request = true
+
 # Stockfish depth and number of lines per position
 depth = 18
 multipv = 3
@@ -255,7 +281,8 @@ def save_settings(s: Settings, path: Optional[Path] = None) -> Path:
             continue
         v = getattr(s, f.name)
         # a token from the environment stays there: never copied into the file
-        if f.name == "lichess_token" and v and v == os.environ.get("CHESSCOACH_LICHESS_TOKEN"):
+        if f.name in SECRETS and v \
+                and v == os.environ.get(f"CHESSCOACH_{f.name.upper()}"):
             v = ""
         if isinstance(v, bool):
             v = "true" if v else "false"

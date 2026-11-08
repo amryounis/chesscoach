@@ -1663,13 +1663,42 @@ $("review-played").addEventListener("click", async () => {
 
 const SETTINGS_FIELDS = ["stockfish_path", "book_path", "maia_cmd", "model", "player_name", "player_elo", "depth",
                          "comment_language", "library_dir", "max_seconds", "blunder_alert", "lichess_token",
-                         "theme"];
-const SETTINGS_CHECKS = ["autosave", "start_maximized"];
+                         "theme", "coach_llm", "online_service", "online_url", "online_model", "online_key"];
+const SETTINGS_CHECKS = ["autosave", "start_maximized", "online_one_request"];
+
+// Who writes the coach's words: Ollama here, or an online model with the user's key.
+let SERVICES = {};
+function coachLlm() {
+  const f = $("settings-form");
+  const online = f.elements.coach_llm.value === "online";
+  $("online-fields").classList.toggle("off", !online);
+  $("ollama-fields").classList.toggle("off", online);
+  for (const el of $("online-fields").querySelectorAll("input, select, button")) el.disabled = !online;
+  f.elements.model.disabled = online;
+  const svc = SERVICES[$("online-service").value] || {};
+  $("online-url").placeholder = svc.url || "https://…/v1";
+  $("key-page").textContent = svc.key_page ? `(get one at ${svc.key_page})` : "";
+  $("online-privacy").textContent = svc.privacy || "";
+}
+for (const el of document.querySelectorAll('#settings-form input[name="coach_llm"]')) el.addEventListener("change", coachLlm);
+$("online-service").addEventListener("change", () => { $("online-models").innerHTML = ""; coachLlm(); });
+$("list-models").addEventListener("click", async () => {
+  const res = await call("list_online_models", $("online-service").value, $("online-url").value.trim(),
+                         $("online-key").value.trim());
+  if (!res) return;
+  $("online-models").innerHTML = res.models.map((m) => `<option value="${esc(m)}">`).join("");
+  toast(res.models.length ? `${res.models.length} models: click the Model box to choose one.`
+    : "The service listed no models for this key.", 5000);
+  $("online-model").focus();
+});
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
   if (!s) return;
   settingsCache = s;
   const f = $("settings-form");
+  SERVICES = s.online_services || {};
+  $("online-service").innerHTML = Object.entries(SERVICES)
+    .map(([k, v]) => `<option value="${esc(k)}">${esc(v.name)}</option>`).join("");
   for (const k of SETTINGS_FIELDS) {
     const el = f.elements[k], v = String(s[k] ?? "");
     // a value set in the config file that the list doesn't offer: keep it
@@ -1677,6 +1706,7 @@ $("open-settings").addEventListener("click", async () => {
     el.value = v;
   }
   for (const k of SETTINGS_CHECKS) f.elements[k].checked = !!s[k];
+  coachLlm();
   $("settings-file").textContent = `Saved to ${s.config_file}`;
   $("settings-error").hidden = true;
   $("settings").showModal();
@@ -1706,7 +1736,7 @@ $("settings-form").addEventListener("submit", async (e) => {
   if (e.submitter && e.submitter.value === "cancel") return;   // let the dialog close
   e.preventDefault();
   const f = e.target;
-  const values = Object.fromEntries(SETTINGS_FIELDS.map((k) => [k, f.elements[k].value.trim()]));
+  const values = Object.fromEntries(SETTINGS_FIELDS.map((k) => [k, String(f.elements[k].value || "").trim()]));
   for (const k of SETTINGS_CHECKS) values[k] = f.elements[k].checked;
   const res = await api().save_settings(values);
   if (res.error) {

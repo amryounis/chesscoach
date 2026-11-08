@@ -750,3 +750,11 @@ dialog.wide { width: min(980px, 94vw); }
 
 .import-bar label.check { flex-direction: row; align-items: center; gap: 4px; }
 .speak-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+fieldset.coach-llm { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px 8px; margin: 4px 0; }
+fieldset.coach-llm legend { padding: 0 4px; }
+fieldset.coach-llm .sub { margin-left: 22px; }
+fieldset.coach-llm .off { opacity: .45; }
+fieldset.coach-llm .row button { align-self: end; }
+fieldset.coach-llm .hint { color: var(--muted); font-size: 12px; }
+fieldset.coach-llm .note { color: var(--muted); font-size: 12px; margin: 4px 0 0; line-height: 1.35; }

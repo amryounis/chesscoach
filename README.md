@@ -5,7 +5,10 @@ book does: few comments, on the moments that matter, in plain language.
 
 Everything runs on your own machine. No internet, no accounts; the
 exceptions are optional and only when you ask: the opening explorer can ask
-Lichess, and Import downloads your own games from Lichess or Chess.com.
+Lichess, Import downloads your own games from Lichess or Chess.com, and,
+if you have no GPU for a local model, the coach's words can come from an
+online model with your own key (Google Gemini has a free one), checked on
+the board exactly as the local model's are.
 
 ## Features
 
@@ -76,6 +79,13 @@ Lichess, and Import downloads your own games from Lichess or Chess.com.
   control, the Evolution graph (Lu, Wang, Lin 2014), the ChessY positional
   measures, and any UCI engine you add
 
+**Who writes the coach's words**
+- Ollama on this computer (the default: nothing leaves it), or an online
+  model with your own key: Google Gemini (free key), OpenAI, Groq,
+  OpenRouter or any OpenAI-compatible service. Its words go through the
+  same board checks; a review's comments come in one request, so a free
+  quota lasts; players' names are never sent
+
 **The app**
 - Looks: as Windows is set, Classic, Night, or Parchment (a study book)
 - Opens maximized (or centred, if you prefer)
@@ -143,7 +153,8 @@ every comment.
 - Python 3.10+
 - [Stockfish](https://stockfishchess.org/download/)
 - [Ollama](https://ollama.com) with a model pulled, e.g. `ollama pull qwen3:14b`
-  (fits a 12 GB GPU; smaller 7–8B models invent noticeably more)
+  (fits a 12 GB GPU; smaller 7–8B models invent noticeably more), **or** a key
+  for an online model (see [An online model instead of Ollama](#an-online-model-instead-of-ollama))
 - Optional: [Maia 3](https://github.com/CSSLab/maia3) for human-move prediction
 - Optional: a Polyglot opening book (`.bin`), so opening theory is skipped
 
@@ -169,6 +180,47 @@ chesscoach config            # shows the settings in effect
 Set at least `stockfish_path`. Settings can also come from environment
 variables (`CHESSCOACH_STOCKFISH_PATH`, `CHESSCOACH_MODEL`, …) or flags
 (`--stockfish`, `--book`, `--model`, `--depth`).
+
+## An online model instead of Ollama
+
+For a computer without a GPU that runs a 14B model. The engine work, the
+facts and the checks stay on your machine; only the writing is done online.
+
+1. Get a key. Google Gemini has a free one: [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+2. Settings → *Who writes the coach's words* → **An online model** →
+   Service *Google Gemini* → paste the key → **List models** → pick a Flash
+   or Flash-Lite model → Save.
+
+(Or in the config file: `coach_llm = "online"`, `online_service = "gemini"`,
+`online_model = "…"`, and the key in `online_key` or the environment variable
+`CHESSCOACH_ONLINE_KEY`, which is never copied into the file.)
+
+What to know:
+
+- **The checks are the same.** The online model gets the facts code worked
+  out, and every sentence it writes is checked on the board, rewritten once
+  or removed, exactly as with Ollama. A bigger model writes better; it is
+  not trusted more.
+- **Quota.** Free keys allow few requests (Gemini's free Flash models: about
+  20 a day, Flash-Lite a few hundred, as of late 2026). So a review asks for
+  all its comments in **one request**, plus at most one more for the
+  rewrites the checks ask for; Explain this position and Ask the coach use
+  one or two each. When the quota is used up the review still finishes (marks,
+  accuracy, facts) and says so where the comments would be; switch to Ollama
+  or try the next day (Gemini's quota restarts at midnight, US Pacific time).
+- **Privacy.** chesscoach sends positions, moves and the engine's facts,
+  never the players' names, events or dates. On Google's **free** tier,
+  Google may use what is sent to improve its products and people may read it;
+  a paid key is not used that way. Google's API is for people aged 18 and
+  over, and in the EU, the UK and Switzerland only a paid key may be used.
+- Other services: OpenAI, Groq, OpenRouter, or *Other* with the address of
+  any OpenAI-compatible service (LM Studio on your own machine works too).
+- From the command line, an online model is named `online:<model>`:
+  `chesscoach review game.pgn -m online:<model>`, and it can be measured
+  against the answer keys next to a local one:
+  `chesscoach eval -m qwen3:14b -m online:<model> --mode pipeline --runs 1`
+  (one or two requests per key and run: on a free Flash key use `--runs 1`,
+  or a Flash-Lite model).
 
 ## Use the desktop app
 

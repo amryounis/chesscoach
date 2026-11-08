@@ -13,14 +13,14 @@ from __future__ import annotations
 import os
 import threading
 import traceback
-from dataclasses import asdict, fields
+from dataclasses import asdict, fields, replace
 from typing import Optional
 
 import chess
 import chess.engine
 import chess.pgn
 
-from .. import __version__, config
+from .. import __version__, config, llm
 from ..play import PlayGame, preview_opponent, random_color
 from ..review import Cancelled, review_game, write_markdown
 
@@ -161,15 +161,36 @@ class Api:
         s["config_file"] = str(config.user_config_path())
         s["my_names"] = config.my_names()
         s["version"] = __version__
+        s["online_services"] = {k: {"name": name, "url": url, "key_page": llm.KEY_PAGES.get(k, ""),
+                                    "privacy": llm.privacy_note(k)}
+                                for k, (name, url) in llm.SERVICES.items()}
+        s["coach_model"] = llm.label(llm.active_model())
         return s
+
+    @_safe
+    def list_online_models(self, service: str, url: str = "", key: str = "") -> dict:
+        """What the online service offers this key (Settings' 'List models')."""
+        try:
+            return {"models": llm.list_models(service, url, key)}
+        except llm.LLMError as e:
+            raise ValueError(str(e)) from None
 
     @_safe
     def save_settings(self, values: dict) -> dict:
         self._not_while_reviewing("changing the settings")
         s = config.settings
+        new = replace(s)
         for f in fields(config.Settings):
             if f.name in values and f.name != "source":
-                setattr(s, f.name, config._coerce(f.name, values[f.name]))
+                setattr(new, f.name, config._coerce(f.name, values[f.name]))
+        if new.coach_llm == "online":           # say what is missing now, not at the review
+            config.settings = new
+            try:
+                llm.check(llm.active_model())
+            finally:
+                config.settings = s
+        for f in fields(config.Settings):
+            setattr(s, f.name, getattr(new, f.name))
         path = config.save_settings(s)
         s.source = str(path)
         return self.get_settings()
@@ -440,7 +461,7 @@ class Api:
             self._coach_lock.release()
         if a.error:
             from ..narrator import check_ollama
-            check_ollama(config.settings.model)    # the plain reason, when it's Ollama
+            check_ollama(llm.active_model())    # the plain reason, when it's Ollama
             raise ValueError(a.error)
         return {"text": a.text, "removed": a.removed, "secs": round(a.secs, 1),
                 "tools": [n for n, _ in a.tool_calls], "facts": a.facts}
@@ -449,7 +470,8 @@ class Api:
     def explain_position(self, ply: int) -> dict:
         from .. import coach
         board, history = self._position(ply)
-        model = config.settings.model
+        model = llm.active_model()
+        self._names_private()
         return self._coach(lambda e: coach.explain(board, model, e, history))
 
     @_safe
@@ -459,9 +481,15 @@ class Api:
         if not question:
             raise ValueError("Type a question first.")
         board, history = self._position(ply)
-        model = config.settings.model
+        model = llm.active_model()
+        self._names_private()
         me = self._my_color()
         return self._coach(lambda e: coach.ask(board, question[:300], model, e, history, me=me))
+
+    def _names_private(self) -> None:
+        """Never send the open game's names to an online model."""
+        if self._game is not None:
+            llm.keep_private(*(self._game.headers.get(t, "") for t in ("White", "Black", "Event")))
 
     def _my_color(self) -> Optional[bool]:
         """The player's colour in the open game: the reviewed side, else the
@@ -490,7 +518,7 @@ class Api:
             raise ValueError("A review is already running.")
         config.settings.require_stockfish()
         from ..narrator import check_ollama
-        check_ollama(config.settings.model)     # say so now, not after the engine pass
+        check_ollama(llm.active_model())     # say so now, not after the engine pass
         self._cancel.clear()
         self._set_status(state="running", stage="engine", done=0, total=1,
                          message="Starting")
@@ -511,7 +539,7 @@ class Api:
 
         def run():
             try:
-                r = review_game(game, side, [config.settings.model], every_move,
+                r = review_game(game, side, [llm.active_model()], every_move,
                                 progress=progress, should_stop=self._cancel.is_set)
                 if self._game_key != key:             # cannot happen while switching is
                     raise Cancelled()                  # blocked; never show it on another game

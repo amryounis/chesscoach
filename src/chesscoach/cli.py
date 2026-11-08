@@ -6,7 +6,7 @@ import argparse
 import sys
 from dataclasses import fields
 
-from . import __version__, config
+from . import __version__, config, llm
 
 
 def _common(p: argparse.ArgumentParser) -> None:
@@ -186,7 +186,7 @@ def main(argv=None) -> int:
         config.settings = config.load_settings(
             args.config, stockfish_path=args.stockfish_path,
             book_path=args.book_path, maia_cmd=args.maia_cmd, depth=args.depth)
-        models = args.models or [config.settings.model]
+        models = args.models or [llm.active_model()]
 
         if args.command == "config":
             if args.init:
@@ -199,7 +199,10 @@ def main(argv=None) -> int:
             print(f"User config file: {config.user_config_path()}")
             for f in fields(config.Settings):
                 if f.name != "source":
-                    print(f"  {f.name:<15} {getattr(config.settings, f.name)!r}")
+                    v = getattr(config.settings, f.name)
+                    if f.name in config.SECRETS and v:
+                        v = f"(set, {len(v)} characters)"     # never printed
+                    print(f"  {f.name:<15} {v!r}")
             return 0
 
         if args.command in ("explain", "ask"):

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.27.0 — unreleased
+
+- **An online model instead of Ollama, with your own key**, for computers
+  without a GPU for a 14B model: Settings → *Who writes the coach's words*.
+  Google Gemini (a free key from Google AI Studio), OpenAI, Groq,
+  OpenRouter, or any OpenAI-compatible address; *List models* shows what
+  the key can use. Ollama stays the default, and nothing leaves the
+  computer unless the online model is chosen
+- The online model's words go through the same board checks, rewrite
+  request and sentence removal as Ollama's
+- **One request per review**: all of a review's comments are asked for in
+  one request, and at most one more for the rewrites the checks ask for,
+  so a free quota (Gemini Flash: about 20 requests a day) lasts. When the
+  quota runs out, the review still finishes and says so where the comments
+  would be
+- Players' names, events and dates are never sent (the prompts are built
+  without them, and names chesscoach knows are blanked out as a second
+  guard). Settings shows what the service may do with what is sent (on
+  Google's free tier: used to improve its products, and may be read)
+- The key can come from `CHESSCOACH_ONLINE_KEY` and is then never written
+  to the config file
+- `chesscoach review` and `chesscoach eval` take `-m online:<model>`, so an
+  online model can be measured on the answer keys next to a local one
+
 ## 0.26.0 — unreleased
 
 - **Advanced analysis.** An Analyzer button under the board opens

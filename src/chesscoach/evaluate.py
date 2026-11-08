@@ -582,6 +582,14 @@ def installed_models() -> list:
 
 def check_models(models: list) -> None:
     """Fail before a long run, not after it, when a model name is wrong."""
+    from . import llm
+    for m in models:
+        if llm.is_online(m):
+            try:
+                llm.check(m)
+            except config.ConfigError as e:
+                raise ValueError(str(e)) from None
+    models = [m for m in models if not llm.is_online(m)]
     if not models:
         return
     try:

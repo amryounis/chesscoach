@@ -358,7 +358,28 @@
     <label>Stockfish executable <input name="stockfish_path" required></label>
     <label>Opening book (.bin) <input name="book_path" placeholder="optional"></label>
     <label>Maia command <input name="maia_cmd"></label>
-    <label>Narrator model (Ollama) <input name="model"></label>
+    <fieldset class="coach-llm">
+      <legend>Who writes the coach's words</legend>
+      <label class="check"><input type="radio" name="coach_llm" value="ollama"> Ollama on this computer: nothing leaves it</label>
+      <label class="sub" id="ollama-fields">Ollama model <input name="model"></label>
+      <label class="check"><input type="radio" name="coach_llm" value="online"> An online model, with your own key</label>
+      <div class="sub" id="online-fields">
+        <div class="row">
+          <label>Service <select name="online_service" id="online-service"></select></label>
+          <label>Address <input name="online_url" id="online-url" placeholder="the usual one" spellcheck="false"></label>
+        </div>
+        <label>Key <span class="hint" id="key-page"></span>
+          <input name="online_key" id="online-key" type="password" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="row">
+          <label>Model <input name="online_model" id="online-model" list="online-models" spellcheck="false" placeholder="List models shows what your key can use"></label>
+          <button type="button" id="list-models">List models</button>
+        </div>
+        <datalist id="online-models"></datalist>
+        <label class="check"><input type="checkbox" name="online_one_request"> A review's comments in one request (free quotas allow only a few requests a day)</label>
+        <p class="note" id="online-privacy"></p>
+      </div>
+    </fieldset>
     <div class="row">
       <label>Your name <input name="player_name"></label>
       <label>Your rating <input name="player_elo" type="number" min="400" max="3000" step="50"></label>
