@@ -339,7 +339,8 @@ def _why(e: Exception, model: str, tools: bool = False) -> str:
 def _content(resp) -> str:
     msg = resp["message"] if isinstance(resp, dict) else resp.message
     text = msg["content"] if isinstance(msg, dict) else (msg.content or "")
-    return re.sub(r"<think>.*?</think>\s*", "", text or "", flags=re.S).strip()
+    from .narrator import strip_echo
+    return strip_echo(re.sub(r"<think>.*?</think>\s*", "", text or "", flags=re.S))
 
 
 def _tool_calls(resp) -> list:

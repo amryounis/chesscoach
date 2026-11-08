@@ -220,6 +220,21 @@ def tidy_annotation(text: str, prep: dict) -> str:
 
 _DEFAULT = object()
 
+# The answer templates say: The first sentence is already written: "..." Do
+# NOT repeat it. Some models (Gemini Flash-Lite) copy that line as it is.
+# The quoted sentence stays (it is the code-written one), the instruction goes.
+_ECHO = re.compile(
+    r'The first sentence(?: of the answer)? is already written:\s*"([^"]*)"\s*'
+    r'(?:Do not repeat it and do not contradict it[;.]?|Do NOT repeat it\.?)?\s*'
+    r'(?:(?:Write only 1-2 sentences|explain WHY)[^\n]*?(?:\.(?=\s|$)|$))?', re.I)
+
+
+def strip_echo(text: str) -> str:
+    """Take an instruction the model copied from the template out of its answer."""
+    out = _ECHO.sub(lambda m: m.group(1).strip() + " ", text or "")
+    return out.replace("  ", " ").replace(" \n", "\n").strip()
+
+
 
 def call_llm(model: str, messages: list, system=_DEFAULT,
              max_tokens: Optional[int] = None) -> tuple:
@@ -240,7 +255,7 @@ def call_llm(model: str, messages: list, system=_DEFAULT,
         except (llm.LLMError, config.ConfigError) as e:
             return None, str(e)
         text = resp["message"]["content"]
-        return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S).strip(), None
+        return strip_echo(re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S)), None
     if max_tokens:
         options["num_predict"] = max_tokens
     try:
@@ -255,7 +270,7 @@ def call_llm(model: str, messages: list, system=_DEFAULT,
             full[first_user]["content"] = "/no_think\n" + full[first_user]["content"]
             resp = ollama.chat(model=model, messages=full, options=options)
         text = resp["message"]["content"]
-        return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S).strip(), None
+        return strip_echo(re.sub(r"<think>.*?</think>\s*", "", text, flags=re.S)), None
     except Exception as e:
         return None, f"{e} (is '{model}' pulled? run: ollama list)"
 
@@ -327,7 +342,8 @@ def _batch_prompt(preps: list) -> str:
             "use only that move's facts for its annotation, and follow every rule for each "
             f"one. Answer with exactly {n} sections, in order, each starting with a line "
             "`### MOVE k` (k = 1 to " + str(n) + ") and then that move's annotation in the "
-            "usual format. Write nothing else.\n\n")
+            "usual format. Write nothing else, and do not copy these instructions or the "
+            "format's instructions into your answer.\n\n")
     return head + "\n\n".join(f"### MOVE {k}\n{p['prompt']}" for k, p in enumerate(preps, 1))
 
 

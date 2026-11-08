@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.1 — unreleased
+
+- Some models (Gemini Flash-Lite in a real review) copied an instruction
+  from the answer template into their comments: *The first sentence is
+  already written: "…" Do NOT repeat it.* Every answer, from Ollama or an
+  online model, now has such a copied instruction taken out before it is
+  checked; the code-written sentence it quoted stays, once
+
 ## 0.27.0 — unreleased
 
 - **An online model instead of Ollama, with your own key**, for computers

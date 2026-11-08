@@ -254,3 +254,42 @@ def test_an_answer_cut_off_by_thinking_is_said_plainly(service):
                                                    "finish_reason": "length"}]})
     with pytest.raises(llm.LLMError, match="ran out of room.*Flash-Lite"):
         llm.chat("online:gemini-flash-test", [{"role": "user", "content": "?"}])
+
+
+
+@pytest.mark.parametrize("raw,want", [
+    # what Gemini Flash-Lite wrote in a real review (0.27.0)
+    ('The first sentence is already written: "White captures Black\'s bishop on d1 with the king '
+     'from c1." Recapturing with the king costs material.',
+     "White captures Black's bishop on d1 with the king from c1. Recapturing with the king costs "
+     "material."),
+    ('The first sentence is already written: "White moves the bishop from c1 to e3." Do NOT repeat '
+     'it. White develops the bishop.', "White moves the bishop from c1 to e3. White develops the bishop."),
+    ('The first sentence is already written: "X moves." Do NOT repeat it. Write only 1-2 sentences '
+     'explaining WHY the move earned this label, using WHAT THE MOVE DID. The pawn is weak.',
+     "X moves. The pawn is weak."),
+    ('The first sentence of the answer is already written: "Nf3 is best." Do not repeat it and do '
+     'not contradict it; explain WHY, from the results.\nIt develops.', "Nf3 is best.\nIt develops."),
+    ('A comment with "quotes" stays as it is.', 'A comment with "quotes" stays as it is.'),
+])
+def test_an_instruction_copied_from_the_template_is_taken_out(raw, want):
+    assert narrator.strip_echo(raw) == want
+
+
+def test_a_review_whose_model_copies_the_template_reads_cleanly(service):
+    def answer(body):
+        ks = _sections(body) or [int(k) for k in re.findall(r"^### MOVE (\d+)",
+                                                             body["messages"][-1]["content"], re.M)]
+        prompts = body["messages"][-1]["content"]
+        fixed = re.findall(r'already written: "([^"]*)"', prompts)
+        return 200, reply("\n\n".join(
+            f'### MOVE {k}\n**Assessment**: x\n**What happened**: The first sentence is already '
+            f'written: "{fixed[k - 1]}" Do NOT repeat it. A reason for move {k}.' for k in ks))
+    service.answer = answer
+    r = review_game(chess.pgn.read_game(io.StringIO(TRAP)), "both")
+    moments = [m for m in r.moves if m.reason]
+    for m in moments:
+        text = m.annotations["online:gemini-flash-test"]
+        assert "already written" not in text and "repeat" not in text, text
+        happened = text.split("**What happened**: ")[1].split("\n")[0]
+        assert happened.count(m.san) <= 2 and "A reason for move" in happened
