@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.27.2 — unreleased
+
+Three fixes found by reviewing one game (youamer vs HYPEMAXIMALIST) with
+both qwen3:14b and Gemini and checking every claim on the board. They apply
+to every model.
+
+- **A change in the pawns made later is no longer blamed on the move.**
+  The summary said "17. h3 weakened White's king's pawn shelter", and both
+  models built on it; but an h-pawn doesn't shelter a king on d1: the
+  shelter changes only with White's own c2-c4 (or Kc1) further along the
+  engine's line. A difference in the king's shelter, open files next to the
+  king, or isolated, doubled or passed pawns now counts as the move's doing
+  only when the move itself made it, the opponent's answer did, or a forced
+  reply did (a recapture, an answer to check: 8...Bg4 hxg6 fxg6 still counts).
+  Otherwise the coach is told it comes from a later move in the line, and
+  the summary leaves it out
+- **The check no longer removes true sentences about a moved piece.**
+  "Black moves the knight from a4 to c5, attacking the bishop on b3" was
+  removed twice from qwen's comments because the check looked for the attack
+  from a4. A piece moved somewhere ("from a4 to c5, attacking / defending
+  ...") is now judged from where it goes
+- **"Can be captured" is checked.** "The bishop is left undefended and can
+  be captured" (22...Bxe5, both models) was false: dxe5 is met by Rxd2, the
+  pawn is pinned to the queen. A claim that a piece can be captured, taken
+  or won now has to win material once the captures that follow are played
+  out; otherwise its sentence is rewritten or removed
+
 ## 0.27.1 — unreleased
 
 - Some models (Gemini Flash-Lite in a real review) copied an instruction

@@ -261,3 +261,25 @@ def test_errors_in_plain_sight_and_hard_to_see_are_named():
     assert verify(review) == []
     moves[1]["difficulty"] = {"level": "deep"}                     # the stored fact changed
     assert any("not stored as 'plain'" in p for p in verify(review))
+
+
+def test_a_shelter_change_made_later_by_the_same_side_is_not_the_moves_doing():
+    """17.h3 (youamer vs HYPEMAXIMALIST): the summary said 'weakened White's
+    king's pawn shelter'; the shelter changes only with White's own later
+    c2-c4 in the engine's line. An h-pawn doesn't shelter a king on d1."""
+    from chesscoach.engine import EngineAnalysis
+    from chesscoach.features import line_diff
+    from chesscoach.themes import move_themes
+    b = chess.Board("r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B3/1PPQ2PP/3K3R w - - 1 17")
+    m = b.parse_san("h3")
+    eb = EngineAnalysis(score_cp=150, best_move="Nc5",
+                        best_line=["Nc5", "Qc6", "d5", "Qe8", "Re1", "Nxd5"])
+    ea = EngineAnalysis(score_cp=-100, best_move="Nxa4", best_line=["Nxa4", "c4", "f5", "Nc5"])
+    diffs = line_diff(b, m, eb, ea)
+    shelter = [d for d in diffs if d.key == "White's king shelter"]
+    assert shelter and not shelter[0].caused and shelter[0].later == "White"
+    assert "later move by White in the line" in shelter[0].line()
+    tags = [t.tag for t in move_themes(0, "17. h3", "Mistake", b, m, "Nc5", None, diffs, ea, 68.0)]
+    assert "king_shelter" not in tags
+    # material lost to the opponent's reply is still the move's doing
+    assert [d.caused for d in diffs if d.key == "material"] == [True]

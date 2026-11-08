@@ -471,12 +471,19 @@ class Difference:
     played: str              # value after the player's move, as text
     engine: str              # value after the engine's choice
     favours: str             # "engine" | "player" | "other"
-    caused: bool = True      # False: already so before the move
+    caused: bool = True      # False: already so before the move, or made later (see `later`)
+    later: str = ""          # who made it later in the line ("White"), when the move itself didn't
 
     def line(self) -> str:
         out = (f"  - {self.key}: after the player's move → {self.played}; "
                f"after the engine's choice → {self.engine}")
-        if not self.caused:
+        if self.later:
+            # 17.h3 (king on d1): the shelter is lost to White's own c2-c4
+            # further along the line, not to h3. Said so, or the model (and
+            # the summary) blamed h3 for it.
+            out += (f" (this comes from a later move by {self.later} in the line, "
+                    "not from the player's move itself)")
+        elif not self.caused:
             # e.g. Black's doubled c-pawns before 12...Kxf7: the move did not
             # create them, the engine's line gets rid of them. Without this
             # the model read the line as 'the move created doubled pawns'.
@@ -503,6 +510,7 @@ def line_diff(board_before: chess.Board, played: chess.Move,
         isn't counted in the middle of a trade."""
         b = start.copy()
         b.push(first)
+        seen.append(b.copy())
         for san in cont:
             done = len(b.move_stack) - len(start.move_stack)
             last = b.peek()
@@ -516,13 +524,17 @@ def line_diff(board_before: chess.Board, played: chess.Move,
                 b.push_san(san)
             except ValueError:
                 break
+            seen.append(b.copy())
         return b
 
     try:
         best_mv = board_before.parse_san(best_san)
     except ValueError:
         return []
+    seen: list = []
     yours = walk(board_before, played, eng_after.best_line)
+    path = [board_before] + seen              # the played line, position by position
+    seen = []
     # eng_before.best_line starts with the best move itself
     engines = walk(board_before, best_mv, eng_before.best_line[1:])
     a, b = snapshot(yours, me), snapshot(engines, me)
@@ -534,12 +546,45 @@ def line_diff(board_before: chess.Board, played: chess.Move,
             continue
         (ta, na, d), (tb, nb, _) = a[key], b[key]
         fav = "player" if na * d > nb * d else "engine" if nb * d > na * d else "other"
-        out.append(Difference(key, ta, tb, fav, caused=before[key][0] != ta))
+        caused = before[key][0] != ta
+        later = ""
+        if caused and key != "material":
+            later = _made_later(path, key, me)
+            caused = not later
+        out.append(Difference(key, ta, tb, fav, caused=caused, later=later))
     (ma, _), (mb, _) = a["_mobility"], b["_mobility"]
     if abs(ma - mb) >= 6:
         out.append(Difference(f"{side_name(me)}'s number of legal moves", str(ma), str(mb),
                               "player" if ma > mb else "engine"))
     return out
+
+
+def _made_later(path: list, key: str, me: bool) -> str:
+    """For a difference in the pawns or the kings (not material): which
+    moves along the played line changed it. The move itself, the opponent's
+    answers, and the mover's forced replies (a capture or recapture, an
+    answer to check, the only legal move: 8...Bg4 hxg6 fxg6) count as the
+    move's doing. When only the mover's own free, quiet later moves changed
+    it (17.h3 Nxa4 c4: c2-c4 strips the king on d1), -> the mover's name: it
+    came later, by choice. Else ""."""
+    snaps = [snapshot(b, me)[key][0] for b in path]
+    by = set()
+    for k in range(1, len(snaps)):
+        if snaps[k] == snaps[k - 1]:
+            continue
+        # path[k] is after move k; move 1 is the played move
+        if k == 1:
+            by.add("move")
+        elif k % 2 == 0:
+            by.add("opponent")
+        else:
+            prev, mv = path[k - 1], path[k].peek()
+            forced = (prev.is_capture(mv) or prev.is_check()
+                      or prev.legal_moves.count() == 1)
+            by.add("forced" if forced else "mover")
+    if by and by <= {"mover"}:
+        return side_name(me)
+    return ""
 
 
 def compare_lines(board_before: chess.Board, played: chess.Move,

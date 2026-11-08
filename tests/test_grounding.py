@@ -626,3 +626,45 @@ def test_the_move_gets_credit_only_for_what_it_did():
         x.push_san(san); line.append(x.copy())
     assert _check_opens_file("The move opens the g-file.", b, mv, line)          # it was gxh5, later
     assert _check_opens_file("The move allows Black to open the g-file.", b, mv, line) == []
+
+
+# --- 0.27.2: three things found in one game reviewed by qwen3:14b and Gemini
+# (youamer vs HYPEMAXIMALIST, Lichess, 30 Oct 2026)
+
+BEFORE_22 = "3r1r2/2p1ppbk/1pq3pp/p3PP2/n2P2P1/1B2B2P/1PPQ1N2/2K4R w - - 1 22"
+AFTER_BXE5 = "3r1r2/2p1pp1k/1pq4p/p3bPp1/n2P2PP/1B2B3/1PPQ1N2/2K4R w - - 0 23"
+
+
+@pytest.mark.parametrize("sentence,fails", [
+    # qwen wrote this twice and the check removed it: the knight on c5 does hit b3
+    ("Black will move the knight from a4 to c5, attacking the White bishop on b3.", False),
+    ("Black will move the knight from a4 to b6, attacking the White bishop on b3.", True),
+    ("The knight on a4 attacks the bishop on b3.", True),
+    ("White moves the queen from d2 to d3, defending the pawn on d4.", False),
+    ("White moves the queen from d2 to e2, defending the pawn on d4.", True),
+])
+def test_a_piece_moved_somewhere_is_judged_from_there(sentence, fails):
+    assert bool(check_sentence(sentence, [chess.Board(BEFORE_22)])) == fails
+
+
+def test_a_piece_that_cannot_be_won_is_not_said_to_be_winnable():
+    # 22...Bxe5: dxe5 is met by Rxd2 (the pawn is pinned to the queen)
+    after = chess.Board(AFTER_BXE5)
+    s = ("Black walks right into a tactical trap where the bishop is left undefended and can "
+         "be captured in return.")
+    found = check_sentence(s, [after], None, [after])
+    assert [f.kind for f in found] == ["winnable"]
+    assert "taking the bishop on e5 does not win material" in found[0].correction
+    assert not check_sentence("The bishop on e5 cannot be captured.", [after], None, [after])
+    # true ones stay: after 17. h3 the pawn on a4 can be taken (Nxa4 wins it)
+    b = chess.Board("r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B2P/1PPQ2P1/3K3R b - - 0 17")
+    assert not check_sentence("The pawn on a4 can be captured by the knight.", [b], None, [b])
+    assert not check_sentence("Now the a4 pawn can be won.", [b], None, [b])
+
+
+def test_capture_gain_plays_out_the_captures():
+    from chesscoach.grounding import capture_gain
+    assert capture_gain(chess.Board(AFTER_BXE5), chess.E5) == -1     # dxe5 Rxd2 Kxd2
+    b = chess.Board("r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B2P/1PPQ2P1/3K3R b - - 0 17")
+    assert capture_gain(b, chess.A4) == 1
+    assert capture_gain(chess.Board(), chess.E2) is None                # nothing takes it

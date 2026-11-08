@@ -177,12 +177,49 @@ def _subject_object(s: str, verb: str):
         yield m, m.group(1).lower(), m.group(2), m.group(4).lower(), m.group(5), m.group("mid")
 
 
+_TO = re.compile(r"\s*(?:to|into|onto) \**([a-h][1-8])\b", re.I)
+
+
+def _from_dest(boards: list, name: str, frm: int, dest: int, target: int, tname: str,
+               xray: bool = True, same_color: bool = False) -> bool:
+    """'the knight from a4 to c5, attacking the bishop on b3' (22.h4, qwen):
+    the claim is about the knight on c5. True if, in a position looked at,
+    a piece of that kind on `dest` reaches the target: standing there
+    already, or moved there from `frm`."""
+    for b in boards:
+        t = _piece(b, target, tname)
+        if not t:
+            continue
+        if _piece(b, dest, name):
+            p = b.piece_at(dest)
+        elif _piece(b, frm, name) and (b.piece_at(dest) is None
+                                       or b.color_at(dest) != b.color_at(frm)):
+            p = b.piece_at(frm)
+            b = b.copy(stack=False)
+            b.remove_piece_at(frm)
+            b.set_piece_at(dest, p)
+        else:
+            continue
+        if same_color and p.color != t.color:
+            continue
+        if _reaches(b, dest, target, xray=xray):
+            return True
+    return False
+
+
 def _check_attacks(s: str, boards: list) -> list:
     out = []
     for m, sn, ssq, on, osq, mid in _subject_object(s, _ATTACK_VERB):
         if _NEG.search(mid) or REF_RE.search(mid):
             continue                      # negated, or the verb has another subject
         a, t = chess.parse_square(ssq), chess.parse_square(osq)
+        to = _TO.match(mid)
+        if to:                            # "from a4 to c5, attacking ...": from c5
+            dest = chess.parse_square(to.group(1))
+            if not _from_dest(boards, sn, a, dest, t, on):
+                out.append(Failure("attack", m.group(0),
+                                   f"a {sn} on {to.group(1)} does not attack the {on} on {osq}"))
+            continue
         ok = any(_piece(b, a, sn) and _piece(b, t, on) and _reaches(b, a, t)
                  for b in boards)
         if not ok:
@@ -197,6 +234,13 @@ def _check_defences(s: str, boards: list) -> list:
         if _NEG.search(mid) or REF_RE.search(mid):
             continue
         a, t = chess.parse_square(ssq), chess.parse_square(osq)
+        to = _TO.match(mid)
+        if to:                            # "from d2 to e2, defending ...": from e2
+            dest = chess.parse_square(to.group(1))
+            if not _from_dest(boards, sn, a, dest, t, on, xray=False, same_color=True):
+                out.append(Failure("defence", m.group(0),
+                                   f"a {sn} on {to.group(1)} does not defend the {on} on {osq}"))
+            continue
         ok = any(_piece(b, a, sn) and _piece(b, t, on)
                  and b.piece_at(a).color == b.piece_at(t).color
                  and _reaches(b, a, t, xray=False) for b in boards)
@@ -260,6 +304,105 @@ def _check_undefended(s: str, boards: list, conseq: Optional[list] = None) -> li
         if not ok and mine:
             out.append(Failure("undefended", m.group(0),
                                f"the {name} on {chess.square_name(sq)} is defended"))
+    return out
+
+
+# "the bishop is left undefended and can be captured" (22...Bxe5: dxe5 is met
+# by Rxd2, the pawn is pinned to the queen). "Can be won" means taking it
+# gains material once the captures that follow are played out.
+_WINNABLE = re.compile(
+    r"(?:can|could) (?:now |then |simply |easily |immediately )?be "
+    r"(?:captured|taken|won|picked up|collected|snapped up)\b", re.I)
+_NAMED = re.compile(r"\b(?:the|a|an|its|their|this|that|his) (?:(?:white|black)(?:'s)? )?"
+                    + _PIECE + r"(?: (?:on|at) \**([a-h][1-8])\b)?", re.I)
+QS_DEPTH = 6
+
+
+def _qsearch(b: chess.Board, depth: int) -> int:
+    """Material the side to move can still gain by captures (it may stop)."""
+    best = 0
+    if depth <= 0:
+        return best
+    for mv in b.legal_moves:
+        if not b.is_capture(mv):
+            continue
+        victim = chess.PAWN if b.is_en_passant(mv) else b.piece_type_at(mv.to_square)
+        gain = VALUES.get(victim, 0)
+        if mv.promotion:
+            gain += VALUES[mv.promotion] - 1
+        b.push(mv)
+        if b.is_checkmate():
+            b.pop()
+            return 100
+        score = gain - _qsearch(b, depth - 1)
+        b.pop()
+        best = max(best, score)
+    return best
+
+
+def capture_gain(board: chess.Board, sq: int) -> Optional[int]:
+    """The most material the other side wins by taking the piece on `sq`
+    (captures played out), or None when nothing can take it."""
+    p = board.piece_at(sq)
+    if p is None:
+        return None
+    b = board.copy(stack=False)
+    if b.turn == p.color:
+        if b.is_check():
+            return None
+        b.turn = not p.color                  # as if it were the taker's move
+        b.ep_square = None
+    best = None
+    for mv in b.legal_moves:
+        if mv.to_square != sq or not b.is_capture(mv):
+            continue
+        gain = VALUES.get(p.piece_type, 0)
+        b.push(mv)
+        score = 100 if b.is_checkmate() else gain - _qsearch(b, QS_DEPTH)
+        b.pop()
+        best = score if best is None else max(best, score)
+    return best
+
+
+def _check_winnable(s: str, conseq: list) -> list:
+    """'X can be captured / won': taking it must win material in a position
+    after the move. Fails only when something can take it there and every
+    way of doing so loses or breaks even; a piece the sentence doesn't place
+    is any piece of that kind under attack, and it fails only if none of
+    them can be won."""
+    out = []
+    for w in _WINNABLE.finditer(s):
+        named = [m for m in _NAMED.finditer(s[:w.start()]) if w.start() - m.end() <= 45]
+        if not named or _NEG.search(s[named[-1].end():w.start()]):
+            continue
+        m = named[-1]
+        name = m.group(1).lower()
+        kind = NAME_TO_TYPE.get(name)
+        if kind is None or kind == chess.KING:
+            continue
+        said = re.search(r"\b(white|black)", m.group(0), re.I)
+        tried, wins = [], False
+        for b in conseq[:3]:
+            squares = ([chess.parse_square(m.group(2))] if m.group(2) else
+                       [q for q in chess.SquareSet(b.pieces_mask(kind, chess.WHITE)
+                                                   | b.pieces_mask(kind, chess.BLACK))
+                        if b.attackers(not b.color_at(q), q)])
+            for q in squares:
+                p = b.piece_at(q)
+                if not p or p.piece_type != kind:
+                    continue
+                if said and (said.group(1).lower() == "white") != p.color:
+                    continue
+                g = capture_gain(b, q)
+                if g is None:
+                    continue
+                tried.append((q, g))
+                wins = wins or g > 0
+        if tried and not wins:
+            q = tried[0][0]
+            out.append(Failure("winnable", m.group(0) + " … " + w.group(0),
+                               f"taking the {name} on {chess.square_name(q)} does not win "
+                               f"material: the captures that follow give it back"))
     return out
 
 
@@ -896,6 +1039,7 @@ def check_sentence(s: str, boards: list, move: Optional[chess.Move] = None,
     out += _check_defences(s, boards)
     out += _check_lost_defence(s, boards, move)
     out += _check_undefended(s, boards, conseq)
+    out += _check_winnable(s, conseq)
     out += _check_pins(s, boards)
     out += _check_forks(s, boards)
     out += _check_material(s, boards)
