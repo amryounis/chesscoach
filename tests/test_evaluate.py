@@ -90,7 +90,13 @@ def test_model_runs_with_a_stub(stockfish, monkeypatch):
                             "check stops castling. Material is equal.", None))
     key = load_keys(ids=["rook-check"])[0]
     with Engines(stockfish) as eng:
-        # Pipeline: the grounding check removes the false sentence.
+        # With the default, a local model keeps one sentence of its own: the
+        # false second one never reaches the comment (0.27.4).
+        r = run_model(key, "stub", "pipeline", eng)
+        assert "castling" in r.hits and r.false_claims == [] and r.removed == []
+        assert "Material is equal" not in r.text
+        # All its sentences: the grounding check removes the false one.
+        config.settings.local_sentences = 0
         r = run_model(key, "stub", "pipeline", eng)
         assert not r.error and not r.skipped
         assert "castling" in r.hits

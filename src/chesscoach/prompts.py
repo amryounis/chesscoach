@@ -197,10 +197,8 @@ def build_user_prompt(board_before: chess.Board, played: chess.Move,
     if board.is_checkmate():
         fmt.append("**What now**: write exactly: The game is over.")
     else:
-        fmt.append(f"**What now**: 1-2 sentences. {opponent} moves next: say what "
-                   f"{opponent} will do (step 1 of the likely continuation) and "
-                   f"how {side} should respond (step 2). Write it from {side}'s "
-                   f"point of view.")
+        fmt.append("**What now**: leave this out: chesscoach writes it from the engine's "
+                   "line.")
     output_format = "\n".join(fmt)
 
     banned_line = (", ".join(banned) if banned

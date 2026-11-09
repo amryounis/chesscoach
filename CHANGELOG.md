@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.27.4 — unreleased
+
+- **"What now" is written by code**, from the engine's next two moves
+  ("Black will capture White's pawn on a4 with the knight from b6, and White
+  should respond by moving the pawn from c2 to c4"), for every model. Models
+  added purposes that weren't true ("c4, aiming to recapture on a4"); Gemini
+  already wrote just the two moves. The model is no longer asked for it
+- **The local model keeps one sentence of its own** in "What happened",
+  after the code-written first sentence. qwen3:14b wrote three or four where
+  it was asked for one or two, and most of its false claims were in them.
+  `local_sentences` in the config file sets how many (0 = all); online
+  models keep what they write (they stay short)
+
 ## 0.27.3 — unreleased
 
 What the 0.27.2 reviews of the same game (qwen3:14b and Gemini) still got

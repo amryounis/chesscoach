@@ -156,6 +156,7 @@ def prepare_move(board_before: chess.Board, played: chess.Move,
     san = board_before.san(played)
     move_label = f"{n}. {san}" if board_before.turn == chess.WHITE else f"{n}...{san}"
     return {"prompt": prompt, "banned": banned, "boards": check_boards,
+            "what_now": what_now(board_after, eng_after.best_line),
             "san": san, "label": label, "move_label": move_label,
             "fixed": fixed, "reason": reason, "move": played,
             "better_fixed": better_fixed, "key_facts": key_facts,
@@ -172,6 +173,42 @@ def insert_fixed_sentence(text: str, fixed: str) -> str:
     if m:
         return text[:m.end()] + fixed + " " + text[m.end():]
     return f"**What happened**: {fixed}\n" + text
+
+
+_VERBS = {"moves": ("move", "moving"), "captures": ("capture", "capturing"),
+          "castles": ("castle", "castling")}
+
+
+def _will(text: str, gerund: bool) -> str:
+    """'Black moves the queen from d8 to e8' -> 'Black will move ...' or,
+    gerund=True, 'moving the queen from d8 to e8'."""
+    side, _, rest = text.partition(" ")
+    verb, _, tail = rest.partition(" ")
+    base, ing = _VERBS.get(verb, (verb, verb))
+    return f"{ing} {tail}".strip() if gerund else f"{side} will {base} {tail}".strip()
+
+
+def what_now(board_after: chess.Board, line: list) -> str:
+    """'What now', written by code from the engine's next two moves: models
+    added purposes that weren't true ('c4, aiming to recapture on a4')."""
+    if board_after.is_game_over(claim_draw=False):
+        return "The game is over."
+    b = board_after.copy(stack=False)
+    steps = []
+    for san in (line or [])[:2]:
+        try:
+            mv = b.parse_san(san)
+        except ValueError:
+            break
+        steps.append(describe_move(b, mv))
+        b.push(mv)
+    if not steps:
+        return ""
+    if len(steps) == 1:
+        return _will(steps[0], False) + "."
+    second = steps[1]
+    side2 = second.partition(" ")[0]
+    return f"{_will(steps[0], False)}, and {side2} should respond by {_will(second, True)}."
 
 
 _SECTION = re.compile(r"^\s*\*\*(Assessment|What happened|Better was|What now):?\*\*:?\s*(.*)$", re.I)
@@ -212,10 +249,54 @@ def tidy_annotation(text: str, prep: dict) -> str:
         better = prep["better_fixed"]
     if better:
         out.append(f"**Better was**: {better}")
-    now = " ".join(parts["What now"]).strip()
+    now = prep.get("what_now") or " ".join(parts["What now"]).strip()
     if now:
         out.append(f"**What now**: {now}")
     return "\n\n".join(out)
+
+
+_SENT = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"'(*])")
+
+
+def trim(text: str, prep: dict, keep: Optional[int]) -> str:
+    """The model's answer, before it is checked: 'What now' is code's (the
+    model's goes), and with `keep`, only that many sentences of its own after
+    the code-written first sentence in 'What happened' (qwen wrote four where
+    it was asked for one or two, and most of its errors were in them)."""
+    if not text:
+        return text
+    parts = {k: [] for k in _ORDER}
+    current = None
+    for line in text.split("\n"):
+        m = _SECTION.match(line)
+        if m:
+            current = next(k for k in _ORDER if k.lower() == m.group(1).lower())
+            if m.group(2).strip():
+                parts[current].append(m.group(2).strip())
+        elif line.strip():
+            key = current if current in ("Better was", "What now") else "What happened"
+            parts[key].append(line.strip())
+    body = " ".join(parts["What happened"]).strip()
+    if keep:
+        fixed = prep.get("fixed", "").strip()
+        lead = fixed if fixed and body.startswith(fixed) else ""
+        own = [x for x in _SENT.split(body[len(lead):].strip()) if x.strip()][:keep]
+        body = " ".join(([lead] if lead else []) + own)
+    out = []
+    if parts["Assessment"]:
+        out.append("**Assessment**: " + " ".join(parts["Assessment"]))
+    out.append("**What happened**: " + body)
+    if parts["Better was"]:
+        out.append("**Better was**: " + " ".join(parts["Better was"]))
+    return "\n".join(out)
+
+
+def _keep(model: str) -> Optional[int]:
+    """How many sentences of its own a model keeps in 'What happened'."""
+    if llm.is_online(model):
+        return None
+    n = config.settings.local_sentences
+    return n if n and n > 0 else None
 
 
 _DEFAULT = object()
@@ -300,6 +381,7 @@ def narrate(model: str, prep: dict) -> dict:
     if err:
         return {"text": None, "err": err, "issues": [], "first_issues": 0,
                 "removed": [], "first_fails": [], "secs": time.time() - t0}
+    text = trim(text, prep, _keep(model))
     issues, fails = review_text(text, prep)
     first = len(issues) + len(fails)
     first_fails = [f"{f.kind}: \"{f.claim}\" — {f.correction}" for f in fails]
@@ -317,6 +399,7 @@ def narrate(model: str, prep: dict) -> dict:
             {"role": "assistant", "content": text},
             {"role": "user", "content": fix}])
         if not err2:
+            text2 = trim(text2, prep, _keep(model))
             issues2, fails2 = review_text(text2, prep)
             if len(issues2) + len(fails2) < first:
                 text, issues, fails = text2, issues2, fails2
@@ -376,7 +459,7 @@ def narrate_batch(model: str, preps: list) -> list:
     if err:
         return [{"text": None, "err": err, "issues": [], "first_issues": 0, "removed": [],
                  "first_fails": [], "secs": time.time() - t0} for _ in preps]
-    parts = _split_batch(text, n)
+    parts = {k: trim(v, preps[k - 1], _keep(model)) for k, v in _split_batch(text, n).items()}
     state = {}
     for k, prep in enumerate(preps, 1):
         if k in parts:
@@ -400,6 +483,7 @@ def narrate_batch(model: str, preps: list) -> list:
                                max_tokens=config.settings.num_predict * len(redo) + 200)
         if not err2:
             for k, body in _split_batch(text2, n).items():
+                body = trim(body, preps[k - 1], _keep(model))
                 if k in redo:
                     issues2, fails2 = review_text(body, preps[k - 1])
                     if len(issues2) + len(fails2) < state[k][3]:

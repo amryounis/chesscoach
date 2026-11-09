@@ -293,3 +293,36 @@ def test_a_review_whose_model_copies_the_template_reads_cleanly(service):
         assert "already written" not in text and "repeat" not in text, text
         happened = text.split("**What happened**: ")[1].split("\n")[0]
         assert happened.count(m.san) <= 2 and "A reason for move" in happened
+
+
+def test_what_now_is_written_by_code():
+    # qwen (0.27.3): "c4, aiming to recapture on a4" — a purpose that wasn't true
+    b = chess.Board("r4r2/1ppqppbk/1n4pp/p3P3/P2PNP2/1B2B2P/1PPQ2P1/3K3R b - - 0 17")
+    assert narrator.what_now(b, ["Nxa4", "c4", "f5"]) == (
+        "Black will capture White's pawn on a4 with the knight from b6, and White should "
+        "respond by moving the pawn from c2 to c4.")
+    assert narrator.what_now(chess.Board(), ["e4"]) == "White will move the pawn from e2 to e4."
+    mate = chess.Board("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3")
+    assert narrator.what_now(mate, []) == "The game is over."
+    prep = {"fixed": "White moves the pawn from h2 to h3.", "label": "Mistake",
+            "what_now": "Black will capture White's pawn on a4 with the knight from b6."}
+    text = ("**Assessment**: Mistake\n**What happened**: White moves the pawn from h2 to h3. "
+            "It ignores the threat.\n**What now**: White plays c4, aiming to recapture on a4.")
+    out = narrator.tidy_annotation(narrator.trim(text, prep, None), prep)
+    assert "aiming to recapture" not in out
+    assert out.endswith("**What now**: Black will capture White's pawn on a4 with the knight from b6.")
+
+
+def test_a_local_model_keeps_one_sentence_of_its_own():
+    prep = {"fixed": "Black moves the rook from a8 to d8.", "label": "Inaccuracy"}
+    text = ("**Assessment**: Inaccuracy\n**What happened**: Black moves the rook from a8 to d8. "
+            "The rook no longer defends a5. While the move adds a shield pawn, it fails.\n"
+            "It allows White to equalize.\n**Better was**: Moving the pawn from f7 to f5.")
+    one = narrator.trim(text, prep, 1)
+    assert "**What happened**: Black moves the rook from a8 to d8. The rook no longer defends a5." in one
+    assert "shield pawn" not in one and "equalize" not in one and "f7 to f5" in one
+    assert "shield pawn" in narrator.trim(text, prep, None)          # online: all of it
+    config.settings.local_sentences = 1
+    assert narrator._keep("qwen3:14b") == 1 and narrator._keep("online:gemini-x") is None
+    config.settings.local_sentences = 0
+    assert narrator._keep("qwen3:14b") is None

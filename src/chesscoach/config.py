@@ -51,6 +51,7 @@ class Settings:
     online_model: str = ""            # e.g. a Gemini Flash model: Settings' "List models" shows them
     online_key: str = ""              # your API key for it (or CHESSCOACH_ONLINE_KEY)
     online_one_request: bool = True   # a review's comments in one request (free quotas are small)
+    local_sentences: int = 1          # sentences of its own a local model keeps in "What happened" (0 = all)
     depth: int = 18                   # Stockfish search depth
     max_seconds: float = 10.0         # cap per position: stop there even if the depth isn't reached
     multipv: int = 3                  # lines analysed per position
@@ -198,6 +199,11 @@ online_key = ""
 # Ask for all of a review's comments in one request (free quotas allow only
 # tens of requests a day); false = one request per comment.
 online_one_request = true
+
+# How many sentences of its own the local (Ollama) model keeps in "What
+# happened", after the code-written first sentence (0 = all it writes).
+# qwen3:14b writes three or four and most of its errors are in them.
+local_sentences = 1
 
 # Stockfish depth and number of lines per position
 depth = 18
