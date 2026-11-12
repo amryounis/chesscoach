@@ -255,6 +255,31 @@ _SECTION = re.compile(r"^\s*\*\*(Assessment|What happened|Better was|What now):?
 _ORDER = ["Assessment", "What happened", "Better was", "What now"]
 
 
+GRADES = {"Inaccuracy": "inaccuracy", "Mistake": "mistake", "Blunder": "blunder"}
+_GRADE_SAID = re.compile(
+    r"\b((?:this|the|it|that)(?: move)? (?:is|was) )(an? )((?:serious |big |clear |minor |slight |"
+    r"small |major |costly |significant |real |critical )?)(inaccuracy|mistake|blunder)\b", re.I)
+
+
+def _fix_grade(body: str, label: Optional[str]) -> str:
+    """'This is an inaccuracy' about a move marked a Mistake (15.Rdg1, qwen):
+    the grade is code's; the word follows it. Only a sentence saying what
+    *this* move is; 'White's previous mistake' is left alone."""
+    want = GRADES.get(label or "")
+    if not want:
+        return body
+
+    def fix(m):
+        if m.group(4).lower() == want:
+            return m.group(0)
+        adj = m.group(3)
+        art = "an " if (adj or want)[0] in "aeiou" else "a "
+        if m.group(2)[0].isupper():
+            art = art.capitalize()
+        return m.group(1) + art + adj + want
+    return _GRADE_SAID.sub(fix, body)
+
+
 def tidy_annotation(text: str, prep: dict) -> str:
     """
     Put the annotation back into its fixed shape after the model, a
@@ -277,7 +302,7 @@ def tidy_annotation(text: str, prep: dict) -> str:
             # unless it follows 'Better was' or 'What now'.
             key = current if current in ("Better was", "What now") else "What happened"
             parts[key].append(line.strip())
-    body = " ".join(parts["What happened"]).strip()
+    body = _fix_grade(" ".join(parts["What happened"]).strip(), prep.get("label"))
     fixed = prep["fixed"]
     if fixed.strip(" .") not in body:
         body = (fixed + " " + body).strip()

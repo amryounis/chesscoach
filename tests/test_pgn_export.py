@@ -91,3 +91,21 @@ def test_the_source_games_notes_are_kept_and_coach_notes_marked():
     again = chess.pgn.read_game(io.StringIO(annotated_pgn(r, g)))
     assert list(again.mainline())[2].comment.count("Coach:") == 1
     assert again.comment.count("Coach summary:") == 1
+
+
+def test_the_summary_and_notes_stand_apart_from_the_annotators():
+    """Abasov–Dotzer (0.27.5): the annotator's first comment ends mid-sentence
+    ('...and began with' 1.e4) and the summary was glued to it."""
+    import chess.pgn
+    src = chess.pgn.read_game(io.StringIO(
+        '[White "Me"]\n[Black "You"]\n[Result "1-0"]\n\n'
+        '{I decided to begin with} 1. e4 {My favourite} e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'))
+    g = chess.pgn.read_game(io.StringIO(annotated_pgn(_review(), src)))
+    assert g.comment.startswith("I decided to begin with\n\nCoach summary:")
+    main = list(g.mainline())
+    assert main[0].comment.startswith("My favourite")
+    if "Coach:" in main[0].comment:
+        assert "My favourite\nCoach:" in main[0].comment
+    again = chess.pgn.read_game(io.StringIO(annotated_pgn(_review(), g)))
+    assert again.comment.count("Coach summary:") == 1
+    assert again.comment.startswith("I decided to begin with\n\nCoach summary:")

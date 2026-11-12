@@ -357,3 +357,19 @@ def test_better_was_is_written_by_code_for_a_local_model():
     assert "freed the pinned pawn on c2" in online             # an online model keeps its own
     good = dict(prep, label="Excellent")                       # nothing better on a good move
     assert "Better was" not in narrator.code_better("**Assessment**: Excellent", good)
+
+
+@pytest.mark.parametrize("said,label,want", [
+    # qwen on 15.Rdg1, marked a Mistake
+    ("This is an inaccuracy because it fails.", "Mistake", "This is a mistake because it fails."),
+    ("This move is a serious mistake.", "Inaccuracy", "This move is a serious inaccuracy."),
+    ("It was a big inaccuracy.", "Blunder", "It was a big blunder."),
+    ("This move exploits White's previous mistake.", "Inaccuracy",
+     "This move exploits White's previous mistake."),            # someone else's: left alone
+    ("This is an inaccuracy.", "Excellent", "This is an inaccuracy."),
+])
+def test_the_grade_the_model_names_follows_the_apps(said, label, want):
+    assert narrator._fix_grade(said, label) == want
+    prep = {"fixed": "White moves the rook.", "label": label}
+    out = narrator.tidy_annotation(f"**What happened**: White moves the rook. {said}", prep)
+    assert want in out

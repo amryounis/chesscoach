@@ -148,7 +148,9 @@ def annotated_game(review, source: Optional[chess.pgn.Game] = None) -> chess.pgn
               for c in (_g(review, "summary") or []) if (_g(c, "kind") != "accuracy")]
     if intro:
         text = f"{SUMMARY} " + " ".join(intro).replace("{", "(").replace("}", ")")
-        game.comment = f"{game.comment} {text}".strip() if own and game.comment else text
+        # on a line of its own: an annotator's comment can end in the middle of a
+        # sentence ("...and began with" 1.e4), and the summary was glued to it
+        game.comment = f"{game.comment.rstrip()}\n\n{text}" if own and game.comment.strip() else text
 
     nodes = list(game.mainline()) if own else []
     node = game
@@ -185,7 +187,7 @@ def annotated_game(review, source: Optional[chess.pgn.Game] = None) -> chess.pgn
             parts.append("Allowed " + ", ".join(MOTIFS.get(t, t) for t in tac["allowed"]) + ".")
         prior = re.sub(r"\s*\[%eval [^\]]*\]\s*", " ", node.comment).strip() if own else ""
         if parts:
-            node.comment = (f"{prior} " if prior else "") + f"{COACH} " + " ".join(parts)
+            node.comment = (f"{prior}\n" if prior else "") + f"{COACH} " + " ".join(parts)
         elif own:
             node.comment = prior
         # [%eval] goes into the comment, so it is set after the text

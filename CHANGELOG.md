@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.27.6 — unreleased
+
+- **The grade a comment names follows the app's.** qwen called 15.Rdg1 "an
+  inaccuracy" where the app marked it a Mistake; a sentence saying what this
+  move is ("This is an inaccuracy", "This move is a serious mistake") now
+  uses the app's word. "White's previous mistake" is left alone
+- **The coach's text stands apart from an annotator's** in an exported PGN:
+  the summary starts after a blank line, and a move's "Coach:" note on a new
+  line. An annotator's opening comment that ended mid-sentence ("...and
+  began with" 1.e4) had the summary glued to it
+
 ## 0.27.5 — unreleased
 
 - **"Better was" is written by code for the local model**: the engine's
