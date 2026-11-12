@@ -714,7 +714,9 @@ def test_comments_are_read_aloud(page):
     assert page.get_attribute("#speak-comments", "aria-pressed") == "true"
     page.wait_for_function("window.__said.some((s) => s.includes('A reason.'))")
     said = [s for s in page.evaluate("window.__said") if s != "<cancel>"][-1]
-    assert "Better was: Something else." in said
+    # a local model's 'Better was' is written by code (0.27.5), and only for an
+    # error: the stand-in model's own one is never read
+    assert "Something else" not in said
     assert "Assessment" not in said and "**" not in said
     assert not re.search(r"\b[KQRBN]x?[a-h][1-8]", said)           # moves in words
     # Stepping to another reviewed move reads its comment; clicking the same one again doesn't.

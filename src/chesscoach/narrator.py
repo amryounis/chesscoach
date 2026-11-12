@@ -138,12 +138,12 @@ def prepare_move(board_before: chess.Board, played: chess.Move,
 
     # A code-written 'Better was', used if the model's is removed.
     better_fixed = ""
+    better_code = ""
     if eng_before.best_move and eng_before.best_move != board_before.san(played):
         try:
-            better_fixed = ("The engine preferred this: "
-                            + describe_move(board_before,
-                                            board_before.parse_san(eng_before.best_move))
-                            + ".")
+            what = describe_move(board_before, board_before.parse_san(eng_before.best_move))
+            better_fixed = "The engine preferred this: " + what + "."
+            better_code = what + _difference_note(diffs) + "."
         except ValueError:
             pass
 
@@ -157,6 +157,7 @@ def prepare_move(board_before: chess.Board, played: chess.Move,
     move_label = f"{n}. {san}" if board_before.turn == chess.WHITE else f"{n}...{san}"
     return {"prompt": prompt, "banned": banned, "boards": check_boards,
             "what_now": what_now(board_after, eng_after.best_line),
+            "better_code": better_code,
             "san": san, "label": label, "move_label": move_label,
             "fixed": fixed, "reason": reason, "move": played,
             "better_fixed": better_fixed, "key_facts": key_facts,
@@ -173,6 +174,45 @@ def insert_fixed_sentence(text: str, fixed: str) -> str:
     if m:
         return text[:m.end()] + fixed + " " + text[m.end():]
     return f"**What happened**: {fixed}\n" + text
+
+
+def _plural(text: str) -> str:
+    """'3 pawn(s)' -> '3 pawns', '1 pawn(s)' and '1 shield pawns' -> '1 ... pawn'."""
+    text = re.sub(r"\b(\d+) (\w+)\(s\)",
+                  lambda m: f"{m.group(1)} {m.group(2)}" + ("" if m.group(1) == "1" else "s"), text)
+    return re.sub(r"\b1 ((?:\w+ )?\w+?)s\b", r"1 \1", text)
+
+
+def _difference_note(diffs: list) -> str:
+    """The main measured difference the engine's move makes, in brackets:
+    ' (a few moves on: White 1 pawn down instead of 2)'. Only one the move
+    itself is responsible for, and only one that favours the engine's move;
+    material first."""
+    ok = [d for d in diffs or [] if d.favours == "engine" and d.caused]
+    if not ok:
+        return ""
+    d = next((x for x in ok if x.key == "material"), ok[0])
+    e, p = _plural(d.engine), _plural(d.played)
+    if d.key == "material":
+        e, p = re.sub(r"^(White|Black) is ", r"\1 ", e), re.sub(r"^(White|Black) is ", r"\1 ", p)
+        me = re.match(r"^(White|Black) (\d+) pawns? (up|down)$", e)
+        mp = re.match(r"^(White|Black) (\d+) pawns? (up|down)$", p)
+        if me and mp and me.group(1) == mp.group(1) and me.group(3) == mp.group(3):
+            p = mp.group(2)                                   # "White 1 pawn down instead of 2"
+        e, p = ("level material" if e == "level" else e), ("level material" if p == "level" else p)
+        return f" (a few moves on: {e} instead of {p})"
+    m = re.match(r"^(White|Black)'s king shelter$", d.key)
+    if m:
+        return f" (a few moves on: {m.group(1)}'s king keeps {e} instead of {p})"
+    m = re.match(r"^(White|Black)'s number of legal moves$", d.key)
+    if m:
+        return f" (a few moves on: {m.group(1)} has {e} possible moves instead of {p})"
+    m = re.match(r"^files with no (White|Black) pawn next to (?:White|Black)'s king$", d.key)
+    if m:
+        return (f" (a few moves on: {'no open file' if e == 'none' else f'the {e}-file open'} "
+                f"next to {m.group(1)}'s king instead of "
+                f"{'none' if p == 'none' else f'the {p}-file'})")
+    return f" (a few moves on, {d.key}: {e} instead of {p})"
 
 
 _VERBS = {"moves": ("move", "moving"), "captures": ("capture", "capturing"),
@@ -262,7 +302,9 @@ def trim(text: str, prep: dict, keep: Optional[int]) -> str:
     """The model's answer, before it is checked: 'What now' is code's (the
     model's goes), and with `keep`, only that many sentences of its own after
     the code-written first sentence in 'What happened' (qwen wrote four where
-    it was asked for one or two, and most of its errors were in them)."""
+    it was asked for one or two, and most of its errors were in them). With
+    `keep` (a local model) its 'Better was' goes too: code writes that one
+    (see code_better)."""
     if not text:
         return text
     parts = {k: [] for k in _ORDER}
@@ -286,9 +328,22 @@ def trim(text: str, prep: dict, keep: Optional[int]) -> str:
     if parts["Assessment"]:
         out.append("**Assessment**: " + " ".join(parts["Assessment"]))
     out.append("**What happened**: " + body)
-    if parts["Better was"]:
+    if parts["Better was"] and not keep:
         out.append("**Better was**: " + " ".join(parts["Better was"]))
     return "\n".join(out)
+
+
+def code_better(text: str, prep: dict) -> str:
+    """For a local model: 'Better was' written by code, the engine's move and
+    the main difference it makes (qwen's reasons there were often false:
+    'Qe2 would have freed the pinned pawn on c2')."""
+    if not prep.get("better_code") or prep.get("label") not in ("Inaccuracy", "Mistake", "Blunder"):
+        return text
+    line = f"**Better was**: {prep['better_code']}"
+    if re.search(r"^\*\*Better was\*\*:.*$", text, re.M):
+        return re.sub(r"^\*\*Better was\*\*:.*$", lambda _: line, text, count=1, flags=re.M)
+    return re.sub(r"(\n\n\*\*What now\*\*:)", lambda m: "\n\n" + line + m.group(1), text, count=1) \
+        if "**What now**:" in text else text + "\n\n" + line
 
 
 def _keep(model: str) -> Optional[int]:
@@ -411,7 +466,10 @@ def narrate(model: str, prep: dict) -> dict:
             seen.setdefault(f.sentence, f.correction)
         removed = [f"{s} [{c}]" for s, c in seen.items()]
         issues = issues + [f"sentence removed, {c}: \"{s}\"" for s, c in seen.items()]
-    return {"text": tidy_annotation(text, prep), "err": None,
+    out = tidy_annotation(text, prep)
+    if _keep(model):
+        out = code_better(out, prep)
+    return {"text": out, "err": None,
             "issues": issues, "first_issues": first, "removed": removed,
             "first_fails": first_fails, "secs": time.time() - t0}
 

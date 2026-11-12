@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.5 — unreleased
+
+- **"Better was" is written by code for the local model**: the engine's
+  move and the main difference it makes, measured a few moves on ("White
+  moves the knight from e4 to c5 (a few moves on: White 1 pawn down instead
+  of 2)"). In 0.27.4 four of qwen3:14b's six false claims in the test game
+  were in its reasons there ("Qe2 would have freed the pinned pawn on c2";
+  it frees d4). Only a difference the move itself is responsible for, and
+  one in the engine's favour, is given. Online models still write their own
+
 ## 0.27.4 — unreleased
 
 - **"What now" is written by code**, from the engine's next two moves

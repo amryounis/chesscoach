@@ -320,9 +320,40 @@ def test_a_local_model_keeps_one_sentence_of_its_own():
             "It allows White to equalize.\n**Better was**: Moving the pawn from f7 to f5.")
     one = narrator.trim(text, prep, 1)
     assert "**What happened**: Black moves the rook from a8 to d8. The rook no longer defends a5." in one
-    assert "shield pawn" not in one and "equalize" not in one and "f7 to f5" in one
+    assert "shield pawn" not in one and "equalize" not in one
+    assert "f7 to f5" not in one                     # its 'Better was' too: code writes it (0.27.5)
     assert "shield pawn" in narrator.trim(text, prep, None)          # online: all of it
     config.settings.local_sentences = 1
     assert narrator._keep("qwen3:14b") == 1 and narrator._keep("online:gemini-x") is None
     config.settings.local_sentences = 0
     assert narrator._keep("qwen3:14b") is None
+
+
+
+def test_better_was_is_written_by_code_for_a_local_model():
+    """qwen (0.27.4): 'Qe2 would have freed the pinned pawn on c2' (it frees
+    d4), 'kept White slightly better in material' (two pawns down)."""
+    from chesscoach.features import Difference
+    note = narrator._difference_note
+    assert note([Difference("material", "White is 3 pawn(s) down", "White is 1 pawn(s) down",
+                            "engine")]) == " (a few moves on: White 1 pawn down instead of 3)"
+    assert note([Difference("material", "level", "Black is 3 pawn(s) up", "engine")]) == \
+        " (a few moves on: Black 3 pawns up instead of level material)"
+    # only a difference the move itself caused, and one in the engine's favour
+    assert note([Difference("material", "x", "y", "engine", caused=False)]) == ""
+    assert note([Difference("material", "x", "y", "player")]) == ""
+    prep = {"label": "Inaccuracy", "fixed": "White moves the pawn from h3 to h4.",
+            "better_code": "White moves the queen from d2 to e2 (a few moves on: White 1 pawn "
+                           "up instead of White 2 pawns down)",
+            "what_now": "Black will move the knight from a4 to c5."}
+    text = ("**Assessment**: Inaccuracy\n**What happened**: White moves the pawn from h3 to h4. "
+            "It ignores the pin.\n**Better was**: Qe2, which would have freed the pinned pawn "
+            "on c2.")
+    local = narrator.code_better(narrator.tidy_annotation(narrator.trim(text, prep, 1), prep), prep)
+    assert "c2" not in local
+    assert "**Better was**: White moves the queen from d2 to e2 (a few moves on: White 1 pawn up" in local
+    assert local.index("**Better was**") < local.index("**What now**")
+    online = narrator.tidy_annotation(narrator.trim(text, prep, None), prep)
+    assert "freed the pinned pawn on c2" in online             # an online model keeps its own
+    good = dict(prep, label="Excellent")                       # nothing better on a good move
+    assert "Better was" not in narrator.code_better("**Assessment**: Excellent", good)
