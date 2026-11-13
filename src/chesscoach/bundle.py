@@ -2,9 +2,10 @@
 chesscoach as an installed Windows program (the installer: packaging/).
 
 The installer is chesscoach and its Python frozen into one folder by
-PyInstaller, with Stockfish beside it in stockfish/: two builds, one for
-processors with AVX2 (most since 2013) and one for older ones, and the
-faster one is chosen here. Ollama is not included (it is its own program,
+PyInstaller, with Stockfish beside it in stockfish/. From Stockfish 19 that
+is one build (stockfish.exe) that picks the processor's best code itself;
+with older releases it was two, one for processors with AVX2 (most since
+2013) and one for the rest, and the faster one is chosen here. Ollama is not included (it is its own program,
 and the models are gigabytes): the first-run setup checks for it and
 downloads the model, or sets up an online model instead. Maia is not
 included either (it needs PyTorch); the app works without it.

@@ -56,35 +56,34 @@ jobs:
           $dest = "dist/chesscoach/stockfish"
           New-Item -ItemType Directory -Force $dest | Out-Null
           $tag = @(); if ($env:SF_TAG) { $tag = @($env:SF_TAG) }
-          # [name in the installer, the release files to try, in order]
-          $builds = @(
-            @("stockfish-avx2.exe", @("stockfish-windows-x86-64-avx2.zip")),
-            @("stockfish.exe", @("stockfish-windows-x86-64-sse41-popcnt.zip", "stockfish-windows-x86-64.zip"))
-          )
-          foreach ($b in $builds) {
-            $got = $false
-            foreach ($zip in $b[1]) {
-              Remove-Item -Recurse -Force sf -ErrorAction SilentlyContinue
-              gh release download @tag --repo official-stockfish/Stockfish --pattern $zip --dir sf 2>$null
-              if ($LASTEXITCODE -eq 0 -and (Test-Path "sf/$zip")) {
-                Expand-Archive "sf/$zip" -DestinationPath sf/x
-                $exe = Get-ChildItem sf/x -Recurse -Filter "stockfish*.exe" | Select-Object -First 1
-                if ($exe) {
-                  Copy-Item $exe.FullName "$dest/$($b[0])"
-                  $lic = Get-ChildItem sf/x -Recurse -Include "Copying.txt", "COPYING*" | Select-Object -First 1
-                  if ($lic) { Copy-Item $lic.FullName "$dest/Copying.txt" -Force }
-                  Write-Host "$($b[0]) <- $zip ($($exe.Name))"
-                  $got = $true; break
-                }
-              }
-            }
-            if (-not $got) {
-              gh release view @tag --repo official-stockfish/Stockfish --json tagName,assets --jq '.tagName, .assets[].name'
-              throw "No Stockfish build found for $($b[0]): the release's file names (above) have changed. Update the names in this workflow."
-            }
+          # One release file -> one program in the installer. $true if found.
+          function Get-Stockfish($zip, $name) {
+            Remove-Item -Recurse -Force sf -ErrorAction SilentlyContinue
+            gh release download @tag --repo official-stockfish/Stockfish --pattern $zip --dir sf 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path "sf/$zip")) { return $false }
+            Expand-Archive "sf/$zip" -DestinationPath sf/x | Out-Null
+            $exe = Get-ChildItem sf/x -Recurse -Filter "stockfish*.exe" | Sort-Object Length -Descending | Select-Object -First 1
+            if (-not $exe) { return $false }
+            Copy-Item $exe.FullName "$dest/$name"
+            $lic = Get-ChildItem sf/x -Recurse -Include "Copying.txt", "COPYING*" | Select-Object -First 1
+            if ($lic) { Copy-Item $lic.FullName "$dest/Copying.txt" -Force }
+            Write-Host "$name <- $zip ($($exe.Name), $([math]::Round($exe.Length / 1MB)) MB)"
+            return $true
+          }
+          # Stockfish 19 on: one build that picks the processor's best code itself.
+          # Before: one for AVX2 processors and one for the rest (chesscoach picks).
+          $ok = Get-Stockfish "stockfish-windows-x86-64-universal.zip" "stockfish.exe"
+          if (-not $ok) {
+            $ok = (Get-Stockfish "stockfish-windows-x86-64-avx2.zip" "stockfish-avx2.exe") -and
+                  ((Get-Stockfish "stockfish-windows-x86-64-sse41-popcnt.zip" "stockfish.exe") -or
+                   (Get-Stockfish "stockfish-windows-x86-64.zip" "stockfish.exe"))
+          }
+          if (-not $ok) {
+            gh release view @tag --repo official-stockfish/Stockfish --json tagName,assets --jq '.tagName, .assets[].name'
+            throw "No Windows Stockfish found in the release (its file names are above). Update the names in this workflow."
           }
           Get-ChildItem $dest
-          $global:LASTEXITCODE = 0      # an earlier name that wasn't found
+          $global:LASTEXITCODE = 0      # a name tried before the one found
 
       - name: Check the frozen program
         shell: pwsh

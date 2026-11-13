@@ -5,8 +5,9 @@
 - **A Windows installer** for testers: `chesscoach-setup-0.28.0.exe`, built
   by GitHub Actions (`installer.yml`: PyInstaller, then Inno Setup). It
   installs for the current user without administrator rights and brings
-  Stockfish (the AVX2 build when the processor has it, else the build for
-  any 64-bit processor). Ollama and Maia are not included. It isn't signed:
+  Stockfish (19's "universal" build, which picks the processor's best code
+  itself; with an older release, its AVX2 build when the processor has it,
+  else the build for any 64-bit processor). Ollama and Maia are not included. It isn't signed:
   Windows SmartScreen asks once ("More info" → "Run anyway")
 - **A first-run setup**: when there is no config file yet, chesscoach opens
   a three-step setup: the engine (found or not), who writes the coach's words
