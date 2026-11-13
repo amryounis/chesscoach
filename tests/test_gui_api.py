@@ -317,3 +317,28 @@ def test_import_find_pick_and_review(api, monkeypatch, tmp_path):
     out = api.import_review(again["games"][0]["key"])
     assert out["headers"]["White"] == "c" and config.settings.lichess_user == "me1"
     assert online_games.have("lichess") == {"https://lichess.org/aa", "https://lichess.org/bb"}
+
+
+def test_the_first_run_setup(api, monkeypatch, tmp_path):
+    from chesscoach import firstrun
+    assert api.get_settings()["first_run"]                    # no config file yet
+    monkeypatch.setattr(firstrun, "gpu", lambda: {"name": "RTX 3070", "vram_gb": 8.0})
+    monkeypatch.setattr(firstrun, "ollama_status",
+                        lambda model: {"running": True, "models": [], "has": False})
+    st = api.setup_status()
+    assert st["stockfish"]["ok"] and not st["stockfish"]["bundled"]
+    assert st["model"] == "qwen3:8b" and st["size"] == "about 5 GB"
+    assert api.setup_status("qwen3:14b")["model"] == "qwen3:14b"
+    assert "error" in api.setup_pull("qwen3:14b; rm -rf /")
+    assert "error" in api.setup_pull("")
+    res = api.finish_setup({"coach_llm": "ollama", "model": "qwen3:8b", "lichess_user": " me ",
+                            "chesscom_user": "", "player_elo": "1650"})
+    assert res["open_settings"] is False
+    s = config.settings
+    assert (s.coach_llm, s.model, s.lichess_user, s.player_elo) == ("ollama", "qwen3:8b", "me", 1650)
+    assert not api.get_settings()["first_run"]
+    # an online coach without a key yet: Settings opens for it
+    monkeypatch.delenv("CHESSCOACH_ONLINE_KEY", raising=False)
+    config.settings.online_key = ""
+    assert api.finish_setup({"coach_llm": "online"})["open_settings"] is True
+    assert config.settings.coach_llm == "online" and config.settings.model == "qwen3:8b"

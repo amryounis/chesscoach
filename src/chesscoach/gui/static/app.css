@@ -635,8 +635,8 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .wdl .b { background: #1d2a30; color: #ffffff; }
 
 /* a checkbox line in the settings dialog */
-#settings label.check { flex-direction: row; display: flex; align-items: center; gap: 8px; }
-#settings label.check input { width: auto; }
+dialog label.check { flex-direction: row; display: flex; align-items: center; gap: 8px; }
+dialog label.check input { width: auto; }
 
 /* ---- the analysis table and the move-type counts (after Lucas Chess) */
 .analysis { max-height: var(--list-h, 20vh); min-height: 60px; overflow-y: auto; }
@@ -758,3 +758,14 @@ fieldset.coach-llm .off { opacity: .45; }
 fieldset.coach-llm .row button { align-self: end; }
 fieldset.coach-llm .hint { color: var(--muted); font-size: 12px; }
 fieldset.coach-llm .note { color: var(--muted); font-size: 12px; margin: 4px 0 0; line-height: 1.35; }
+
+#setup .setup-step { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+#setup h3 { margin: 0; font-size: 15px; }
+#setup p { margin: 0; }
+#setup .sub-opt { margin-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+#setup .off { opacity: .45; }
+#setup .row button { align-self: end; }
+#setup code { font-size: 12px; word-break: break-all; }
+.setup-progress { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.setup-progress .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.setup-progress .bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }

@@ -50,11 +50,13 @@ def browser():
 
 
 @pytest.fixture
-def page(browser, stockfish, monkeypatch, tmp_path):
+def page(browser, stockfish, monkeypatch, tmp_path, request):
     config.settings = config.load_settings(stockfish_path=stockfish, maia_cmd="no-such-maia",
                                            depth=10)
     config.settings.player_name = "Homer"
     monkeypatch.setattr(config, "user_config_path", lambda: tmp_path / "config.toml")
+    if not getattr(request, "param", None) == "first-run":
+        (tmp_path / "config.toml").write_text("", encoding="utf-8")   # not a first run
     monkeypatch.setattr(narrator.ollama, "chat", lambda model, messages, options=None, **kw: {
         "message": {"content": "**Assessment**: x\n**What happened**: A reason.\n"
                                "**Better was**: Something else."}})
@@ -816,3 +818,63 @@ def test_settings_choose_an_online_coach(page):
         assert page.errors == []
     finally:
         svc.server.shutdown()
+
+
+
+@pytest.mark.parametrize("page", ["first-run"], indirect=True)
+def test_first_run_setup(page, monkeypatch):
+    from chesscoach import firstrun
+
+    class FakeOllama:
+        models = []
+
+        def list(self):
+            return {"models": [{"model": m} for m in self.models]}
+
+        def pull(self, model, stream=True):
+            for done in (0, 4, 9):
+                yield {"status": "pulling", "total": 9 * 2 ** 30, "completed": done * 2 ** 30}
+            FakeOllama.models.append(model)
+
+    fake = FakeOllama()
+    monkeypatch.setattr(firstrun, "gpu", lambda: {"name": "NVIDIA GeForce RTX 3060", "vram_gb": 12.0})
+    real_status = firstrun.ollama_status
+    monkeypatch.setattr(firstrun, "ollama_status", lambda model: real_status(model, client=fake))
+    real_start = firstrun.Pull.start
+    monkeypatch.setattr(firstrun.Pull, "start", lambda self, model, client=None: real_start(self, model, fake))
+    # the page asked at start-up: no config file yet, so the setup opens
+    page.reload()
+    page.wait_for_selector("#setup[open]")
+    assert "Stockfish is ready" in page.inner_text("#setup-engine")
+    assert "RTX 3060" in page.inner_text("#setup-machine")
+    assert "qwen3:14b" in page.inner_text("#setup-suggest")
+    assert page.is_checked("#setup-form input[name=coach_llm][value=ollama]")
+    assert page.input_value("#setup-model") == "qwen3:14b"
+    assert "isn't downloaded yet (about 9 GB)" in page.inner_text("#setup-ollama-state")
+    page.click("#setup-pull")
+    page.wait_for_function("document.getElementById('setup-ollama-state').textContent.includes('ready')")
+    assert "downloaded" in page.inner_text("#setup-progress-text")
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "setup.png"))
+    page.fill("#setup-form input[name=lichess_user]", "youamer")
+    page.fill("#setup-form input[name=player_elo]", "1500")
+    page.click("#setup-done")
+    page.wait_for_function("!document.getElementById('setup').open")
+    s = config.settings
+    assert (s.coach_llm, s.model, s.lichess_user, s.player_elo) == ("ollama", "qwen3:14b", "youamer", 1500)
+    assert config.user_config_path().exists()
+    # not a first run any more; the setup stays reachable from Settings
+    page.reload()
+    page.wait_for_timeout(600)
+    assert not page.is_visible("#setup")
+    page.click("#open-settings")
+    page.click("#rerun-setup")
+    page.wait_for_selector("#setup[open]")
+    # an online coach: Settings opens at the key
+    page.check("#setup-form input[name=coach_llm][value=online]")
+    page.click("#setup-done")
+    page.wait_for_selector("#settings[open]")
+    page.wait_for_function("document.activeElement && document.activeElement.id === 'online-key'")
+    assert page.is_checked("#settings-form input[name=coach_llm][value=online]")
+    assert config.settings.coach_llm == "online"
+    assert page.errors == []

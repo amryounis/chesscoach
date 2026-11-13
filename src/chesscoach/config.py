@@ -135,8 +135,11 @@ def _coerce(name: str, value):
 
 def load_settings(config_file: Optional[str] = None, **overrides) -> Settings:
     """Build settings from defaults, config file, environment and overrides."""
+    from .bundle import bundled_stockfish
     s = Settings()
-    s.stockfish_path = shutil.which("stockfish") or ""
+    # the installed program's own Stockfish first: a different one on PATH
+    # isn't the one the installer put there
+    s.stockfish_path = bundled_stockfish() or shutil.which("stockfish") or ""
     names = [f.name for f in fields(Settings) if f.name != "source"]
 
     path = find_config_file(config_file)

@@ -1,0 +1,124 @@
+name: Windows installer
+
+# Builds chesscoach-setup-<version>.exe: chesscoach frozen by PyInstaller,
+# Stockfish beside it, packed by Inno Setup.
+#   Actions -> "Windows installer" -> Run workflow: the installer is an
+#     artifact of the run (download it from the run's page).
+#   Pushing a tag v<version> (e.g. v0.28.0): also a GitHub release with it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stockfish_tag:
+        description: "Stockfish release tag (empty: the latest)"
+        required: false
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write            # creating the release on a tag
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install chesscoach and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[gui,advanced]" "pyinstaller==6.20.0"
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $v = python -c "import chesscoach; print(chesscoach.__version__)"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "The tag $env:GITHUB_REF_NAME doesn't match chesscoach's version $v."
+          }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Freeze chesscoach
+        run: pyinstaller --noconfirm packaging/chesscoach.spec
+
+      - name: Download Stockfish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SF_TAG: ${{ inputs.stockfish_tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dest = "dist/chesscoach/stockfish"
+          New-Item -ItemType Directory -Force $dest | Out-Null
+          $tag = @(); if ($env:SF_TAG) { $tag = @($env:SF_TAG) }
+          # [name in the installer, the release files to try, in order]
+          $builds = @(
+            @("stockfish-avx2.exe", @("stockfish-windows-x86-64-avx2.zip")),
+            @("stockfish.exe", @("stockfish-windows-x86-64-sse41-popcnt.zip", "stockfish-windows-x86-64.zip"))
+          )
+          foreach ($b in $builds) {
+            $got = $false
+            foreach ($zip in $b[1]) {
+              Remove-Item -Recurse -Force sf -ErrorAction SilentlyContinue
+              gh release download @tag --repo official-stockfish/Stockfish --pattern $zip --dir sf 2>$null
+              if ($LASTEXITCODE -eq 0 -and (Test-Path "sf/$zip")) {
+                Expand-Archive "sf/$zip" -DestinationPath sf/x
+                $exe = Get-ChildItem sf/x -Recurse -Filter "stockfish*.exe" | Select-Object -First 1
+                if ($exe) {
+                  Copy-Item $exe.FullName "$dest/$($b[0])"
+                  $lic = Get-ChildItem sf/x -Recurse -Include "Copying.txt", "COPYING*" | Select-Object -First 1
+                  if ($lic) { Copy-Item $lic.FullName "$dest/Copying.txt" -Force }
+                  Write-Host "$($b[0]) <- $zip ($($exe.Name))"
+                  $got = $true; break
+                }
+              }
+            }
+            if (-not $got) {
+              gh release view @tag --repo official-stockfish/Stockfish --json tagName,assets --jq '.tagName, .assets[].name'
+              throw "No Stockfish build found for $($b[0]): the release's file names (above) have changed. Update the names in this workflow."
+            }
+          }
+          Get-ChildItem $dest
+          $global:LASTEXITCODE = 0      # an earlier name that wasn't found
+
+      - name: Check the frozen program
+        shell: pwsh
+        run: |
+          $out = "$pwd/selftest.txt"
+          $env:CHESSCOACH_SELFTEST = $out
+          Start-Process -FilePath "dist/chesscoach/chesscoach.exe" -Wait
+          Get-Content $out
+          if (-not (Get-Content $out -First 1).StartsWith("ok")) { throw "The frozen program failed its check." }
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) {
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+            if (-not (Test-Path $iscc)) {
+              choco install innosetup -y --no-progress
+            }
+          }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" packaging/chesscoach.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chesscoach-setup-${{ steps.version.outputs.version }}
+          path: dist/chesscoach-setup-${{ steps.version.outputs.version }}.exe
+
+      - name: Release (tags only)
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME "dist/chesscoach-setup-${{ steps.version.outputs.version }}.exe" `
+            --title "chesscoach ${{ steps.version.outputs.version }}" `
+            --notes "Windows installer. See the README's 'Install (testers)' section."

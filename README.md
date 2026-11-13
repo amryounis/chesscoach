@@ -148,7 +148,33 @@ words. The coach says less rather than something false about the pieces;
 its strategic opinions still need a reader's eye. The app says this under
 every comment.
 
+## Install on Windows (testers)
+
+1. Download `chesscoach-setup-<version>.exe` from the
+   [Releases](https://github.com/amryounis/chesscoach/releases) page and run it.
+   Windows may say "Windows protected your PC" (the installer isn't signed):
+   click **More info**, then **Run anyway**. It installs for your user only,
+   without administrator rights, and brings Stockfish with it.
+2. The first time chesscoach opens, a short setup checks your computer and
+   asks who writes the coach's words:
+   - **Ollama on your computer** (nothing leaves it): install Ollama from
+     [ollama.com/download](https://ollama.com/download), then press
+     **Download the model** in the setup (qwen3:14b, about 9 GB; it needs a
+     graphics card with 12 GB, and qwen3:8b is suggested for 8 GB), or
+   - **an online model with your own key**: Google Gemini has a free key at
+     [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+     Settings opens for it after the setup.
+3. Optionally your Lichess / Chess.com names and rating.
+
+The setup can be run again from Settings → **Setup…**. Maia (human-move
+prediction) isn't included in the installer; everything else works without it.
+The window needs Microsoft Edge WebView2, which Windows 10 and 11 normally have
+([download](https://developer.microsoft.com/microsoft-edge/webview2/) if not).
+
 ## Requirements
+
+For installing from the source (any system):
+
 
 - Python 3.10+
 - [Stockfish](https://stockfishchess.org/download/)
@@ -412,6 +438,12 @@ pytest              # engine tests are skipped if Stockfish isn't found
 ruff check src tests
 ```
 
+The Windows installer is built by GitHub Actions (`.github/workflows/installer.yml`):
+Actions → "Windows installer" → **Run workflow** (the installer is in the run's
+artifacts), or push a tag `v<version>` to make a release with it. The files are in
+`packaging/`: PyInstaller's `chesscoach.spec`, its start `launch.py`, and Inno
+Setup's `chesscoach.iss`.
+
 Package layout (`src/chesscoach/`):
 
 | Module | Responsibility |
@@ -438,6 +470,7 @@ Package layout (`src/chesscoach/`):
 | `history` / `summary` | patterns across games; the game summary |
 | `logfile` | chesscoach.log: errors and review timings |
 | `cli` | the `chesscoach` command |
+| `bundle` / `firstrun` | the installed program's Stockfish; the first-run setup's checks |
 
 ## Roadmap
 

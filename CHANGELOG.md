@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.28.0 — unreleased
+
+- **A Windows installer** for testers: `chesscoach-setup-0.28.0.exe`, built
+  by GitHub Actions (`installer.yml`: PyInstaller, then Inno Setup). It
+  installs for the current user without administrator rights and brings
+  Stockfish (the AVX2 build when the processor has it, else the build for
+  any 64-bit processor). Ollama and Maia are not included. It isn't signed:
+  Windows SmartScreen asks once ("More info" → "Run anyway")
+- **A first-run setup**: when there is no config file yet, chesscoach opens
+  a three-step setup: the engine (found or not), who writes the coach's words
+  (the graphics card is read with `nvidia-smi`: 12 GB suggests qwen3:14b,
+  8 GB qwen3:8b with a warning that it isn't measured, less an online model),
+  with Ollama checked and the model downloaded from the setup with a progress
+  bar; and your Lichess / Chess.com names and rating. Choosing an online model
+  opens Settings at the key. Settings → "Setup…" opens it again
+- The radio buttons in every dialog sit beside their labels
+
 ## 0.27.6 — unreleased
 
 - **The grade a comment names follows the app's.** qwen called 15.Rdg1 "an

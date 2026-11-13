@@ -122,6 +122,8 @@ class Api:
         self._window = None                 # set by the app after the window exists
         from .advanced import Analyzer
         self._analyzer = Analyzer()          # the advanced analyzer's window (uciboard)
+        from ..firstrun import Pull
+        self._pull = Pull()                  # a model download started by the first-run setup
         self._game: Optional[chess.pgn.Game] = None
         self._games: list = []                # every game in the file opened last
         self._game_path: str = ""
@@ -165,7 +167,63 @@ class Api:
                                     "privacy": llm.privacy_note(k)}
                                 for k, (name, url) in llm.SERVICES.items()}
         s["coach_model"] = llm.label(llm.active_model())
+        s["first_run"] = config.find_config_file() is None
         return s
+
+    # -- the first-run setup -------------------------------------------------------
+
+    @_safe
+    def setup_status(self, model: str = "") -> dict:
+        """What this computer has: the engine, the graphics card, Ollama and
+        its models. `model`: the one asked about (default: the suggestion)."""
+        import os
+        import shutil
+
+        from .. import firstrun
+        from ..bundle import bundled_stockfish
+        s = config.settings
+        path = s.stockfish_path or ""
+        ok = bool(path) and (os.path.isfile(path) or bool(shutil.which(path)))
+        card, ram = firstrun.gpu(), firstrun.ram_gb()
+        tip = firstrun.suggest(card, ram)
+        want = (model or (s.model if s.model and s.model != firstrun.MEASURED else "")
+                or tip["model"] or firstrun.MEASURED)
+        return {"stockfish": {"ok": ok, "path": path, "bundled": bool(bundled_stockfish())},
+                "gpu": card, "ram_gb": ram, "suggest": tip, "model": want,
+                "size": firstrun.SIZES.get(want, ""),
+                "ollama": firstrun.ollama_status(want),
+                "lichess_user": s.lichess_user, "chesscom_user": s.chesscom_user,
+                "player_elo": s.player_elo}
+
+    @_safe
+    def setup_pull(self, model: str) -> dict:
+        """Download the model through Ollama (in the background)."""
+        model = (model or "").strip()
+        if not model or any(c in model for c in " ;&|"):
+            raise ValueError("Give the model's name, e.g. qwen3:14b.")
+        return self._pull.start(model)
+
+    @_safe
+    def setup_pull_progress(self) -> dict:
+        return self._pull.progress()
+
+    @_safe
+    def finish_setup(self, values: dict) -> dict:
+        """Save what the setup chose. An online coach needs its key: the page
+        then opens Settings at that part."""
+        s = config.settings
+        coach = values.get("coach_llm") if values.get("coach_llm") in ("ollama", "online") else "ollama"
+        s.coach_llm = coach
+        if coach == "ollama" and (values.get("model") or "").strip():
+            s.model = values["model"].strip()
+        for k in ("lichess_user", "chesscom_user"):
+            if k in values:
+                setattr(s, k, str(values[k] or "").strip())
+        if str(values.get("player_elo") or "").strip():
+            s.player_elo = config._coerce("player_elo", values["player_elo"])
+        path = config.save_settings(s)
+        need_key = coach == "online" and not (s.online_key and s.online_model)
+        return {"saved": str(path), "open_settings": need_key}
 
     @_safe
     def list_online_models(self, service: str, url: str = "", key: str = "") -> dict:

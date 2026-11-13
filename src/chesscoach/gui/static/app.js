@@ -2257,6 +2257,91 @@ function isPromotion(o, d) {
 
 // ---------------------------------------------------------------- start
 
+// ---- the first-run setup ------------------------------------------------------
+const SETUP = { status: null, timer: null };
+function setupChoice() { return $("setup-form").elements.coach_llm.value || "ollama"; }
+function renderSetup() {
+  const s = SETUP.status;
+  if (!s) return;
+  const sf = s.stockfish;
+  $("setup-engine").innerHTML = sf.ok
+    ? `\u2714 Stockfish is ready${sf.bundled ? " (it came with chesscoach)" : ""}: <code>${esc(sf.path)}</code>`
+    : `\u2716 Stockfish wasn't found. Download it from stockfishchess.org and set its path in Settings.`;
+  const g = s.gpu;
+  $("setup-machine").textContent = (g ? `Graphics card: ${g.name}, ${g.vram_gb} GB.` : "No NVIDIA graphics card found.")
+    + (s.ram_gb ? ` Memory: ${s.ram_gb} GB.` : "");
+  $("setup-suggest").textContent = `Suggested: ${s.suggest.text}`;
+  const o = s.ollama, online = setupChoice() === "online";
+  $("setup-ollama").classList.toggle("off", online);
+  $("setup-online").classList.toggle("off", !online);
+  $("setup-ollama-state").innerHTML = !o.running
+    ? "\u2716 Ollama isn't running. Get it at <b>ollama.com/download</b>, install it, then press Check again."
+    : o.has ? `\u2714 Ollama has ${esc(s.model)}: ready.`
+      : `Ollama is running. ${esc(s.model)} isn't downloaded yet${s.size ? ` (${esc(s.size)})` : ""}.`;
+  $("setup-pull").disabled = online || !o.running || o.has || (SETUP.pull && SETUP.pull.running);
+}
+async function loadSetup(model) {
+  const s = await call("setup_status", model || "");
+  if (!s) return;
+  SETUP.status = s;
+  if (!model) $("setup-model").value = s.model;
+  renderSetup();
+}
+async function openSetup() {
+  const f = $("setup-form");
+  await loadSetup("");
+  const s = SETUP.status || {};
+  f.elements.coach_llm.value = (s.suggest && s.suggest.coach) || "ollama";
+  f.elements.lichess_user.value = s.lichess_user || "";
+  f.elements.chesscom_user.value = s.chesscom_user || "";
+  f.elements.player_elo.value = s.player_elo || "";
+  renderSetup();
+  if (!$("setup").open) $("setup").showModal();
+}
+async function watchPull() {
+  clearTimeout(SETUP.timer);
+  const p = await call("setup_pull_progress");
+  if (!p) return;
+  SETUP.pull = p;
+  $("setup-progress").hidden = !p.model;
+  const pct = p.total ? Math.round(100 * p.completed / p.total) : 0;
+  $("setup-bar").style.width = `${pct}%`;
+  $("setup-progress-text").textContent = p.error ? p.error
+    : p.done ? `${p.model} is downloaded.`
+      : `${p.status || "starting"}${p.total ? ` — ${pct}% of ${(p.total / 2 ** 30).toFixed(1)} GB` : ""}`;
+  if (p.running) SETUP.timer = setTimeout(watchPull, 1000);
+  else if (p.done) loadSetup($("setup-model").value.trim());
+  renderSetup();
+}
+for (const el of document.querySelectorAll('#setup-form input[name="coach_llm"]')) el.addEventListener("change", renderSetup);
+$("setup-check").addEventListener("click", () => loadSetup($("setup-model").value.trim()));
+$("setup-model").addEventListener("change", () => loadSetup($("setup-model").value.trim()));
+$("setup-pull").addEventListener("click", async () => {
+  const res = await call("setup_pull", $("setup-model").value.trim());
+  if (res) watchPull();
+});
+$("rerun-setup").addEventListener("click", () => { $("settings").close(); openSetup(); });
+$("setup-form").addEventListener("submit", async (e) => {
+  if (e.submitter && e.submitter.value === "cancel") return;
+  e.preventDefault();
+  const f = e.target;
+  const res = await call("finish_setup", {
+    coach_llm: setupChoice(), model: $("setup-model").value.trim(),
+    lichess_user: f.elements.lichess_user.value.trim(), chesscom_user: f.elements.chesscom_user.value.trim(),
+    player_elo: f.elements.player_elo.value.trim(),
+  });
+  if (!res) return;
+  $("setup").close();
+  if (res.open_settings) {
+    $("open-settings").click();
+    setTimeout(() => {
+      const r = document.querySelector('#settings-form input[name="coach_llm"][value="online"]');
+      if (r) { r.checked = true; r.dispatchEvent(new Event("change")); }
+      const k = $("online-key"); if (k) k.focus();
+    }, 300);
+  } else toast("All set. Open a game, or import yours from the Games tab.", 5000);
+});
+
 async function init() {
   settingsCache = await api().get_settings();
   if (settingsCache && settingsCache.theme) applyTheme(settingsCache.theme);
@@ -2269,6 +2354,7 @@ async function init() {
   }
   renderCoach();
   showTab("review");
+  if (settingsCache && settingsCache.first_run) openSetup();
 }
 if (window.pywebview && window.pywebview.api) init();
 else window.addEventListener("pywebviewready", init, { once: true });

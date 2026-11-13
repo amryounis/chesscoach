@@ -422,8 +422,50 @@
     <p class="sub" id="settings-file"></p>
     <p class="error" id="settings-error" hidden></p>
     <div class="dialog-actions">
+      <button type="button" class="quiet" id="rerun-setup" title="The first-run setup: engine, coach model, your names">Setup…</button>
       <button value="cancel" formnovalidate class="quiet">Cancel</button>
       <button value="save" class="primary" id="save-settings">Save settings</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setup" class="wide">
+  <form method="dialog" id="setup-form">
+    <h2>Welcome to chesscoach</h2>
+    <p class="sub">Three things to set up. Everything can be changed later in Settings.</p>
+    <section class="setup-step">
+      <h3>1. The chess engine</h3>
+      <p id="setup-engine"></p>
+    </section>
+    <section class="setup-step">
+      <h3>2. Who writes the coach's words</h3>
+      <p class="sub" id="setup-machine"></p>
+      <p id="setup-suggest"></p>
+      <label class="check"><input type="radio" name="coach_llm" value="ollama"> Ollama on this computer: nothing leaves it</label>
+      <div class="sub-opt" id="setup-ollama">
+        <p id="setup-ollama-state"></p>
+        <div class="row">
+          <label>Model <input id="setup-model" spellcheck="false"></label>
+          <button type="button" id="setup-pull">Download the model</button>
+          <button type="button" class="quiet" id="setup-check">Check again</button>
+        </div>
+        <div class="setup-progress" id="setup-progress" hidden><div class="bar"><span id="setup-bar"></span></div><span id="setup-progress-text"></span></div>
+      </div>
+      <label class="check"><input type="radio" name="coach_llm" value="online"> An online model, with your own key (Google Gemini has a free one)</label>
+      <p class="sub-opt sub" id="setup-online">After this, Settings opens at the online model: paste your key there and pick a model.</p>
+    </section>
+    <section class="setup-step">
+      <h3>3. You (optional)</h3>
+      <div class="row">
+        <label>Lichess name <input name="lichess_user" spellcheck="false"></label>
+        <label>Chess.com name <input name="chesscom_user" spellcheck="false"></label>
+        <label>Your rating <input name="player_elo" type="number" min="400" max="3000"></label>
+      </div>
+      <p class="sub">Your names let chesscoach tell your games from your opponents' and import them; the rating picks the opponents' level for the coach's comments.</p>
+    </section>
+    <div class="dialog-actions">
+      <button value="cancel" formnovalidate class="quiet">Later</button>
+      <button value="done" class="primary" id="setup-done">Finish</button>
     </div>
   </form>
 </dialog>

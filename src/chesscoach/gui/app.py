@@ -82,6 +82,8 @@ def launch(debug: bool = False) -> None:
 
 def main() -> None:
     """Entry point for the `chesscoach-app` shortcut (no console window)."""
+    from ..bundle import quiet_streams
+    quiet_streams()
     try:
         config.settings = config.load_settings()
     except config.ConfigError:
