@@ -23,6 +23,7 @@ import chess.pgn
 from .. import __version__, config, llm
 from ..play import PlayGame, preview_opponent, random_color
 from ..review import Cancelled, review_game, write_markdown
+from ..engine import open_uci
 
 
 def log_error(where: str) -> None:
@@ -778,7 +779,7 @@ class Api:
         """The helper Stockfish; call with _practice_lock held."""
         if self._practice_sf is None:
             config.settings.require_stockfish()
-            self._practice_sf = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+            self._practice_sf = open_uci(config.settings.stockfish_path)
         return self._practice_sf
 
     def _hint(self, board: chess.Board, best: Optional[chess.Move] = None) -> dict:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -11,6 +12,15 @@ import chess
 import chess.engine
 
 from . import config
+
+
+def open_uci(command, **popen_args) -> chess.engine.SimpleEngine:
+    """Start a UCI engine (Stockfish, Maia). On Windows, without a console
+    window of its own: the installed program has no console, and Windows
+    otherwise opens one for each engine it starts."""
+    if os.name == "nt":
+        popen_args.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return chess.engine.SimpleEngine.popen_uci(command, **popen_args)
 
 
 @dataclass
@@ -52,7 +62,7 @@ def run_stockfish(board: chess.Board, depth: Optional[int] = None,
         config.settings.require_stockfish()
 
     if own:
-        engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+        engine = open_uci(config.settings.stockfish_path)
     try:
         # Win/draw/loss from Stockfish's own model, where the engine has it
         if "UCI_ShowWDL" in engine.options and not getattr(engine, "_cc_wdl", False):
@@ -123,7 +133,7 @@ def open_maia(elo: Optional[int] = None, temperature: float = 0.0):
     if not shutil.which(config.settings.maia_cmd):
         return None
     try:
-        eng = chess.engine.SimpleEngine.popen_uci(
+        eng = open_uci(
             config.settings.maia_cmd, stderr=subprocess.DEVNULL)
     except Exception:
         return None

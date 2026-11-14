@@ -30,6 +30,7 @@ import chess.engine
 from . import config
 from .assessment import label_for_drop, win_pct
 from .engine import run_stockfish
+from .engine import open_uci
 
 DRILL_LABELS = ("Inaccuracy", "Mistake", "Blunder")
 _SEVERITY = {"Blunder": 0, "Mistake": 1, "Inaccuracy": 2}
@@ -226,7 +227,7 @@ def judge(drill: dict, answer_uci: Optional[str], engine=None) -> dict:
     own = engine is None
     if own:
         config.settings.require_stockfish()
-        engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+        engine = open_uci(config.settings.stockfish_path)
     try:
         if answer_uci is None:
             out.update(verdict="revealed",

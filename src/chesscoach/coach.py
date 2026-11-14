@@ -37,6 +37,7 @@ from .engine import EngineAnalysis, run_stockfish
 from .facts import (castling_lines, join_words, legal_move_line, loose_piece_lines,
                     material_lines, play_line, position_facts, resolve_move)
 from .grounding import correction_text, ground, remove_failed
+from .engine import open_uci
 
 MAX_TOOL_CALLS = 6
 
@@ -1039,7 +1040,7 @@ def ask_routed(board: chess.Board, question: str, model: str, engine,
 
 def open_engine():
     config.settings.require_stockfish()
-    return chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+    return open_uci(config.settings.stockfish_path)
 
 
 def board_from(fen: str = "", pgn_moves: str = "") -> tuple:

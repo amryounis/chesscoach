@@ -47,6 +47,7 @@ from . import config
 from .assessment import eval_phrase, win_pct
 from .describe import PIECE_NAMES, describe_move, move_notes, side_name
 from .opening import idea_for, name_at
+from .engine import open_uci
 
 DEFAULTS = {"plies": 20, "min_share": 0.05, "min_line": 0.002, "max_moves": 4}
 CENTRE = (chess.D4, chess.E4, chess.D5, chess.E5)
@@ -384,7 +385,7 @@ def run(book_path: str, model: str, plies: int = DEFAULTS["plies"],
     if llm is None:
         from .narrator import check_ollama
         check_ollama(model)
-    engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+    engine = open_uci(config.settings.stockfish_path)
     done = written = 0
     t0 = time.time()
     todo = [(epd, m) for epd in p.order for m in p.positions[epd]["moves"]]

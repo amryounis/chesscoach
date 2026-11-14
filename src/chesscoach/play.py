@@ -20,6 +20,7 @@ import chess.pgn
 
 from . import config
 from .engine import open_maia
+from .engine import open_uci
 
 # Maia samples from its move distribution at this temperature. 1.0 is the
 # distribution as learned from real games; lower plays more predictably.
@@ -86,7 +87,7 @@ class PlayGame:
             why = "failed" if shutil.which(config.settings.maia_cmd) else "missing"
             self.opponent = describe_opponent("stockfish", elo, why)
             config.settings.require_stockfish()
-            self._engine = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+            self._engine = open_uci(config.settings.stockfish_path)
             self._engine.configure({"UCI_LimitStrength": True,
                                     "UCI_Elo": self.opponent["effective_elo"]})
             self._limit = chess.engine.Limit(time=0.2)

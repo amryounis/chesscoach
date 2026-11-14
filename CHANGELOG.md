@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.28.1 — unreleased
+
+- **No console windows for the engines** in the installed program. It has
+  no console of its own, so Windows opened a black window for each Stockfish
+  (and Maia) it started: in Review, Practice, Play and the coach. Every engine
+  now starts through `engine.open_uci`, without a window (the advanced
+  analyzer already did this)
+
 ## 0.28.0 — unreleased
 
 - **A Windows installer** for testers: `chesscoach-setup-0.28.0.exe`, built

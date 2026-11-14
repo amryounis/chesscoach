@@ -30,6 +30,7 @@ from .opening import book_status, opening_notes, theory_exit
 from .report import print_scoreboard
 from .summary import summarize
 from .themes import move_themes
+from .engine import open_uci
 
 # progress(stage, done, total, message, info); stages: "engine", "prepare", "narrate", "done".
 # info (may be empty), so a viewer can follow along: "engine": {ply: the
@@ -248,7 +249,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
     evals: list = []
     timing = {"slow": []}                     # written to chesscoach.log at the end
     t_engine = time.time()
-    sf = chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+    sf = open_uci(config.settings.stockfish_path)
     try:
         for i, b in enumerate(boards):
             if stop():
@@ -353,7 +354,7 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         t_narrate = time.time()
         # One Stockfish for the engine-verified concepts of every moment.
         # (also for how hard each error's better move was to find)
-        concept_sf = (chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path)
+        concept_sf = (open_uci(config.settings.stockfish_path)
                       if todo else None)
         # Online models with small free quotas get every comment in one request.
         batched = {model: [] for model in models if llm.one_request(model)}

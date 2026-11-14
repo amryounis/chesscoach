@@ -35,6 +35,7 @@ import chess
 import chess.engine
 
 from . import config
+from .engine import open_uci
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -219,7 +220,7 @@ class Engines:
 
     def __enter__(self):
         if self.path:
-            self.sf = chess.engine.SimpleEngine.popen_uci(self.path)
+            self.sf = open_uci(self.path)
         return self
 
     def __exit__(self, *exc):

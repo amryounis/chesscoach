@@ -65,3 +65,18 @@ def test_the_installed_programs_stockfish(tmp_path):
     assert bundle.bundled_stockfish(tmp_path, avx2=True).endswith("stockfish-avx2.exe")
     assert bundle.bundled_stockfish(tmp_path, avx2=False).endswith("stockfish.exe")
     assert bundle.app_dir() is None and not bundle.frozen()            # run from Python
+
+
+def test_engines_start_without_a_window_on_windows(monkeypatch):
+    import chess.engine
+
+    from chesscoach import engine
+    seen = []
+    monkeypatch.setattr(chess.engine.SimpleEngine, "popen_uci",
+                        lambda cmd, **kw: seen.append(kw) or "engine")
+    monkeypatch.setattr(engine.os, "name", "nt")
+    assert engine.open_uci("stockfish.exe") == "engine"
+    assert "creationflags" in seen[-1]
+    monkeypatch.setattr(engine.os, "name", "posix")
+    engine.open_uci("stockfish")
+    assert "creationflags" not in seen[-1]
