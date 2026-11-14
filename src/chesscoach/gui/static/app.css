@@ -292,6 +292,8 @@ select, input:not([type=radio]):not([type=range]) {
 .statusbar .sb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .statusbar button { padding: 1px 6px; font-size: 12.5px; }
 .statusbar .sb-gap { flex: 1; }
+.statusbar .sb-task.failed { color: var(--j-blunder); }
+.statusbar .sb-task.failed .bar { display: none; }
 .statusbar .sb-coach { white-space: nowrap; }
 .bar { flex: 1 1 200px; max-width: 320px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); transition: width .25s; }

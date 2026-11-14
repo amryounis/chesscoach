@@ -19,7 +19,7 @@ import chess.pgn
 
 from . import config, llm
 from .assessment import compute_assessment, eval_phrase, win_pct
-from .engine import EngineAnalysis, open_maia, run_maia, run_stockfish
+from .engine import EngineAnalysis, open_maia, quit_quietly, run_maia, run_stockfish
 from .moments import moment_context, pick_critical
 from .narrator import check_ollama, narrate, narrate_batch, prepare_move, warm_up
 from .describe import move_notes, move_shapes, side_name
@@ -117,7 +117,9 @@ def _log_timing(game, n_positions: int, n_moments: int, total: float, timing: di
     lines = [f"{h.get('White', '?')} - {h.get('Black', '?')}: {n_positions} positions, "
              f"{n_moments} moments, {total:.0f}s; depth {config.settings.depth}, "
              f"cap {config.settings.max_seconds}s per position"]
-    lines += [f"  {k}: {v}s" for k, v in timing.items() if k != "slow"]
+    lines += [f"  {k}: {v}s" for k, v in timing.items() if isinstance(v, (int, float))]
+    for note in timing.get("engines that had stopped", []):
+        lines.append(f"  had stopped before the end (see maia.log): {note}")
     for i, secs, depth, fen in timing["slow"]:
         lines.append(f"  slow position {i}: {secs}s (depth {depth}) {fen}")
     append("review timing", "\n".join(lines))
@@ -405,10 +407,12 @@ def review_game(game: chess.pgn.Game, side: str = "both", models: Optional[list]
         progress("narrate", len(todo), len(todo), "Done", {})
         timing["comments"] = round(time.time() - t_narrate, 1)
     finally:
-        if maia_engine:
-            maia_engine.quit()
-        if concept_sf:
-            concept_sf.quit()
+        # Maia or the second Stockfish may have stopped on their own (out of
+        # memory, say): the review is still good, so close them quietly.
+        for name, eng in (("Maia", maia_engine), ("Stockfish (concepts)", concept_sf)):
+            gone = quit_quietly(eng)
+            if gone:
+                timing.setdefault("engines that had stopped", []).append(f"{name}: {gone}")
 
     review.accuracy = game_accuracy(
         [100.0 if b.is_checkmate() and b.turn == chess.BLACK else

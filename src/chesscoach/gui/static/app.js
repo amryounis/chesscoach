@@ -1254,6 +1254,8 @@ async function startReview() {
   $("follow-review").hidden = true;
   $("coach").innerHTML = "";
   $("progress").hidden = false;
+  $("progress").classList.remove("failed");
+  $("cancel-review").hidden = false;
   $("progress-fill").style.width = "0%";
   $("progress-text").textContent = "Starting";
   clearInterval(R.polling);
@@ -1297,8 +1299,15 @@ async function pollReview() {
     R.live = null;
     renderGraph();
     goTo(R.cursor);
-    if (s.state === "error") toast(s.message, 6000);
-    else if (s.state === "cancelled") toast("Review stopped.");
+    if (s.state === "error") {
+      // it stays in the status bar: a toast alone is easy to miss, and the
+      // panel still shows the game's earlier review
+      toast(s.message, 6000);
+      $("progress").hidden = false;
+      $("progress").classList.add("failed");
+      $("cancel-review").hidden = true;
+      $("progress-text").textContent = `The review failed: ${s.message} — what is shown is the earlier review, if any (details in chesscoach.log)`;
+    } else if (s.state === "cancelled") toast("Review stopped.");
   }
 }
 

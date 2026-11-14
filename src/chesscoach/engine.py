@@ -132,15 +132,36 @@ def open_maia(elo: Optional[int] = None, temperature: float = 0.0):
     """
     if not shutil.which(config.settings.maia_cmd):
         return None
+    # Maia's own messages go to maia.log beside the config file: when it
+    # stops in the middle of a review, that is where the reason is.
     try:
-        eng = open_uci(
-            config.settings.maia_cmd, stderr=subprocess.DEVNULL)
+        log = config.user_config_path().parent / "maia.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        if log.exists() and log.stat().st_size > 1_000_000:
+            log.write_bytes(b"")
+        err = open(log, "ab")
+    except OSError:
+        err = subprocess.DEVNULL
+    try:
+        eng = open_uci(config.settings.maia_cmd, stderr=err)
     except Exception:
         return None
     opts = {"Elo": elo or config.settings.player_elo,
             "Temperature": str(temperature)}
     eng.configure({k: v for k, v in opts.items() if k in eng.options})
     return eng
+
+
+def quit_quietly(eng) -> Optional[str]:
+    """Close an engine; when it had already stopped, say so instead of
+    failing (a review is not lost to an engine that died at its end)."""
+    if eng is None:
+        return None
+    try:
+        eng.quit()
+        return None
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"
 
 
 def run_maia(board: chess.Board, engine=None) -> MaiaPrediction:

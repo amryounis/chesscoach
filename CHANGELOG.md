@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.28.4 — unreleased
+
+- **A Maia that stops no longer loses the review.** Amr's 0.28.3 reviews
+  failed at the very end: Maia had stopped during the review, and closing
+  it raised "engine event loop dead", so the finished review was thrown away
+  and the page kept the game's earlier review (with the old grades). Maia and
+  the second Stockfish are now closed quietly; a stopped engine is noted in
+  chesscoach.log, and Maia's own messages go to maia.log beside it, so the
+  reason it stopped can be read
+- **A failed review says so in the status bar** and stays there, in red,
+  until the next review: "The review failed: … what is shown is the earlier
+  review, if any". It was a 6-second toast, easy to miss
+
 ## 0.28.3 — unreleased
 
 - **Inaccuracy, mistake and blunder are judged as Lichess judges them.**

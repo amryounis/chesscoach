@@ -888,3 +888,21 @@ def test_first_run_setup(page, monkeypatch):
     assert page.is_checked("#settings-form input[name=coach_llm][value=online]")
     assert config.settings.coach_llm == "online"
     assert page.errors == []
+
+
+def test_a_failed_review_says_so_in_the_status_bar(page, monkeypatch):
+    """Amr's 0.28.3 review failed with a 6-second toast he didn't see; the
+    panel kept the earlier review and looked like the new one."""
+    from chesscoach.gui import api as api_mod
+
+    def failing_review(*a, **kw):
+        raise RuntimeError("engine event loop dead")
+
+    monkeypatch.setattr(api_mod, "review_game", failing_review)
+    page.click("#open-pgn")
+    page.click("#start-review")
+    page.wait_for_selector("#progress.failed")
+    text = page.inner_text("#progress-text")
+    assert "The review failed: engine event loop dead" in text and "earlier review" in text
+    assert not page.is_visible("#cancel-review")
+    assert page.errors == []
