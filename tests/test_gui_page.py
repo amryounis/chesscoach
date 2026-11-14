@@ -311,7 +311,8 @@ def test_the_board_follows_a_running_review(page):
     bar = page.locator("#statusbar").bounding_box()
     assert bar["y"] + bar["height"] >= page.viewport_size["height"] - 1
     assert page.is_visible("#cancel-review")
-    assert "comments appear here" in page.inner_text("#coach")
+    assert page.inner_text("#coach").strip() == ""            # nothing said twice
+    assert "board follows" in page.get_attribute("#progress", "title")
     assert "Coach: " in page.inner_text("#sb-coach")
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "statusbar.png"))
@@ -322,7 +323,7 @@ def test_the_board_follows_a_running_review(page):
     page.click("#follow-review")
     assert not page.is_visible("#follow-review")
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
-    assert "comments appear here" not in page.inner_text("#coach")   # the summary replaces it
+    assert page.inner_text("#coach").strip()                   # the summary fills it
     assert not page.is_visible("#progress")
     assert page.errors == []
 

@@ -16,7 +16,8 @@ the board exactly as the local model's are.
 - Stockfish analyses every move; the coach comments only on the critical
   moments, and every fact it states about the pieces is checked against the
   board before you see it (a false sentence is rewritten or removed)
-- Move marks (!!, !, !?, ?!, ?, ??), accuracy per side (Lichess's method),
+- Move marks (!!, !, !?, ?!, ?, ??; ?! ? ?? judged as Lichess judges them),
+  accuracy per side (Lichess's method),
   an evaluation graph, and an analysis table with Stockfish's
   win/draw/loss for every move
 - *Show the better move*: your move and the engine's on the board, with the

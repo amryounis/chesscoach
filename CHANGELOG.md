@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.28.3 — unreleased
+
+- **Inaccuracy, mistake and blunder are judged as Lichess judges them.**
+  chesscoach said it used Lichess's thresholds but its numbers were twice
+  as lenient: Lichess's .1 / .2 / .3 are on a -1..1 scale of winning chances,
+  that is 5 / 10 / 15 points of win%, and chesscoach used 10 / 20 / 30. In
+  Amr's game against Stockfish 1500, 20...Bf5 (the queen lost, the drop 19)
+  was an "inaccuracy"; it is a blunder now, as is 10...O-O. Below an
+  inaccuracy: Excellent under 2, Good under 5. Also as Lichess: the score is
+  capped at 10 pawns for winning chances, and allowing a mate or losing your
+  own is judged by the score on the other side of it (more than 10 pawns:
+  inaccuracy, more than 7: mistake, else blunder). Accuracy % is unchanged.
+  Practice accepts a move that keeps your chances within Lichess's
+  inaccuracy line (5 points, was 10), and All moves marks inaccuracies again
+- While a review runs, the comment panel stays empty: the status bar says
+  what is running (its hover text says the board follows the review)
+
 ## 0.28.2 — unreleased
 
 - **A status bar** at the bottom of the window, one line: while a review

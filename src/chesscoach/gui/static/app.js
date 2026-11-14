@@ -1252,7 +1252,7 @@ async function startReview() {
   lockForReview(true);
   R.running = true; R.follow = true; R.live = []; R.liveShown = null;
   $("follow-review").hidden = true;
-  $("coach").innerHTML = `<p class="empty">The board follows Stockfish. The coach's comments appear here when the review is done.</p>`;
+  $("coach").innerHTML = "";
   $("progress").hidden = false;
   $("progress-fill").style.width = "0%";
   $("progress-text").textContent = "Starting";
@@ -1343,7 +1343,7 @@ function showLive(s) {
     renderGraph();
   }
   if (s.stage === "prepare") {
-    $("coach").innerHTML = `<p class="empty">Next, the coach writes about the moments that decided the game.</p>`;
+    $("coach").innerHTML = "";
     R.liveShown = null;
     return;
   }
@@ -1365,10 +1365,7 @@ function showLive(s) {
     const sc = s.stage === "engine" && !s.searching ? R.live[pos] : null;
     if (sc) setEval(winPctWhite(sc[0], sc[1]));
   }
-  const note = s.stage === "engine"
-    ? "The board follows Stockfish. The coach's comments appear here when the review is done."
-    : "The coach's comments appear here when the review is done, each checked against the board first.";
-  if ($("coach").textContent !== note) $("coach").innerHTML = `<p class="empty">${note}</p>`;
+  $("coach").innerHTML = "";            // the comments come when the review is done
   $("coach-scroll").scrollTop = 0;
 }
 $("save-annotated").addEventListener("click", async () => {

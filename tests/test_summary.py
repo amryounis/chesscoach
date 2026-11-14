@@ -112,8 +112,9 @@ def test_patterns_across_games(tmp_path):
 
 @pytest.mark.engine
 def test_homer_game_errors_share_king_shelter(homer_game, stockfish):
-    """The design doc's example: the three inaccuracies in Homer vs Fritz
-    (8...Bg4, 9...dxc4, 12...Kxf7) all gave up king shelter."""
+    """The design doc's example: the three errors in Homer vs Fritz (8...Bg4,
+    9...dxc4, 12...Kxf7) all gave up king shelter. (Inaccuracies by the old,
+    too lenient thresholds; with Lichess's, 8...Bg4 is a mistake.)"""
     config.settings = config.load_settings(stockfish_path=stockfish)
     boards, moves = homer_game
     sf = chess.engine.SimpleEngine.popen_uci(stockfish)
@@ -123,7 +124,7 @@ def test_homer_game_errors_share_king_shelter(homer_game, stockfish):
             eb = run_stockfish(boards[i], depth=18, engine=sf)
             ea = run_stockfish(boards[i + 1], depth=18, engine=sf)
             prep = prepare_move(boards[i], moves[i], eb, ea, None, engine=sf)
-            if prep["label"] != "Inaccuracy":
+            if prep["label"] not in ("Inaccuracy", "Mistake", "Blunder"):
                 pytest.skip(f"{name} is a {prep['label']} on this machine")
             found[name] = [t.tag for t in move_themes(
                 i, name, prep["label"], boards[i], moves[i], eb.best_move,

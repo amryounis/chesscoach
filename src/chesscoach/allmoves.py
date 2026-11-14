@@ -25,7 +25,7 @@ import chess
 import chess.engine
 
 from . import config
-from .assessment import label_for_drop, win_pct
+from .assessment import INACCURACY, label_for_drop, win_pct
 from .describe import PIECE_NAMES
 from .engine import white_mate
 
@@ -33,7 +33,7 @@ DEPTH = 12               # a quick search: every move, in seconds
 LINE_PLIES = 8           # how far the line is followed for material...
 MAX_PLIES = 14           # ...and on while captures go on
 EQUAL = 3.0              # points of winning chance: as good as the best
-GOOD = 10.0
+GOOD = float(INACCURACY)   # below Lichess's inaccuracy
 VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}
 
 

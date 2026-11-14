@@ -15,7 +15,35 @@ def test_blunder_from_large_drop():
 
 def test_winning_position_swings_are_not_blunders():
     # -6.28 -> -5.42 for Black while completely winning: still fine
-    assert compute_assessment(-628, -542, None, None, False)[0] == "Excellent"
+    assert compute_assessment(-628, -542, None, None, False)[0] in ("Excellent", "Good")
+
+
+def test_lichess_thresholds():
+    """Lichess's .1 / .2 / .3 on its -1..1 scale: 5 / 10 / 15 points of win%.
+    Amr's game (Player - Stockfish 1500, 2026.11.14), Black's moves:"""
+    a = lambda before, after: compute_assessment(before, after, None, None, False)[0]
+    assert a(29, 337) == "Blunder"            # 10...O-O, a piece lost (drop 25)
+    assert a(324, 841) == "Blunder"           # 20...Bf5, the queen (drop 19); was "Inaccuracy"
+    assert a(276, 473) == "Mistake"           # 12...Be6 (drop 12)
+    assert a(828, 1027) in ("Excellent", "Good")   # 21...Bxc5: the game was already lost
+    from chesscoach.assessment import label_for_drop
+    assert [label_for_drop(d) for d in (1.9, 4.9, 5, 9.9, 10, 14.9, 15)] == [
+        "Excellent", "Good", "Inaccuracy", "Inaccuracy", "Mistake", "Mistake", "Blunder"]
+    assert win_pct(1500, None, True) == win_pct(1000, None, True)      # capped at 10 pawns
+
+
+def test_mates_judged_as_lichess_does():
+    # allowing a mate: by how lost the mover already was
+    assert compute_assessment(-300, None, None, -4, True)[0] == "Blunder"
+    assert compute_assessment(-800, None, None, -4, True)[0] == "Mistake"
+    assert compute_assessment(-1200, None, None, -4, True)[0] == "Inaccuracy"
+    assert compute_assessment(300, None, None, 4, False)[0] == "Blunder"      # Black allows
+    # losing your own mate: by how much is left
+    assert compute_assessment(None, 1200, 3, None, True)[0] == "Inaccuracy"
+    assert compute_assessment(None, 800, 3, None, True)[0] == "Mistake"
+    assert compute_assessment(None, None, -3, 2, False)[0] == "Blunder"       # Black's mate, now White's
+    # a longer mate is still a mate
+    assert compute_assessment(None, None, 3, 5, True)[0] == "Excellent"
 
 
 def test_losing_a_forced_mate_is_a_blunder():
