@@ -29,7 +29,7 @@
   --book: Cambria, "Iowan Old Style", Georgia, "Times New Roman", serif;
   --fig: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", var(--ui);
 
-  --board: min(calc(100vh - 168px), calc(100vw - 560px));
+  --board: min(calc(100vh - 196px), calc(100vw - 560px));
 
   /* what a theme can add beyond colour: the board's dark squares, a grain
      over the board, a paper texture behind the page, a frame, and how
@@ -140,7 +140,7 @@ body {
   color: var(--ink);
   font: 14px/1.45 var(--ui);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   overflow: hidden;
 }
 [hidden] { display: none !important; }
@@ -282,7 +282,17 @@ select, input:not([type=radio]):not([type=range]) {
   padding: 5px 8px;
 }
 
-.progress { display: flex; gap: 12px; align-items: center; font-size: 13.5px; color: var(--ink); }
+/* ---- the status bar: one line at the bottom of the window ---- */
+.statusbar {
+  display: flex; align-items: center; gap: 12px; min-height: 26px; padding: 2px 20px;
+  border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); min-width: 0;
+}
+.statusbar .sb-task { display: flex; align-items: center; gap: 10px; color: var(--ink); min-width: 0; }
+.statusbar .bar { flex: 0 0 140px; height: 6px; }
+.statusbar .sb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.statusbar button { padding: 1px 6px; font-size: 12.5px; }
+.statusbar .sb-gap { flex: 1; }
+.statusbar .sb-coach { white-space: nowrap; }
 .bar { flex: 1 1 200px; max-width: 320px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
 

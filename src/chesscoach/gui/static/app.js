@@ -1252,7 +1252,7 @@ async function startReview() {
   lockForReview(true);
   R.running = true; R.follow = true; R.live = []; R.liveShown = null;
   $("follow-review").hidden = true;
-  $("coach").innerHTML = `<p class="empty">Stockfish is starting…</p>`;
+  $("coach").innerHTML = `<p class="empty">The board follows Stockfish. The coach's comments appear here when the review is done.</p>`;
   $("progress").hidden = false;
   $("progress-fill").style.width = "0%";
   $("progress-text").textContent = "Starting";
@@ -1273,8 +1273,7 @@ async function pollReview() {
     if (R.step !== step) { R.step = step; R.stepSince = Date.now(); }
     const secs = Math.round((Date.now() - R.stepSince) / 1000);
     const took = secs >= 4 ? ` · ${secs}s` : "";
-    $("progress-text").textContent = (s.stage === "engine" && s.message.startsWith("Analysing")
-      ? `Analysing position ${Math.min(s.done + (s.searching ? 1 : 0), s.total)} of ${s.total}` : s.message) + took;
+    $("progress-text").textContent = reviewStatus(s) + took;
     showLive(s);
     return;
   }
@@ -1303,6 +1302,30 @@ async function pollReview() {
   }
 }
 
+// The status bar's line while a review runs: what is being done, and where.
+function reviewStatus(s) {
+  const pos = s.ply === null || s.ply === undefined || !R.game ? null
+    : s.stage === "engine" ? s.ply : s.ply + 1;
+  const mv = pos ? R.game.moves[pos - 1] : null;
+  const where = pos === null ? "" : mv ? figurine(mv.move_label) : "the starting position";
+  if (s.stage === "engine" && where) {
+    const n = Math.min(s.done + (s.searching ? 1 : 0), s.total);
+    return `Stockfish: ${where}${!s.searching && s.verdict ? ` — ${s.verdict}` : "…"} (position ${n} of ${s.total})`;
+  }
+  if (s.stage === "coach" && where)
+    return `Coach writing about ${where} (moment ${s.done + 1} of ${s.total})`;
+  return s.message;
+}
+
+// Who writes the coach's words, at the right of the status bar.
+function showCoachStatus() {
+  const s = settingsCache;
+  if (!s) return;
+  $("sb-coach").textContent = s.coach_llm === "online"
+    ? `Coach: ${s.online_model || "online model (no model chosen)"} · online`
+    : `Coach: ${s.model} · on this computer`;
+}
+
 $("cancel-review").addEventListener("click", () => api().cancel_review());
 $("follow-review").addEventListener("click", () => {
   R.follow = true;
@@ -1320,8 +1343,7 @@ function showLive(s) {
     renderGraph();
   }
   if (s.stage === "prepare") {
-    $("coach").innerHTML = `<p class="live">${esc(s.message)}…</p>`
-      + `<p class="empty">Stockfish has analysed every position. Next, the coach writes about the moments that decided the game.</p>`;
+    $("coach").innerHTML = `<p class="empty">Next, the coach writes about the moments that decided the game.</p>`;
     R.liveShown = null;
     return;
   }
@@ -1343,12 +1365,10 @@ function showLive(s) {
     const sc = s.stage === "engine" && !s.searching ? R.live[pos] : null;
     if (sc) setEval(winPctWhite(sc[0], sc[1]));
   }
-  const where = mv ? figurine(mv.move_label) : "the starting position";
-  $("coach").innerHTML = s.stage === "engine"
-    ? `<p class="live">Stockfish is analysing <b>${esc(where)}</b>${!s.searching && s.verdict ? `: ${esc(s.verdict)}` : "…"}</p>`
-      + `<p class="empty">Position ${Math.min(s.done + (s.searching ? 1 : 0), s.total)} of ${s.total}. Next, the coach writes about the moments that decided the game.</p>`
-    : `<p class="live">The coach is writing about <b>${esc(where)}</b> (moment ${s.done + 1} of ${s.total}).</p>`
-      + `<p class="empty">Its comment is checked against the board before you see it.</p>`;
+  const note = s.stage === "engine"
+    ? "The board follows Stockfish. The coach's comments appear here when the review is done."
+    : "The coach's comments appear here when the review is done, each checked against the board first.";
+  if ($("coach").textContent !== note) $("coach").innerHTML = `<p class="empty">${note}</p>`;
   $("coach-scroll").scrollTop = 0;
 }
 $("save-annotated").addEventListener("click", async () => {
@@ -1694,7 +1714,7 @@ $("list-models").addEventListener("click", async () => {
 $("open-settings").addEventListener("click", async () => {
   const s = await call("get_settings");
   if (!s) return;
-  settingsCache = s;
+  settingsCache = s; showCoachStatus();
   const f = $("settings-form");
   SERVICES = s.online_services || {};
   $("online-service").innerHTML = Object.entries(SERVICES)
@@ -1744,7 +1764,7 @@ $("settings-form").addEventListener("submit", async (e) => {
     $("settings-error").hidden = false;
     return;
   }
-  settingsCache = res;
+  settingsCache = res; showCoachStatus();
   applyTheme(res.theme);
   $("settings").close();
   toast("Settings saved.");
@@ -2021,7 +2041,7 @@ function renderImport() {
       const s = await call("import_review", key);
       if (!s) return;
       $("import-dialog").close();
-      settingsCache = await api().get_settings();
+      settingsCache = await api().get_settings(); showCoachStatus();
       showTab("review");
       loadSummary(s);
     });
@@ -2070,7 +2090,7 @@ $("import-form").addEventListener("submit", async (e) => {
   const res = await api().import_add([...IMP.picked]);
   if (res.error) { $("import-go").disabled = false; return fail(res.error); }
   $("import-dialog").close();
-  settingsCache = await api().get_settings();              // the name is now known as yours
+  settingsCache = await api().get_settings(); showCoachStatus();              // the name is now known as yours
   toast(`Added ${res.added} game${res.added === 1 ? "" : "s"} from ${res.site} to ${res.file}.`, 5000);
   fillFiles([...new Set([...[...$("lib-file").options].map((o) => o.value).filter(Boolean), res.file])]);
   $("lib-file").value = res.file;
@@ -2343,7 +2363,7 @@ $("setup-form").addEventListener("submit", async (e) => {
 });
 
 async function init() {
-  settingsCache = await api().get_settings();
+  settingsCache = await api().get_settings(); showCoachStatus();
   if (settingsCache && settingsCache.theme) applyTheme(settingsCache.theme);
   if (settingsCache && settingsCache.version) {
     $("app-version").textContent = `v${settingsCache.version}`;

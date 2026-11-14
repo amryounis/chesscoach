@@ -226,6 +226,8 @@ def test_practice_your_mistakes(page):
     page.mouse.move(400, 150)                      # over the panel: the wheel scrolls it
     page.mouse.wheel(0, 1500)
     page.wait_for_timeout(300)
+    assert page.evaluate("document.getElementById('panel-practice').scrollTop") > 0
+    page.locator("#drill-next").scroll_into_view_if_needed()   # the panel scrolls to it
     box = page.locator("#drill-next").bounding_box()
     assert box and box["y"] >= 0 and box["y"] + box["height"] <= 300   # on screen
     page.click("#drill-next")
@@ -302,10 +304,17 @@ def test_the_board_follows_a_running_review(page):
     page.click("#open-pgn")
     page.click("#start-review")
     page.wait_for_function(
-        "document.querySelector('#coach .live') && document.querySelector('#movelist .mv.current')",
-        timeout=60000)
-    assert "Stockfish is analysing" in page.inner_text("#coach") or \
-        "The coach is writing" in page.inner_text("#coach")
+        "/^(Stockfish|Coach writing)/.test(document.getElementById('progress-text').textContent)"
+        " && document.querySelector('#movelist .mv.current')", timeout=60000)
+    # what is running is in the status bar at the bottom; the coach panel
+    # keeps one quiet line until the comments come
+    bar = page.locator("#statusbar").bounding_box()
+    assert bar["y"] + bar["height"] >= page.viewport_size["height"] - 1
+    assert page.is_visible("#cancel-review")
+    assert "comments appear here" in page.inner_text("#coach")
+    assert "Coach: " in page.inner_text("#sb-coach")
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "statusbar.png"))
     page.wait_for_selector("#evalgraph:not([hidden]) .ln", timeout=60000)
     # Taking over the board stops following; Follow brings it back.
     page.keyboard.press("Home")
@@ -313,7 +322,8 @@ def test_the_board_follows_a_running_review(page):
     page.click("#follow-review")
     assert not page.is_visible("#follow-review")
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
-    assert page.locator("#coach .live").count() == 0           # the summary replaces it
+    assert "comments appear here" not in page.inner_text("#coach")   # the summary replaces it
+    assert not page.is_visible("#progress")
     assert page.errors == []
 
 
@@ -362,8 +372,7 @@ def test_live_review_marks_the_king_in_check(page, monkeypatch):
     monkeypatch.setattr(api_mod, "review_game", stuck_review)
     page.click("#open-pgn")
     page.click("#start-review")
-    page.wait_for_function("document.querySelector('#coach .live') && "
-                           "document.querySelector('#coach .live').textContent.includes('gxf7')")
+    page.wait_for_function("document.getElementById('progress-text').textContent.includes('gxf7')")
     box = page.locator("#board").bounding_box()
     sq = box["width"] / 8
     page.wait_for_selector("cg-board square.check")

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.2 — unreleased
+
+- **A status bar** at the bottom of the window, one line: while a review
+  runs, its progress bar, what it is on ("Stockfish: 25. Qxe4 — Good move
+  (position 50 of 90)", "Coach writing about 25. Qxe4 (moment 3 of 7)"),
+  Follow and Stop; on the right, who writes the coach's words ("Coach:
+  qwen3:14b · on this computer"). The review's progress row above the graph
+  is gone, and the comment panel no longer repeats the move and the count
+  while the review runs: it keeps one quiet line until the comments come
+
 ## 0.28.1 — unreleased
 
 - **No console windows for the engines** in the installed program. It has

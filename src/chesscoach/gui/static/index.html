@@ -76,13 +76,6 @@
       <button class="quiet" id="save-report" hidden title="The review as a readable report (Markdown)">Save report…</button>
     </div>
 
-    <div class="progress" id="progress" hidden>
-      <div class="bar"><div class="bar-fill" id="progress-fill"></div></div>
-      <span id="progress-text">Starting</span>
-      <button class="quiet" id="follow-review" hidden title="Show the analysis on the board again">Follow</button>
-      <button class="quiet" id="cancel-review">Stop</button>
-    </div>
-
     <div class="moments" id="moments" hidden></div>
 
     <div class="evalgraph" id="evalgraph" hidden></div>
@@ -470,6 +463,18 @@
   </form>
 </dialog>
 
+<!-- The status bar: what is running now (a review, with Stop) and who
+     writes the coach's words. -->
+<footer class="statusbar" id="statusbar">
+  <span class="sb-task" id="progress" hidden>
+    <span class="bar"><span class="bar-fill" id="progress-fill"></span></span>
+    <span class="sb-text" id="progress-text" aria-live="polite">Starting</span>
+    <button class="quiet" id="follow-review" hidden title="Show the analysis on the board again">Follow</button>
+    <button class="quiet" id="cancel-review" title="Stop the review">Stop</button>
+  </span>
+  <span class="sb-gap"></span>
+  <span class="sb-coach" id="sb-coach"></span>
+</footer>
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script type="module" src="app.js"></script>
