@@ -292,6 +292,8 @@ select, input:not([type=radio]):not([type=range]) {
 .statusbar .sb-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .statusbar button { padding: 1px 6px; font-size: 12.5px; }
 .statusbar .sb-gap { flex: 1; }
+.statusbar .sb-hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#progress:not([hidden]) ~ .sb-hint { display: none; }   /* a running review has the line */
 .statusbar .sb-task.failed { color: var(--j-blunder); }
 .statusbar .sb-task.failed .bar { display: none; }
 .statusbar .sb-coach { white-space: nowrap; }
@@ -565,9 +567,6 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
 /* the moves pane and the comments share the column; drag between them */
 #panel-review { gap: 10px; }
-.splitter { height: 8px; margin: -6px 0 -4px; cursor: row-resize; position: relative; flex: none; }
-.splitter::after { content: ""; position: absolute; left: 45%; right: 45%; top: 3px; height: 2px; border-radius: 1px; background: var(--line); }
-.splitter:hover::after, .splitter.drag::after { background: var(--accent); }
 
 /* the plan behind a quiet engine move */
 .coach .plan { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 10px 0 12px; font: 14px/1.5 var(--ui); }

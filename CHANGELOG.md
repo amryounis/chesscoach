@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.28.5 — unreleased
+
+- **No resizing bar between the moves and the comments**: it took space
+  and did little. The move list keeps its height (a fifth of the window)
+- **What to do next is in the status bar**, not in the comment panel:
+  "Pick a critical moment, or step through with the arrow keys. The game
+  summary is in the Summary tab." (with the link), "Choose whose moves to
+  comment on, then Review game.", "Review the game to see the coach's
+  comments.", "Open a game to review it…". The panel holds only comments
+
 ## 0.28.4 — unreleased
 
 - **A Maia that stops no longer loses the review.** Amr's 0.28.3 reviews

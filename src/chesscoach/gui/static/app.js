@@ -606,11 +606,26 @@ function renderAnnotation(text) {
   return out.join("");
 }
 
+// What to do next, in the status bar (it was a paragraph in the comment
+// panel): one line, gone while a review runs.
+function statusHint(text, summaryLink = false) {
+  const el = $("sb-hint");
+  el.textContent = text;
+  if (summaryLink) {
+    const a = document.createElement("a");
+    a.href = "#"; a.textContent = "Summary"; a.id = "to-summary";
+    a.addEventListener("click", (e) => { e.preventDefault(); setView("summary"); });
+    el.append(" The game summary is in the ", a, " tab.");
+  }
+}
+
 function renderCoach() {
   readComment();
   const el = $("coach");
+  statusHint("");
   if (!R.game) {
-    el.innerHTML = `<p class="empty">The coach comments on the moments that decided the game: where you left the opening, your mistakes and what was better, and the moves you got right.</p>`;
+    el.innerHTML = "";
+    statusHint("Open a game to review it: the coach comments on the moments that decided it.");
     return;
   }
   if (R.node !== null) {
@@ -621,12 +636,9 @@ function renderCoach() {
     return;
   }
   if (R.cursor < 0) {
-    el.innerHTML = R.reviewed
-      ? `<p class="empty">Pick a critical moment above, or step through with the arrow keys. The game summary, with the patterns across your games, is in the <a href="#" id="to-summary">Summary</a> tab.</p>`
-      : `<p class="empty">Choose whose moves to comment on, then review the game. Stockfish analyses every position first; the coach then writes about the critical moments.</p>`;
-    bindSummary(el);
-    const ts = $("to-summary");
-    if (ts) ts.addEventListener("click", (e) => { e.preventDefault(); setView("summary"); });
+    el.innerHTML = "";
+    if (R.reviewed) statusHint("Pick a critical moment, or step through with the arrow keys.", true);
+    else statusHint("Choose whose moves to comment on, then Review game.");
     R.facts = null;
     return;
   }
@@ -636,8 +648,8 @@ function renderCoach() {
   if (R.reviewed) html += `<span class="judgment j-${mv.label}">${esc(JUDGMENT_TEXT[mv.label] || mv.label)}</span>`;
   html += `</div>`;
   if (!R.reviewed) {
-    el.innerHTML = html + openingHtml(mv) + notesHtml(mv)
-      + `<p class="empty">Review the game to see the coach's comments.</p>`;
+    el.innerHTML = html + openingHtml(mv) + notesHtml(mv);
+    statusHint("Review the game to see the coach's comments.");
     return;
   }
   html += `<div class="verdict">After this move: ${esc(mv.verdict)}.</div>`;
@@ -801,7 +813,7 @@ function setView(v) {
   $("analysis").hidden = v !== "table";
   // the game summary has the whole space: no move list, no comment under it
   $("summary-view").hidden = v !== "summary";
-  $("splitter").hidden = $("coach-scroll").hidden = v === "summary";
+  $("coach-scroll").hidden = v === "summary";
   markNotes();
   if (v === "table") renderAnalysis();
   if (v === "summary") renderSummaryView();
@@ -1776,31 +1788,6 @@ $("settings-form").addEventListener("submit", async (e) => {
   toast("Settings saved.");
   if (R.game && R.game.tree) renderNotes();
 });
-
-// ---------------------------------------------------------------- splitter
-// Drag the bar under the moves to give the comments more room (or less);
-// remembered in this browser only.
-
-(function splitter() {
-  const bar = $("splitter");
-  const set = (px) => document.documentElement.style.setProperty("--list-h", `${Math.round(px)}px`);
-  try { const v = Number(localStorage.getItem("listH")); if (v > 40) set(v); } catch (e) { /* storage off */ }
-  bar.addEventListener("mousedown", (ev) => {
-    ev.preventDefault();
-    const pane = !$("annotations").hidden ? $("annotations") : !$("analysis").hidden ? $("analysis") : $("movelist");
-    const top = pane.getBoundingClientRect().top;
-    bar.classList.add("drag");
-    const move = (e) => set(Math.max(60, Math.min(window.innerHeight * 0.7, e.clientY - top)));
-    const up = () => {
-      bar.classList.remove("drag");
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
-      try { localStorage.setItem("listH", String(pane.getBoundingClientRect().height)); } catch (e) { /* storage off */ }
-    };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
-  });
-})();
 
 // ---------------------------------------------------------------- practice
 //

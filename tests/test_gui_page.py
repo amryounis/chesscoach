@@ -286,15 +286,13 @@ def test_review_fills_the_annotations_and_keeps_comments_visible(page):
     page.click("#moments button >> nth=1")
     assert page.evaluate("document.getElementById('coach-scroll').scrollTop") == 0
     assert "A reason." in page.inner_text("#coach")
-    # The splitter still resizes the move list.
-    split = page.locator("#splitter").bounding_box()
-    page.click("#viewtabs [data-view=moves]")
-    h0 = page.locator("#movelist").bounding_box()["height"]
-    page.mouse.move(split["x"] + 20, split["y"] + 2)
-    page.mouse.down()
-    page.mouse.move(split["x"] + 20, split["y"] + 80, steps=5)
-    page.mouse.up()
-    assert page.locator("#movelist").bounding_box()["height"] > h0 + 40
+    # No resizing bar; what to do next is in the status bar, not the panel.
+    assert page.locator("#splitter").count() == 0
+    page.click("[data-nav=first]")
+    assert page.inner_text("#coach").strip() == ""
+    assert "Pick a critical moment" in page.inner_text("#sb-hint")
+    page.click("#sb-hint a")
+    assert page.is_visible("#summary-view")
     assert page.errors == []
 
 
@@ -323,7 +321,7 @@ def test_the_board_follows_a_running_review(page):
     page.click("#follow-review")
     assert not page.is_visible("#follow-review")
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
-    assert page.inner_text("#coach").strip()                   # the summary fills it
+    assert "Pick a critical moment" in page.inner_text("#sb-hint")   # the review is done
     assert not page.is_visible("#progress")
     assert page.errors == []
 
@@ -618,11 +616,13 @@ def test_the_game_summary_has_its_own_tab(page):
     page.click("#start-review")
     page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
     page.click("#nav [data-nav=first]")
-    assert "Summary" in page.inner_text("#coach") and page.locator("#coach .summary").count() == 0
+    assert "Summary" in page.inner_text("#sb-hint") and page.inner_text("#coach").strip() == ""
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "hint.png"))
     page.click("#view-summary")
     page.wait_for_selector("#summary-view:not([hidden]) .summary")
     assert "Game summary" in page.inner_text("#summary-view")
-    assert page.is_hidden("#coach-scroll") and page.is_hidden("#splitter")
+    assert page.is_hidden("#coach-scroll")
     link = page.locator("#summary-view a.ply").first
     label = link.inner_text()
     link.click()                                              # a move named there: shown with its comment
