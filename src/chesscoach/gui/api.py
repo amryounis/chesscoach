@@ -159,6 +159,19 @@ class Api:
     # -- settings ----------------------------------------------------------
 
     @_safe
+    def problem_report(self, what_happened: str = "") -> dict:
+        """The text a tester sends about a problem, and the GitHub page for it."""
+        from ..problem import build
+        return build(what_happened)
+
+    def open_report_page(self, what_happened: str = "") -> dict:
+        """Open the filled-in GitHub issue in the browser (only that page)."""
+        import webbrowser
+        from ..problem import build
+        url = build(what_happened)["url"]
+        webbrowser.open(url)
+        return {"opened": True}
+
     def get_settings(self) -> dict:
         s = asdict(config.settings)
         s["config_file"] = str(config.user_config_path())

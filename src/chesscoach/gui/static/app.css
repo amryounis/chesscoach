@@ -297,6 +297,10 @@ select, input:not([type=radio]):not([type=range]) {
 .statusbar .sb-task.failed { color: var(--j-blunder); }
 .statusbar .sb-task.failed .bar { display: none; }
 .statusbar .sb-coach { white-space: nowrap; }
+.statusbar .sb-report { color: var(--muted); white-space: nowrap; }
+.statusbar .sb-report:hover { color: var(--accent); }
+#report-dialog textarea { width: 100%; box-sizing: border-box; font: 12.5px/1.45 ui-monospace, Consolas, monospace; }
+#report-dialog #report-what { font: 14px/1.5 var(--ui); margin-bottom: 8px; }
 .bar { flex: 1 1 200px; max-width: 320px; height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); transition: width .25s; }
 

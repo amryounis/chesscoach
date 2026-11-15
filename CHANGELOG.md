@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.28.7 — unreleased
+
+- **Report a problem**, in the status bar, for testers. It shows what would
+  be sent before anything goes: what you write, then the version, the system,
+  the coach (Ollama and its model, or the online service and model), whether
+  Stockfish and Maia were found, and the end of chesscoach.log and maia.log.
+  Keys and tokens are left out and anything that looks like one is masked.
+  "Open on GitHub" opens a filled-in issue in the browser (the log trimmed to
+  fit the link); "Copy" is for testers without a GitHub account, to paste
+  into an email or a message (`problem.py`)
+
 ## 0.28.6 — unreleased
 
 - **The moves fill the column.** Moves, Annotations and Analysis were held

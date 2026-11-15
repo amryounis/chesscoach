@@ -1348,6 +1348,32 @@ function showCoachStatus() {
 }
 
 $("cancel-review").addEventListener("click", () => api().cancel_review());
+
+// ---- Report a problem: the tester sees the details, then sends them
+async function refreshReport() {
+  const r = await call("problem_report", $("report-what").value);
+  if (r) $("report-text").value = r.text;
+  return r;
+}
+$("report-problem").addEventListener("click", async (e) => {
+  e.preventDefault();
+  if (!(await refreshReport())) return;
+  $("report-dialog").showModal();
+  $("report-what").focus();
+});
+let reportTimer = null;
+$("report-what").addEventListener("input", () => {        // the preview follows the typing
+  clearTimeout(reportTimer);
+  reportTimer = setTimeout(refreshReport, 400);
+});
+$("report-copy").addEventListener("click", async () => {
+  const r = await refreshReport();
+  if (r) copyText(r.text, "The report");
+});
+$("report-github").addEventListener("click", async () => {
+  if (await call("open_report_page", $("report-what").value))
+    toast("GitHub opened in your browser: check the text there, then Submit.", 5000);
+});
 $("follow-review").addEventListener("click", () => {
   R.follow = true;
   R.liveShown = null;

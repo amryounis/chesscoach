@@ -343,6 +343,24 @@
   </form>
 </dialog>
 
+<dialog id="report-dialog" class="wide">
+  <form method="dialog" id="report-form">
+    <h2>Report a problem</h2>
+    <p class="sub">Say what you did and what went wrong. The details below go with it, so the
+      problem can be found; read them first. Keys and tokens are never included, but the names
+      of players in your games may be.</p>
+    <textarea id="report-what" rows="4" placeholder="What happened? e.g. &ldquo;The review stopped at position 40 with an error.&rdquo;"></textarea>
+    <textarea id="report-text" rows="12" readonly spellcheck="false"></textarea>
+    <p class="sub">Open on GitHub needs a GitHub account. Without one, Copy and paste it into an
+      email or a message to whoever gave you chesscoach.</p>
+    <div class="dialog-actions">
+      <button value="cancel">Close</button>
+      <button type="button" id="report-copy">Copy</button>
+      <button type="button" class="primary" id="report-github">Open on GitHub</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="settings">
   <form method="dialog" id="settings-form">
     <h2>Settings</h2>
@@ -472,6 +490,7 @@
   </span>
   <span class="sb-hint" id="sb-hint"></span>
   <span class="sb-gap"></span>
+  <a href="#" class="sb-report" id="report-problem" title="Send the details of a problem: you see them first">Report a problem</a>
   <span class="sb-coach" id="sb-coach"></span>
 </footer>
 <div class="toast" id="toast" role="status" hidden></div>

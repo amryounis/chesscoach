@@ -933,3 +933,21 @@ def test_the_moves_fill_the_room_a_comment_does_not_need(page):
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "fill-after.png"))
     assert page.errors == []
+
+
+def test_report_a_problem(page, monkeypatch):
+    import webbrowser
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url, *a, **kw: opened.append(url))
+    page.click("#report-problem")
+    page.wait_for_selector("#report-dialog[open]")
+    assert "---- chesscoach details ----" in page.input_value("#report-text")
+    page.fill("#report-what", "The board froze.")
+    page.wait_for_function("document.getElementById('report-text').value.includes('The board froze.')")
+    page.click("#report-github")
+    page.wait_for_function("document.getElementById('toast').textContent.includes('GitHub')")
+    assert opened and opened[0].startswith("https://github.com/amryounis/chesscoach/issues/new?")
+    assert "The+board+froze" in opened[0] or "The%20board%20froze" in opened[0]
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "report.png"))
+    assert page.errors == []
