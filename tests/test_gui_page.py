@@ -906,3 +906,30 @@ def test_a_failed_review_says_so_in_the_status_bar(page, monkeypatch):
     assert "The review failed: engine event loop dead" in text and "earlier review" in text
     assert not page.is_visible("#cancel-review")
     assert page.errors == []
+
+
+def test_the_moves_fill_the_room_a_comment_does_not_need(page):
+    """No space kept under the moves for a comment that isn't there."""
+    page.click("#open-pgn")
+    page.click("[data-nav=first]")
+    page.click("#viewtabs [data-view=moves]")
+    lst = page.locator("#movelist").bounding_box()
+    panel = page.locator("#panel-review").bounding_box()
+    below = panel["y"] + panel["height"] - (lst["y"] + lst["height"])
+    ask = page.locator("#ask").bounding_box() if page.is_visible("#ask") else {"height": 0}
+    assert below < ask["height"] + 60                          # the list fills the column
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "fill-before.png"))
+    page.click("#start-review")
+    page.wait_for_selector("#moments:not([hidden]) button", timeout=180000)
+    page.click("#moments button >> nth=1")
+    page.wait_for_selector("#coach .move")
+    page.click("#viewtabs [data-view=moves]")
+    lst2 = page.locator("#movelist").bounding_box() if page.is_visible("#movelist") else None
+    coach = page.locator("#coach-scroll").bounding_box()
+    assert coach["height"] > 60                                 # the comment has its room
+    if lst2:
+        assert lst2["height"] >= 119
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "fill-after.png"))
+    assert page.errors == []

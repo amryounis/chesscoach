@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.28.6 — unreleased
+
+- **The moves fill the column.** Moves, Annotations and Analysis were held
+  to a fifth of the window, with the rest kept for a comment even when there
+  was none. Now the comment takes only the room it needs (at most 60%,
+  scrolling past that) and the moves pane has the rest (at least 120 px)
+
 ## 0.28.5 — unreleased
 
 - **No resizing bar between the moves and the comments**: it took space
