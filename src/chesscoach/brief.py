@@ -48,12 +48,45 @@ CANDIDATES = 3
 AVOID = 3
 
 
+class Line(str):
+    """A sentence of the sheet with what to draw for it on the board:
+    [{"orig": "c5"} circle | {"orig": "f8", "dest": "c5"} arrow, "brush": ...]"""
+    shapes: list
+
+    def __new__(cls, text: str, shapes=()):
+        obj = super().__new__(cls, text)
+        obj.shapes = [dict(x) for x in shapes]
+        return obj
+
+
+def _sq(sq: int) -> str:
+    return chess.square_name(sq)
+
+
+def circle(sq: int, brush: str) -> dict:
+    return {"orig": _sq(sq), "brush": brush}
+
+
+def arrow(a: int, b: int, brush: str) -> dict:
+    return {"orig": _sq(a), "dest": _sq(b), "brush": brush}
+
+
 @dataclass
 class Brief:
     overview: str = ""
     sections: list = field(default_factory=list)      # [(heading, [lines])]
     lines: list = field(default_factory=list)          # candidate lines, SAN, for the check
     best_san: str = ""
+
+    def marks(self) -> list:
+        """What to draw for each line, in the order of the lines:
+        [{"shapes": [...], "main": bool}]; the main ones (candidate moves,
+        moves to avoid) are drawn while the sheet is shown."""
+        out = []
+        for head, lines in self.sections:
+            main = head.startswith("Candidate") or head == "Moves to avoid"
+            out += [{"shapes": getattr(x, "shapes", []), "main": main} for x in lines]
+        return out
 
     def text(self) -> str:
         out = [f"**Overview**: {self.overview}"]
@@ -115,30 +148,33 @@ def pawn_lines(board: chess.Board) -> list:
         doubled = sorted({f for f in files if files.count(f) > 1})
         for f in doubled:
             sqs = [chess.square_name(s) for s in sorted(pawns) if chess.square_file(s) == f]
-            out.append(f"{side} has doubled pawns on the {chess.FILE_NAMES[f]}-file "
-                       f"({' and '.join(sqs)}).")
+            out.append(Line(f"{side} has doubled pawns on the {chess.FILE_NAMES[f]}-file "
+                            f"({' and '.join(sqs)}).",
+                            [circle(t, "yellow") for t in pawns if chess.square_file(t) == f]))
         for s in sorted(pawns):
             f, r = chess.square_file(s), chess.square_rank(s)
             ahead = [t for t in theirs if abs(chess.square_file(t) - f) <= 1
                      and (chess.square_rank(t) > r if color == chess.WHITE
                           else chess.square_rank(t) < r)]
             if not ahead:
-                out.append(f"{side}'s pawn on {chess.square_name(s)} is a passed pawn: "
-                           "no enemy pawn can stop it.")
+                out.append(Line(f"{side}'s pawn on {chess.square_name(s)} is a passed pawn: "
+                                "no enemy pawn can stop it.", [circle(s, "green")]))
             if not [t for t in pawns if abs(chess.square_file(t) - f) == 1] and f not in doubled:
-                out.append(f"{side}'s pawn on {chess.square_name(s)} is isolated: "
-                           "no pawn of its own on the files next to it.")
+                out.append(Line(f"{side}'s pawn on {chess.square_name(s)} is isolated: "
+                                "no pawn of its own on the files next to it.", [circle(s, "yellow")]))
             if _advanced(color, s) and not board.attackers(color, s):
                 atk = board.attackers(not color, s)
                 line = f"{side}'s pawn on {chess.square_name(s)} has no defender"
                 if atk:
                     line += " and is attacked by " + " and ".join(_the(board, a) for a in sorted(atk))
+                shapes = [circle(s, "red")] + [arrow(a, s, "attack") for a in sorted(atk)]
                 aimed = aimed_through_own_pawn(board, s)
                 if aimed:
                     sl, pw = aimed[0]
                     line += (f". {_who(board, sl)} is aimed at it, behind its own pawn on "
                              f"{chess.square_name(pw)}: once that pawn moves, it attacks it")
-                out.append(line + ".")
+                    shapes += [arrow(sl, s, "threat"), circle(pw, "yellow")]
+                out.append(Line(line + ".", shapes))
     return out
 
 
@@ -173,7 +209,7 @@ def king_lines(board: chess.Board) -> list:
             names = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
             line += (f"; no {side} pawn on the {names}file" + ("s" if len(open_files) > 1 else "")
                      + " next to it")
-        out.append(line + ".")
+        out.append(Line(line + ".", [circle(k, "blue")]))
     if board.is_check():
         out.append(f"{side_name(board.turn)} is in check and must answer it.")
     return out
@@ -192,12 +228,14 @@ def piece_lines(board: chess.Board) -> list:
             out.append(f"{side}'s {PIECE_NAMES[board.piece_at(minors[0]).piece_type]} on "
                        f"{chess.square_name(minors[0])} has not moved yet.")
         elif minors and not out_:
-            out.append(f"{side} has not developed a knight or bishop yet.")
+            out.append(Line(f"{side} has not developed a knight or bishop yet.",
+                            [circle(s, "yellow") for s in at_home]))
         elif at_home and len(out_) <= 2:
-            out.append(f"{side} has developed {NUMBER.get(len(out_), len(out_))} minor "
-                       f"piece{'s' if len(out_) > 1 else ''} ("
-                       + ", ".join(_the(board, s) for s in out_) + "); still at home: "
-                       + ", ".join(_the(board, s) for s in at_home) + ".")
+            out.append(Line(f"{side} has developed {NUMBER.get(len(out_), len(out_))} minor "
+                            f"piece{'s' if len(out_) > 1 else ''} ("
+                            + ", ".join(_the(board, s) for s in out_) + "); still at home: "
+                            + ", ".join(_the(board, s) for s in at_home) + ".",
+                            [circle(s, "green") for s in out_] + [circle(s, "yellow") for s in at_home]))
     if not board.is_check():
         nb = board.copy(stack=False)
         nb.push(chess.Move.null())
@@ -216,10 +254,14 @@ def piece_lines(board: chess.Board) -> list:
         if loose:
             names = [f"{_the(board, sq)}" for sq in sorted(loose)]
             names = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
-            out.append(f"{side_name(color)}'s {names[4:]} {'is' if len(loose) == 1 else 'are'} undefended.")
+            out.append(Line(f"{side_name(color)}'s {names[4:]} "
+                            f"{'is' if len(loose) == 1 else 'are'} undefended.",
+                            [circle(sq, "red") for sq in loose]))
     w, b = (len(board.pieces(chess.BISHOP, c)) >= 2 for c in (chess.WHITE, chess.BLACK))
     if w != b:
-        out.append(f"{'White' if w else 'Black'} has the bishop pair.")
+        c = chess.WHITE if w else chess.BLACK
+        out.append(Line(f"{'White' if w else 'Black'} has the bishop pair.",
+                        [circle(sq, "green") for sq in board.pieces(chess.BISHOP, c)]))
     return out
 
 
@@ -243,7 +285,9 @@ def attack_lines(board: chess.Board) -> list:
         if cheapest < VALUE[p.piece_type] and p.piece_type != chess.PAWN:
             line += " (attacked by a cheaper piece)"
         danger = (not dfd) or cheapest < VALUE[p.piece_type]
-        rows.append((not danger, -VALUE[p.piece_type], line + "."))
+        shapes = [arrow(a, sq, "attack" if danger else "threat") for a in atk[:2]]
+        shapes += [arrow(d, sq, "defend") for d in dfd[:2]]
+        rows.append((not danger, -VALUE[p.piece_type], Line(line + ".", shapes)))
     return [r[2] for r in sorted(rows)[:5]]
 
 
@@ -262,6 +306,31 @@ def protects(board: chess.Board, move: chess.Move) -> list:
                 move.to_square in after.attackers(color, sq):
             out.append(f"protects {_the(board, sq)}, which had no defender")
     return out
+
+
+def protected_squares(board: chess.Board, move: chess.Move) -> list:
+    """The squares `protects` names."""
+    color = board.turn
+    after = board.copy(stack=False)
+    after.push(move)
+    return [sq for sq, p in board.piece_map().items()
+            if p.color == color and p.piece_type != chess.KING and sq != move.from_square
+            and (p.piece_type != chess.PAWN or _advanced(color, sq))
+            and not board.attackers(color, sq) and after.piece_at(sq)
+            and move.to_square in after.attackers(color, sq)]
+
+
+def _reply(board: chess.Board, move: chess.Move, line: str):
+    """The answer to `move` in its engine line ("1. Qxd5 Qxd5 2. ...")."""
+    sans = [t for t in line.split() if not t[0].isdigit()]
+    if len(sans) < 2:
+        return None
+    b = board.copy(stack=False)
+    b.push(move)
+    try:
+        return b.parse_san(sans[1])
+    except ValueError:
+        return None
 
 
 def _tempting(board: chess.Board, mv: chess.Move) -> int:
@@ -299,7 +368,8 @@ def build(board: chess.Board, engine) -> Brief:
     threats = attack_lines(board)
     t = threat(engine, board)
     if t:
-        threats.append(f"If it were {side_name(t.side)}'s move: {t.text()}")
+        threats.append(Line(f"If it were {side_name(t.side)}'s move: {t.text()}",
+                            [arrow(t.move.from_square, t.move.to_square, "threat")]))
     if not threats:
         threats = ["Nothing is attacked, and neither side has a threat."]
     br.sections.append(("Threats", threats))
@@ -311,12 +381,14 @@ def build(board: chess.Board, engine) -> Brief:
         if r["drop"] >= EQUAL * 2 and cands:
             break
         mv = chess.Move.from_uci(r["uci"])
+        shapes = [arrow(mv.from_square, mv.to_square, "green" if not cands else "paleGreen")]
+        shapes += [arrow(mv.to_square, sq, "defend") for sq in protected_squares(board, mv)]
         does = [f"It {x}." for x in protects(board, mv)]
         does += [e.rstrip(".") + "." for e in describe_move_effects(board, mv)[:2]]
         note = "" if not cands else (" (practically as good as the first)" if r["drop"] < EQUAL else "")
         line = (f"{r['san']}{note}: {side_name(me)}'s winning chance {r['win']:.0f}%. "
                 + " ".join(does) + (" " if does else "") + f"Line: {r['line']}")
-        cands.append(line)
+        cands.append(Line(line, shapes))
         br.lines.append(r["line"])
     if rows:
         br.best_san = rows[0]["san"]
@@ -332,6 +404,10 @@ def build(board: chess.Board, engine) -> Brief:
             continue
         mark = "??" if lab == "Blunder" else "?"
         why = r["text"].split(": ", 1)[1] if ": " in r["text"] else r["text"]
-        avoid.append(f"{r['san']}{mark}: {why}.")
+        shapes = [arrow(mv.from_square, mv.to_square, "red")]
+        reply = _reply(board, mv, r["line"])
+        if reply:
+            shapes.append(arrow(reply.from_square, reply.to_square, "paleRed"))
+        avoid.append(Line(f"{r['san']}{mark}: {why}.", shapes))
     br.sections.append(("Moves to avoid", avoid))
     return br

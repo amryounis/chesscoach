@@ -536,7 +536,8 @@ class Api:
             check_ollama(llm.active_model())    # the plain reason, when it's Ollama
             raise ValueError(a.error)
         return {"text": a.text, "removed": a.removed, "secs": round(a.secs, 1),
-                "tools": [n for n, _ in a.tool_calls], "facts": a.facts, "route": a.route}
+                "tools": [n for n, _ in a.tool_calls], "facts": [str(f) for f in a.facts],
+                "route": a.route, "marks": a.marks}
 
     @_safe
     def explain_position(self, ply: int) -> dict:

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.30.0 — unreleased
+
+- **The coach's sheet is drawn on the board.** Every line of it says what to
+  draw: the candidate moves (the best in green, the others pale green, with
+  what each protects), the moves to avoid in red with the reply that refutes
+  them, and, when you point at a line, only that line: a pawn with no defender
+  circled with the piece aimed at it (Amr's position: c5, the f8 bishop behind
+  e7), attacks and their defenders as arrows, doubled and isolated pawns, the
+  kings, undefended pieces, the threat
+- The sheet's sections are coloured as the board draws them: candidate moves
+  green, moves to avoid red, threats orange
+- **Answers are cards.** The newest is open with a line at its edge; the
+  earlier ones fold to their question, and open with a click. A card you
+  opened or closed yourself stays that way
+- **With answers at a move, they get most of the column** (the moves keep
+  120 px); before, they were held to 60% of it and scrolled in a small box
+
 ## 0.29.1 — unreleased
 
 - **"Analyze this position" in the Ask box gets the coach's sheet**, as the

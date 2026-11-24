@@ -798,3 +798,29 @@ fieldset.coach-llm .note { color: var(--muted); font-size: 12px; margin: 4px 0 0
   letter-spacing: .04em; margin: 12px 0 2px; }
 .ask-answer ul.sheet { margin: 0 0 6px; padding-left: 18px; font: 14.5px/1.5 var(--book); }
 .ask-answer ul.sheet li { margin: 2px 0; }
+
+/* Answers: one card each; the newest open, the earlier folded to the question */
+.ask-answer details.answer { border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+  padding: 6px 12px; margin: 0 0 10px; }
+.ask-answer details.answer.latest { border-left: 3px solid var(--accent); }
+.ask-answer details.answer > summary.q { cursor: pointer; margin: 2px 0; list-style: none; }
+.ask-answer details.answer > summary.q::-webkit-details-marker { display: none; }
+.ask-answer details.answer > summary.q::before { content: "▸ "; color: var(--muted); }
+.ask-answer details.answer[open] > summary.q::before { content: "▾ "; }
+.ask-answer details.answer .answer-body { margin-top: 6px; }
+.ask-answer { border-top: none; }
+/* a line of the sheet with a picture: point at it to see it on the board */
+.ask-answer ul.sheet li.drawn { cursor: default; border-radius: 4px; padding: 0 4px; margin-left: -4px; }
+.ask-answer ul.sheet li.drawn:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* with answers at this move, they get most of the column (the moves keep 120 px) */
+#panel-review.has-answers .coach-scroll { flex: 3 1 0; max-height: none; }
+
+/* the sheet's sections, coloured as the board draws them */
+.ask-answer .sheet-head { border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+.ask-answer .sheet-head.sec-candidate { color: var(--j-excellent); }
+.ask-answer .sheet-head.sec-avoid { color: var(--j-blunder); }
+.ask-answer .sheet-head.sec-threats { color: var(--j-mistake); }
+.ask-answer .sheet-head.sec-plans { color: var(--accent); }
+.ask-answer ul.sheet.sec-candidate li::marker { color: var(--j-excellent); }
+.ask-answer ul.sheet.sec-avoid li::marker { color: var(--j-blunder); }
+.ask-answer ul.sheet.sec-threats li::marker { color: var(--j-mistake); }

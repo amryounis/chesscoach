@@ -301,6 +301,7 @@ class Answer:
     boards: list = field(default_factory=list)       # positions the answer may describe
     route: str = ""                                  # router: the kind of question
     candidates: list = field(default_factory=list)   # [(before, move, [after...])]
+    marks: list = field(default_factory=list)        # the sheet: what to draw per line
 
 
 CALL_LOG: list = []      # (seconds, prompt tokens, output tokens) per model call
@@ -451,7 +452,14 @@ def explain_prompt(board: chess.Board, engine, history: str = "") -> tuple:
     from .brief import build
     br = build(board, engine)
     sheet = br.text()
-    facts = [x for _, lines in br.sections for x in lines]
+    facts = []
+    for head, lines in br.sections:
+        for x in lines:
+            if not hasattr(x, "shapes"):
+                from .brief import Line
+                x = Line(x)
+            x.main = head.startswith("Candidate") or head == "Moves to avoid"
+            facts.append(x)
     game = f"\nGAME SO FAR:\n{history}\n" if history else ""
     me = side_name(board.turn)
     prompt = f"""This position sheet was written from the board and the engine. Every line in it is verified:
@@ -487,6 +495,8 @@ def explain(board: chess.Board, model: str, engine, history: str = "") -> Answer
         ans.error = f"analysis failed: {e}"
         return ans
     ans.facts, ans.fixed, ans.boards = facts, sheet, boards
+    ans.marks = [{"shapes": getattr(f, "shapes", []), "main": getattr(f, "main", False)}
+                 for f in facts]
     messages = [{"role": "system", "content": EXPLAIN_SYSTEM},
                 {"role": "user", "content": prompt}]
     try:

@@ -473,8 +473,10 @@ function renderReviewBoard() {
     // A threat the move ignored still stands after it: show it there too.
     const shapes = threat && mv.threat.ignored
       ? [{ orig: threat[0], dest: threat[1], brush: "threat" }] : [];
-    board.setAutoShapes(shapes.concat(moveShapes(mv, shapes), factShapes(),
-                                      noteShapes(mainNode(R.cursor))));
+    // pointing at a line of the coach's sheet: only what that line says
+    board.setAutoShapes(R.sheetHover ? sheetShapes()
+      : shapes.concat(moveShapes(mv, shapes), factShapes(), noteShapes(mainNode(R.cursor)),
+                      sheetShapes()));
   }
   const ev = evalAt(R.cursor);
   setEval(ev === null ? 50 : ev);
@@ -596,8 +598,11 @@ function renderMoments() {
 function renderAnnotation(text) {
   const out = [];
   let list = null;                       // "- " lines: one list until the next non-item
+  let sec = "";                          // the sheet's section: its colour
   const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-  const close = () => { if (list) { out.push(`<ul class="sheet">${list.join("")}</ul>`); list = null; } };
+  const close = () => { if (list) { out.push(`<ul class="sheet${sec}">${list.join("")}</ul>`); list = null; } };
+  const secOf = (h) => /^candidate/i.test(h) ? " sec-candidate" : /^moves to avoid/i.test(h) ? " sec-avoid"
+    : /^threats/i.test(h) ? " sec-threats" : /^plans/i.test(h) ? " sec-plans" : "";
   for (const raw of text.split(/\n+/)) {
     const line = raw.trim();
     if (!line) continue;
@@ -606,7 +611,7 @@ function renderAnnotation(text) {
     const m = line.match(/^\*\*(.+?)\*\*:?\s*(.*)$/);
     if (m && /assessment/i.test(m[1])) continue;
     if (m && /what happened/i.test(m[1])) out.push(`<p>${inline(m[2])}</p>`);
-    else if (m && !m[2]) out.push(`<p class="sheet-head">${esc(m[1])}</p>`);   // a section of the sheet
+    else if (m && !m[2]) { sec = secOf(m[1]); out.push(`<p class="sheet-head${sec}">${esc(m[1])}</p>`); }   // a section of the sheet
     else if (m) out.push(`<p><b>${esc(m[1])}.</b> ${inline(m[2])}</p>`);
     else out.push(`<p>${inline(line)}</p>`);
   }
@@ -1164,41 +1169,83 @@ function bindAllMoves(el, restore) {
   });
 }
 
+// Each answer is a card; the newest is open, the earlier ones fold to their
+// question (click to open), so a new answer is never lost among the old.
+function answerBody(a) {
+  if (a.kind === "all") {
+    if (a.pending) return `<p class="thinking">Stockfish is looking at every move…</p>`;
+    const marks = {};
+    const next = R.game.moves[R.cursor + 1];
+    if (next && next.uci) {
+      marks[next.uci] = R.reviewed && BAD.has(next.label)
+        ? `played in the game (${next.label.toLowerCase()} in the review)` : "played in the game";
+    }
+    return allMovesHtml(a, marks);
+  }
+  if (a.pending) return `<p class="thinking">The coach is checking the position with the engine…</p>`;
+  let html = renderAnnotation(a.text);
+  const meta = [];
+  if (a.removed && a.removed.length)
+    meta.push(`${a.removed.length === 1 ? "One sentence was" : a.removed.length + " sentences were"} left out because ${a.removed.length === 1 ? "it was" : "they were"} not true on the board.`);
+  if (!(a.removed && a.removed.length))
+    meta.push(a.question && a.route !== "sheet" ? "Piece facts checked against the board; judgements are the model's."
+                         : "Written from the board and Stockfish; the plans are the model's, checked against the board.");
+  if (a.marks && a.marks.length) meta.push("Point at a line to see it on the board.");
+  if (a.secs) meta.push(`${a.secs}s`);
+  if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;
+  return html;
+}
+
 function renderAsk() {
   const el = $("ask-answer");
   const list = R.answers[R.cursor] || [];
-  let html = "";
-  for (const a of list) {
-    if (a.kind === "all") {
-      html += `<p class="q">All moves</p>`;
-      if (a.pending) { html += `<p class="thinking">Stockfish is looking at every move…</p>`; continue; }
-      const marks = {};
-      const next = R.game.moves[R.cursor + 1];
-      if (next && next.uci) {
-        marks[next.uci] = R.reviewed && BAD.has(next.label)
-          ? `played in the game (${next.label.toLowerCase()} in the review)` : "played in the game";
-      }
-      html += allMovesHtml(a, marks);
-      continue;
+  $("panel-review").classList.toggle("has-answers", list.length > 0);
+  const last = list.length - 1;
+  el.innerHTML = list.map((a, i) => {
+    const label = a.kind === "all" ? "All moves"
+      : a.question ? `You asked: ${esc(a.question)}` : "Explain this position";
+    const open = i === last ? a.open !== false : a.open === true;
+    return `<details class="answer${i === last ? " latest" : ""}" data-i="${i}"${open ? " open" : ""}>`
+      + `<summary class="q">${label}</summary><div class="answer-body">${answerBody(a)}</div></details>`;
+  }).join("");
+  el.querySelectorAll("details.answer").forEach((d) => {
+    const a = list[+d.dataset.i];
+    // only the reader's own clicks are remembered (a card opened for being
+    // the newest folds when a newer one comes)
+    d.querySelector("summary").addEventListener("click", () => { a.open = !d.open; });
+    // the sheet: each line knows what to draw on the board
+    if (a.marks && a.marks.length) {
+      d.querySelectorAll("ul.sheet li").forEach((li, k) => {
+        const m = a.marks[k];
+        if (!m || !m.shapes.length) return;
+        li.classList.add("drawn");
+        li.addEventListener("mouseenter", () => { R.sheetHover = { a, k }; renderReviewBoard(); });
+        li.addEventListener("mouseleave", () => {
+          if (R.sheetHover && R.sheetHover.a === a && R.sheetHover.k === k) R.sheetHover = null;
+          renderReviewBoard();
+        });
+      });
     }
-    if (a.question) html += `<p class="q">You asked: ${esc(a.question)}</p>`;
-    else html += `<p class="q">Explain this position</p>`;
-    if (a.pending) { html += `<p class="thinking">The coach is checking the position with the engine…</p>`; continue; }
-    html += renderAnnotation(a.text);
-    const meta = [];
-    if (a.removed && a.removed.length)
-      meta.push(`${a.removed.length === 1 ? "One sentence was" : a.removed.length + " sentences were"} left out because ${a.removed.length === 1 ? "it was" : "they were"} not true on the board.`);
-    if (!(a.removed && a.removed.length))
-      meta.push(a.question && a.route !== "sheet" ? "Piece facts checked against the board; judgements are the model's."
-                           : "Written from the board and Stockfish; the plans are the model's, checked against the board.");
-    if (a.secs) meta.push(`${a.secs}s`);
-    if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;
-  }
-  el.innerHTML = html;
+  });
   bindAllMoves(el, () => renderReviewBoard());
   $("explain-btn").disabled = R.asking;
   $("ask-btn").disabled = R.asking;
   $("all-moves-btn").disabled = R.asking;
+}
+
+// What the sheet draws: the line pointed at, else the candidate moves and the
+// moves to avoid of the newest open sheet at this move.
+function sheetShapes() {
+  if (R.sheetHover) return R.sheetHover.a.marks[R.sheetHover.k].shapes;
+  const list = R.answers[R.cursor] || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const a = list[i];
+    if (a.marks && a.marks.length && !a.pending) {
+      const open = i === list.length - 1 ? a.open !== false : a.open === true;
+      return open ? a.marks.filter((m) => m.main).flatMap((m) => m.shapes) : [];
+    }
+  }
+  return [];
 }
 
 $("all-moves-btn").addEventListener("click", async () => {
@@ -1238,6 +1285,8 @@ async function askCoach(question) {
 // The newest question at the top of the view; the comment is above it, one
 // scroll away, and comes back first when you return to this move.
 function showLatestAnswer() {
+  R.sheetHover = null;
+  renderReviewBoard();
   const qs = $("ask-answer").querySelectorAll(".q");
   if (qs.length) qs[qs.length - 1].scrollIntoView({ block: "start", behavior: "smooth" });
 }

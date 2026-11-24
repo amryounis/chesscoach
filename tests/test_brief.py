@@ -53,3 +53,19 @@ def test_the_sheet_on_amrs_position(sf):
     assert any(a.startswith("Qxd5??: loses a queen") for a in dict(br.sections)["Moves to avoid"])
     # no section claims a pawn break Black can't make
     assert "...c5" not in t and "c-pawn" not in t
+
+
+def test_each_line_says_what_to_draw(sf):
+    br = brief.build(chess.Board(AMR), sf)
+    lines = [x for _, ls in br.sections for x in ls]
+    marks = br.marks()
+    assert len(marks) == len(lines)
+    c5 = [m for x, m in zip(lines, marks) if x.startswith("White's pawn on c5")][0]
+    assert c5 == {"main": False, "shapes": [
+        {"orig": "c5", "brush": "red"}, {"orig": "f8", "dest": "c5", "brush": "threat"},
+        {"orig": "e7", "brush": "yellow"}]}
+    b4 = [m for x, m in zip(lines, marks) if x.startswith("b4")][0]
+    assert b4["main"] and {"orig": "b4", "dest": "c5", "brush": "defend"} in b4["shapes"]
+    qxd5 = [m for x, m in zip(lines, marks) if x.startswith("Qxd5")][0]
+    assert qxd5["shapes"] == [{"orig": "d1", "dest": "d5", "brush": "red"},
+                              {"orig": "d8", "dest": "d5", "brush": "paleRed"}]

@@ -974,6 +974,30 @@ def test_explain_shows_the_coachs_sheet(page, monkeypatch):
     assert "It protects the pawn on c5, which had no defender." in text
     assert "For White." in text and "Free the bishop on f8" in text
     assert "the plans are the model's" in text
+    # the board shows the candidate moves and the moves to avoid; pointing at
+    # a line shows only what it says
+    shapes = lambda: page.evaluate("document.querySelectorAll('.cg-shapes line, .cg-shapes circle').length")
+    main = shapes()
+    assert main >= 4                                 # 3 candidates + Qxd5?? and its reply
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "sheet-board.png"))
+    page.hover("ul.sheet li:has-text('has no defender. Black')")
+    page.wait_for_timeout(200)
+    assert shapes() == 3                             # the c5 pawn: circle, the f8 arrow, e7
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "sheet-hover.png"))
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(200)
+    assert shapes() == main
+    # answers are cards: a second answer folds the first
+    monkeypatch.setattr(coach, "_chat", lambda model, messages, tools=None: {"message": {
+        "content": "White is a pawn up."}})
+    page.fill("#ask-q", "Why is b4 good?")
+    page.click("#ask-btn")
+    page.wait_for_function("document.querySelectorAll('#ask-answer details.answer').length === 2"
+                           " && !document.querySelector('#ask-answer details.latest .thinking')",
+                           timeout=120000)
+    assert page.evaluate("[...document.querySelectorAll('#ask-answer details.answer')].map(d => d.open)") == [False, True]
     if os.environ.get("CC_SHOTS"):
         page.locator("#coach-scroll").evaluate("e => e.scrollTop = 0")
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "sheet.png"), full_page=True)
