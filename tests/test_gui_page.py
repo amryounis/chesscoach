@@ -951,3 +951,32 @@ def test_report_a_problem(page, monkeypatch):
     if os.environ.get("CC_SHOTS"):
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "report.png"))
     assert page.errors == []
+
+
+def test_explain_shows_the_coachs_sheet(page, monkeypatch):
+    """Amr's position: the code-written sections, then the model's plans."""
+    from chesscoach import coach
+    monkeypatch.setattr(coach, "_chat", lambda model, messages, tools=None: {"message": {
+        "content": "**For White**: Protect the pawn on c5 and develop the knights.\n"
+                   "**For Black**: Free the bishop on f8 to attack the pawn on c5."}})
+    page.evaluate("() => { if (navigator.clipboard) navigator.clipboard.readText = () => Promise.reject(new Error('no')); }")
+    page.click("#paste-btn")
+    page.wait_for_selector("#paste-dialog[open]")
+    page.fill("#paste-area", "rn1qkbnr/pp2pppp/8/2PpPb2/8/8/PPP2PPP/RNBQKBNR w KQkq - 0 1")
+    page.click("#paste-open")
+    page.wait_for_function("document.querySelector('#game-title').textContent === 'Pasted position'")
+    page.click("#explain-btn")
+    page.wait_for_selector(".ask-answer .meta", timeout=120000)
+    heads = page.locator(".ask-answer .sheet-head").all_inner_texts()
+    assert [h.lower() for h in heads[:3]] == ["material and pawns", "kings", "pieces"]
+    assert "Candidate moves for White".lower() in [h.lower() for h in heads]
+    text = page.inner_text("#ask-answer")
+    assert "It protects the pawn on c5, which had no defender." in text
+    assert "For White." in text and "Free the bishop on f8" in text
+    assert "the plans are the model's" in text
+    if os.environ.get("CC_SHOTS"):
+        page.locator("#coach-scroll").evaluate("e => e.scrollTop = 0")
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "sheet.png"), full_page=True)
+        page.locator("#coach-scroll").evaluate("e => e.scrollTop = e.scrollHeight")
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "sheet2.png"))
+    assert page.errors == []

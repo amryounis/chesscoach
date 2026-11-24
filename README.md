@@ -28,9 +28,13 @@ the board exactly as the local model's are.
 - Tactics each error allowed or missed (fork, pin, skewer, hanging piece…)
 - A game summary written by code from the stored facts, and the patterns
   that recur across all your reviewed games
-- **Explain this position**, **Ask the coach** ("Why not Nd2?") and **All
-  moves**: every legal move with a short verdict ("Blunder: loses a knight
-  (after 5...exd5)")
+- **Explain this position**: a coach's sheet, written by code from the board
+  and Stockfish (overview, material and pawns, kings, pieces, threats,
+  candidate moves with what each does and its line, moves to avoid), with
+  only the plans for both sides written by the model and checked against the
+  board. It still shows when no model is available
+- **Ask the coach** ("Why not Nd2?") and **All moves**: every legal move with
+  a short verdict ("Blunder: loses a knight (after 5...exd5)")
 - **Read aloud**: the coach's comment is spoken as you step onto each move,
   moves said in words ("knight takes e5, check"), with the Windows voice you
   choose; its answers too
@@ -242,6 +246,8 @@ What to know:
   over, and in the EU, the UK and Switzerland only a paid key may be used.
 - Other services: OpenAI, Groq, OpenRouter, or *Other* with the address of
   any OpenAI-compatible service (LM Studio on your own machine works too).
+  A ChatGPT subscription is not an OpenAI key: the key comes from
+  platform.openai.com and is billed by use, separately from ChatGPT.
 - From the command line, an online model is named `online:<model>`:
   `chesscoach review game.pgn -m online:<model>`, and it can be measured
   against the answer keys next to a local one:

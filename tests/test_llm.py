@@ -237,7 +237,10 @@ def test_the_coach_answers_with_an_online_model(service):
     service.answer = lambda b: (429, {"error": {"message": "x"}})
     with chess.engine.SimpleEngine.popen_uci(config.settings.stockfish_path) as e:
         a = coach.explain(chess.Board(), "online:gemini-flash-test", e, "")
-    assert "quota is used up" in a.error and "ollama" not in a.error
+    # the sheet is the code's and still shows; the plans say why they're missing
+    assert not a.error and a.text.startswith("**Overview**")
+    plans = a.text.split("**Plans**")[1]
+    assert "quota is used up" in plans and "ollama" not in plans
 
 
 def test_the_config_command_never_prints_a_key(monkeypatch, capsys):

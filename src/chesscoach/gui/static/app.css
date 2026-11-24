@@ -577,6 +577,8 @@ dialog .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   flex: 1 1 0; max-height: none; min-height: 120px;
 }
 #panel-review .coach-scroll { flex: 0 1 auto; max-height: 60%; }
+#panel-review .movelist.no-moves { flex: 0 0 auto; min-height: 0; padding: 0; border-bottom: none; }
+#panel-review .movelist.no-moves ~ .coach-scroll { max-height: none; flex: 1 1 auto; }
 
 /* the plan behind a quiet engine move */
 .coach .plan { border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 10px 0 12px; font: 14px/1.5 var(--ui); }
@@ -790,3 +792,9 @@ fieldset.coach-llm .note { color: var(--muted); font-size: 12px; margin: 4px 0 0
 .setup-progress { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .setup-progress .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .setup-progress .bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+
+/* Explain this position: the coach's sheet */
+.ask-answer .sheet-head { font: 600 13px var(--ui); color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; margin: 12px 0 2px; }
+.ask-answer ul.sheet { margin: 0 0 6px; padding-left: 18px; font: 14.5px/1.5 var(--book); }
+.ask-answer ul.sheet li { margin: 2px 0; }

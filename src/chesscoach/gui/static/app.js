@@ -520,6 +520,8 @@ function numCell(label) {
 
 function renderMoveList() {
   const el = $("movelist");
+  // a pasted position has no moves: the list takes no room from the answers
+  el.classList.toggle("no-moves", !R.game || !R.game.moves.length);
   if (!R.game) { el.innerHTML = ""; return; }
   fillMoveGrid(el, R.game.moves, R.cursor, goTo, R.reviewed);
 }
@@ -593,16 +595,22 @@ function renderMoments() {
 // shown separately, so the Assessment line is dropped.
 function renderAnnotation(text) {
   const out = [];
+  let list = null;                       // "- " lines: one list until the next non-item
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  const close = () => { if (list) { out.push(`<ul class="sheet">${list.join("")}</ul>`); list = null; } };
   for (const raw of text.split(/\n+/)) {
     const line = raw.trim();
     if (!line) continue;
+    if (line.startsWith("- ")) { (list = list || []).push(`<li>${inline(line.slice(2))}</li>`); continue; }
+    close();
     const m = line.match(/^\*\*(.+?)\*\*:?\s*(.*)$/);
     if (m && /assessment/i.test(m[1])) continue;
-    const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
     if (m && /what happened/i.test(m[1])) out.push(`<p>${inline(m[2])}</p>`);
+    else if (m && !m[2]) out.push(`<p class="sheet-head">${esc(m[1])}</p>`);   // a section of the sheet
     else if (m) out.push(`<p><b>${esc(m[1])}.</b> ${inline(m[2])}</p>`);
     else out.push(`<p>${inline(line)}</p>`);
   }
+  close();
   return out.join("");
 }
 
@@ -1180,7 +1188,9 @@ function renderAsk() {
     const meta = [];
     if (a.removed && a.removed.length)
       meta.push(`${a.removed.length === 1 ? "One sentence was" : a.removed.length + " sentences were"} left out because ${a.removed.length === 1 ? "it was" : "they were"} not true on the board.`);
-    if (!(a.removed && a.removed.length)) meta.push("Piece facts checked against the board; judgements are the model's.");
+    if (!(a.removed && a.removed.length))
+      meta.push(a.question ? "Piece facts checked against the board; judgements are the model's."
+                           : "Written from the board and Stockfish; the plans are the model's, checked against the board.");
     if (a.secs) meta.push(`${a.secs}s`);
     if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;
   }

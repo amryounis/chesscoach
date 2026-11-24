@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.29.0 — unreleased
+
+- **Explain this position is a coach's sheet** (`brief.py`), laid out like
+  ChessBase's AI review but true by construction. Amr's tests on one position
+  (2026-11-24): ChatGPT, Gemini and ChessBase-style answers were well laid out
+  but wrong underneath (material "equal" with White a pawn up; a move order
+  that cannot reach the position; a break with a pawn Black did not have) and
+  missed the point: White's c5 pawn has no defender and Black's f8 bishop is
+  aimed at it behind e7, which is why the engine likes b4. Now code writes,
+  from the board and Stockfish:
+  - **Overview**: who is to move, who is better, the material, the opening
+  - **Material and pawns**: pawn counts; doubled, isolated and passed pawns;
+    pawns with no defender, what attacks them, and a bishop, rook or queen
+    aimed at them behind its own pawn
+  - **Kings**: castled or not, the rights left, the files open next to it
+  - **Pieces**: development, room to move, undefended pieces, bishop pair
+  - **Threats**: what attacks what, with its defenders; what the other side
+    would do with a free move
+  - **Candidate moves**: the engine's best three, each with the winning
+    chance, what it does ("It protects the pawn on c5, which had no
+    defender") and its line
+  - **Moves to avoid**: tempting captures and checks that lose, and how
+    ("Qxd5??: loses a queen (after 1...Qxd5)")
+  The model writes only **Plans** for White and for Black, from the sheet,
+  and the board check reads them as before. When the model is unavailable
+  (no Ollama, no key, quota used up), the sheet still shows and says why the
+  plans are missing
+- A pasted position (no moves) gives its explanations the whole column
+- README: a ChatGPT subscription is not an OpenAI API key
+
 ## 0.28.7 — unreleased
 
 - **Report a problem**, in the status bar, for testers. It shows what would

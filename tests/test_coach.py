@@ -86,25 +86,38 @@ def test_ask_stops_calling_tools_at_the_limit(sf, fake):
     assert a.text == "White is winning."
 
 
-def test_explain_writes_the_verdict_and_checks_the_rest(sf, fake):
-    fake(["**The position**: Black's king is still in the centre and can castle.\n"
-          "**Threats**: Material is equal.\n"
-          "**Plan**: White gives check with a rook on e1.",
-          "**The position**: Black's king is still in the centre and can castle.\n"
-          "**Threats**: Material is equal.\n"
-          "**Plan**: White gives check with a rook on e1."])
+def test_explain_writes_the_sheet_and_checks_the_plans(sf, fake):
+    fake(["**For White**: Material is equal, so White should trade.\n"
+          "**For Black**: Black's king is still in the centre and can castle kingside.",
+          "**For White**: Material is equal, so White should trade.\n"
+          "**For Black**: Black's king is still in the centre and can castle kingside."])
     a = coach.explain(chess.Board(ROOK), "m", sf)
-    assert a.text.startswith("**The position**: White is to move, and White is winning. "
+    # code writes everything but the plans
+    assert a.text.startswith("**Overview**: White is to move, and White is winning. "
                              "White is up a bishop and a knight.")
+    for head in ("Material and pawns", "Kings", "Pieces", "Threats", "Candidate moves for White",
+                 "Plans"):
+        assert f"**{head}**" in a.text
+    assert "Black's bishop on c8 is undefended." in a.text
+    assert "Rae1+ (practically as good as the first)" in a.text
+    # the model's false sentence is checked and removed; its true one stays
     assert "Material is equal" not in a.text
-    assert "can castle" in a.text
-    assert any("Black can still castle" in k for k in a.facts)
+    assert "can castle kingside" in a.text.split("**Plans**")[1]
+    assert any("castle kingside" in k for k in a.facts)
 
 
-def test_explain_prompt_has_key_facts_and_best_moves(sf):
-    p, boards, fixed, key = coach.explain_prompt(chess.Board(ROOK), sf)
-    assert "KEY FACTS" in p and "THE ENGINE'S BEST MOVES FOR WHITE" in p
-    assert "practically as good as the first" in p
+def test_explain_shows_the_sheet_when_the_model_fails(sf, monkeypatch):
+    def down(*a, **kw):
+        raise ConnectionError("Ollama is not running")
+    monkeypatch.setattr(coach, "_chat", down)
+    a = coach.explain(chess.Board(ROOK), "m", sf)
+    assert not a.error and a.text.startswith("**Overview**: White is to move")
+    assert "**Plans**: not written: Ollama is not running" in a.text
+
+
+def test_explain_prompt_has_the_sheet_and_no_fen(sf):
+    p, boards, sheet, facts = coach.explain_prompt(chess.Board(ROOK), sf)
+    assert sheet in p and "**For White**" in p and "**For Black**" in p
     assert ROOK.split()[0] not in p                # no FEN for the model to misread
     assert len(boards) > 3
 

@@ -164,9 +164,8 @@ def test_keys_have_explain_items_and_questions():
 def test_explain_and_ask_modes_with_a_stub(stockfish, monkeypatch):
     import ollama
     config.settings = config.load_settings(stockfish_path=stockfish)
-    replies = iter(["**The position**: Black can still castle. The bishop on c8 is "
-                    "undefended.\n**Threats**: None.\n**Plan**: Check on e1; both rook "
-                    "checks are practically equal."]
+    replies = iter(["**For White**: Check on e1 while Black can still castle.\n"
+                    "**For Black**: Get the king to safety."]
                    + ["The bishop on c8 has no defender."] * 10)
     monkeypatch.setattr(ollama, "chat", lambda **kw: {"message": {"content": next(replies)}})
     key = load_keys(ids=["rook-check"])[0]

@@ -31,10 +31,10 @@ import chess.engine
 
 from . import config, llm
 from .assessment import eval_phrase, win_pct
-from .concepts import _pv_captures, equal_alternative, threat
+from .concepts import _pv_captures, threat
 from .describe import PIECE_NAMES, describe_move, describe_move_effects, side_name
 from .engine import EngineAnalysis, run_stockfish
-from .facts import (castling_lines, join_words, legal_move_line, loose_piece_lines,
+from .facts import (join_words, legal_move_line, loose_piece_lines,
                     material_lines, play_line, position_facts, resolve_move)
 from .grounding import correction_text, ground, remove_failed
 from .engine import open_uci
@@ -422,94 +422,50 @@ def _grounded(model: str, messages: list, text: str, boards: list, keep: str,
 
 
 # --- Explain this position -------------------------------------------------
+#
+# A coach's sheet (brief.py): overview, material and pawns, kings, pieces,
+# threats, candidate moves and moves to avoid are written by code from the
+# board and Stockfish. The model writes only the plans for both sides, from
+# that sheet, and the board check reads what it wrote.
 
-EXPLAIN_SYSTEM = """You are a chess coach explaining a position to a club player (about 1500). You are a narrator: every fact you may use is given to you, verified. Do not calculate, do not invent pieces, squares, threats or moves, and do not write move notation. Describe moves in words. Use the exact verdict wording given for who is better. Follow the output format exactly."""
+EXPLAIN_SYSTEM = """You are a chess coach writing the plans at the end of a position sheet for a club player (about 1500). Everything you may use is in the sheet and the facts, verified. Do not calculate, do not invent pieces, squares, threats or moves, and do not write move notation: describe moves in words. Follow the output format exactly."""
+
+
+def _sheet_boards(board: chess.Board, lines: list) -> list:
+    """The positions the plans may describe: now, along each candidate line,
+    and after a free move for the other side (its threats)."""
+    boards = [board.copy(stack=False)]
+    for line in lines:
+        sans = [t for t in line.split() if not t[0].isdigit()]
+        boards += _line_boards(board, sans, plies=4)
+    if not board.is_check():
+        nb = board.copy(stack=False)
+        nb.push(chess.Move.null())
+        if not nb.is_check():
+            boards.append(nb)
+    return boards
 
 
 def explain_prompt(board: chess.Board, engine, history: str = "") -> tuple:
-    """(prompt, boards to check against, code-written first sentence, key facts)."""
-    ea = _analyse(engine, board, multipv=3)
-    verdict = _verdict(ea, board)
-    boards = [board.copy(stack=False)]
-    me = board.turn
-    key = []
-
-    # Real threats: what the side not to move would do with a free move.
-    t = threat(engine, board)
-    if t:
-        key.append(t.text())
-        nb = board.copy(stack=False)
-        nb.push(chess.Move.null())
-        boards.append(nb)
-    # Loose pieces the engine's line captures, either side.
-    for line in loose_piece_lines(board):
-        if line.startswith("Undefended"):
-            key.append(line)
-    # Castling still possible matters while kings are in the centre.
-    for line in castling_lines(board):
-        if "can still castle" in line:
-            key.append(line)
-    if board.is_check():
-        key.append(f"{side_name(me)} is in check and must answer it.")
-
-    # The engine's best moves, in words, with equal ones marked.
-    best = []
-    rows = [((ea.score_cp, ea.score_mate), ea.best_line)] + [
-        (sc, line) for sc, (_, line) in zip(ea.alt_scores, ea.alt_lines)]
-    top = None
-    for (cp, mate), line in rows:
-        if not line:
-            continue
-        boards += _line_boards(board, line)
-        w = win_pct(cp, mate, me == chess.WHITE)
-        top = w if top is None else top
-        mv = board.parse_san(line[0])
-        eq = " (practically as good as the first)" if best and top - w < 3 else ""
-        best.append(f"- {describe_move(board, mv)}: winning chance for {side_name(me)} "
-                    f"{w:.0f}%{eq}")
-        for e in describe_move_effects(board, mv)[:3]:
-            best.append(f"    - {e}")
-        if len(best) > 12:
-            break
-    first = ea.best_line[0] if ea.best_line else ""
-    alt = None
-    if len(rows) > 1 and rows[1][1]:
-        try:
-            alt = equal_alternative(board, board.parse_san(first), ea) if first else None
-        except ValueError:
-            pass
-        if alt:
-            key.append(f"Two moves are practically equal for {side_name(me)}: the first "
-                       f"choice and {alt[0]}")
-
-    fixed = (f"{side_name(me)} is to move, and {verdict}. "
-             + material_lines(board)[-1].replace("Material difference: ", ""))
-    fixed = fixed.rstrip(".") + "."
-    if alt:
-        # The model left this out of every explanation: code writes it.
-        first_words = describe_move(board, board.parse_san(first))
-        fixed += (f" The engine's two best moves are practically equal: {first_words}, "
-                  f"or {alt[0][0].lower() + alt[0][1:] if not alt[0].startswith(('White', 'Black')) else alt[0]}.")
+    """(prompt for the plans, boards to check them against, the sheet, its lines)."""
+    from .brief import build
+    br = build(board, engine)
+    sheet = br.text()
+    facts = [x for _, lines in br.sections for x in lines]
     game = f"\nGAME SO FAR:\n{history}\n" if history else ""
-    prompt = f"""Explain this position to the player.
+    me = side_name(board.turn)
+    prompt = f"""This position sheet was written from the board and the engine. Every line in it is verified:
+
+{sheet}
 {game}
-SIDE TO MOVE: {side_name(me)}
-VERDICT (use this exact wording for who is better): {verdict}
-
-KEY FACTS (verified; the most important — build your explanation on these):
-{chr(10).join('- ' + k for k in key) if key else '- No real threats; no loose pieces.'}
-
-THE ENGINE'S BEST MOVES FOR {side_name(me).upper()} (in words, verified):
-{chr(10).join(best) or '- none'}
-
 ALL FACTS (verified and complete; anything not listed here is not so):
-{position_facts(board, engine=ea)}
+{position_facts(board)}
 
-OUTPUT FORMAT (exactly these headings, in this order):
-**The position**: The first sentence is already written: "{fixed}" Do NOT repeat it. Write 1-2 sentences on what matters most, from the KEY FACTS.
-**Threats**: 1-2 sentences on what each side threatens, only from the KEY FACTS. If there are none, say so.
-**Plan**: 1-2 sentences on what {side_name(me)} should do, describing the engine's best move in words and its idea, only from the facts above."""
-    return prompt, boards, fixed, key
+Write the plans, in exactly this format and nothing else:
+**For White**: 2 or 3 sentences: what White should aim for, and why, built on the sheet (what the engine's best moves protect or attack, which weaknesses matter, where the kings are).
+**For Black**: 2 or 3 sentences, the same for Black.
+{me} is to move. Describe moves in words (e.g. "the pawn from b2 to b4"), never in notation. Do not repeat the sheet's lines."""
+    return prompt, _sheet_boards(board, br.lines), sheet, facts
 
 
 def explain(board: chess.Board, model: str, engine, history: str = "") -> Answer:
@@ -519,31 +475,30 @@ def explain(board: chess.Board, model: str, engine, history: str = "") -> Answer
     if board.is_game_over():
         # Nothing to explain: code says what happened.
         if board.is_checkmate():
-            ans.text = (f"**The position**: {side_name(board.turn)} is checkmated: "
+            ans.text = (f"**Overview**: {side_name(board.turn)} is checkmated: "
                         f"{side_name(not board.turn)} has won the game.")
         else:
-            ans.text = "**The position**: The game is drawn: no further moves are played."
+            ans.text = "**Overview**: The game is drawn: no further moves are played."
         ans.secs = time.time() - t0
         return ans
     try:
-        prompt, boards, fixed, key = explain_prompt(board, engine, history)
+        prompt, boards, sheet, facts = explain_prompt(board, engine, history)
     except Exception as e:
         ans.error = f"analysis failed: {e}"
         return ans
-    ans.facts, ans.fixed = key, fixed
+    ans.facts, ans.fixed, ans.boards = facts, sheet, boards
     messages = [{"role": "system", "content": EXPLAIN_SYSTEM},
                 {"role": "user", "content": prompt}]
     try:
         text = _content(_chat(model, messages))
-        text = _grounded(model, messages, text, boards, fixed, ans)
+        text = _grounded(model, messages, text, boards, "", ans)
+        text = "\n".join(ln.strip() for ln in text.strip().splitlines() if ln.strip())
+        plans = f"**Plans**\n{text}" if text else ""
     except Exception as e:
-        ans.error = _why(e, model)
-        return ans
-    m = re.search(r"(\*\*The position\*\*:?\s*)", text)
-    if fixed.strip(" .") not in text:
-        text = (text[:m.end()] + fixed + " " + text[m.end():]) if m \
-            else f"**The position**: {fixed}\n" + text
-    ans.text = text
+        # The sheet is the code's and stands on its own: show it, and say why
+        # the plans are missing.
+        plans = f"**Plans**: not written: {_why(e, model)}"
+    ans.text = sheet + ("\n" + plans if plans else "")
     ans.secs = time.time() - t0
     ans.calls = list(CALL_LOG)
     return ans
