@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.29.1 — unreleased
+
+- **"Analyze this position" in the Ask box gets the coach's sheet**, as the
+  Explain button does: Amr typed it there and got the model's free text, with
+  a false claim in it. Requests for the whole position ("explain / analyze /
+  evaluate / assess / describe this position", "what's going on here?", "how
+  should I continue?") are recognised; a question about a move or a piece
+  ("Why not Nd2?", "analyze Rae1+") and "Who is better?" (answered by code
+  already) still go to the Ask path
+- **The board check reads "pawn to b4, attacking Black's d5 pawn"**: a piece
+  moved to a square with no square it came from, the target named either way
+  round. It is judged by the legal moves of that piece to that square, and
+  left alone when there is none (it may be about another line). qwen wrote it
+  on Amr's test position; it went through before
+
 ## 0.29.0 — unreleased
 
 - **Explain this position is a coach's sheet** (`brief.py`), laid out like

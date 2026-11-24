@@ -743,3 +743,17 @@ def test_true_sentences_the_check_used_to_remove():
          "undefended after capturing White's pawn on e5.")
     assert not [f for f in check_sentence(s, [hxg5]) if f.kind == "placement"]
     assert check_sentence("White's pawn on e5 attacks the rook.", [hxg5])      # present: caught
+
+
+def test_a_piece_moved_to_a_square_and_what_it_attacks():
+    """qwen on Amr's position (2026-11-24): "The best move is pawn to b4,
+    attacking Black's d5 pawn" -- no square it came from, the target named
+    square-first."""
+    b = chess.Board("rn1qkbnr/pp2pppp/8/2PpPb2/8/8/PPP2PPP/RNBQKBNR w KQkq - 0 1")
+    bad = ground("The best move is pawn to b4, attacking Black's d5 pawn.", [b])
+    assert [f.correction for f in bad] == ["a pawn on b4 does not attack the pawn on d5"]
+    for ok in ("The best move is knight to c3, attacking the pawn on d5.",
+               "Bishop to d3, attacking the bishop on f5.",
+               "Knight to c3 attacks the d5 pawn.",
+               "A rook to h5 attacking the pawn on d5 is not possible now."):   # no such move: not judged
+        assert ground(ok, [b]) == [], ok

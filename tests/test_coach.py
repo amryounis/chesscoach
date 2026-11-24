@@ -248,3 +248,21 @@ def test_is_my_bishop_safe_finds_the_bishop():
     assert r.kind == "safety" and chess.C4 in r.squares and chess.C5 in r.squares
     assert any("not known which side" in n for n in r.notes)
     assert route_question(b, "Is the bishop on c4 safe?").squares == [chess.C4]
+
+
+def test_a_request_for_the_whole_position_gets_the_sheet():
+    for q in ("analyze this position", "explain the position", "Analyse the position please",
+              "evaluate", "What's going on here?", "explain it",
+              "how should I continue here?", "Can you assess the current position?"):
+        assert coach.wants_the_sheet(q), q
+    for q in ("Why not Nd2?", "Who is better?", "explain why Bg4 is bad", "Is the bishop on c8 safe?",
+              "analyze Rae1+", "what is the plan after b4?"):
+        assert not coach.wants_the_sheet(q), q
+
+
+def test_ask_answers_analyze_this_position_with_the_sheet(sf, fake):
+    fake(["**For White**: Check on e1 while Black can still castle.\n"
+          "**For Black**: Get the king to safety."])
+    a = coach.ask(chess.Board(ROOK), "analyze this position", "m", sf)
+    assert a.route == "sheet" and a.text.startswith("**Overview**: White is to move")
+    assert "**Candidate moves for White**" in a.text and "**Plans**" in a.text

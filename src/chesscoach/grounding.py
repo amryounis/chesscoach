@@ -218,8 +218,52 @@ def _from_dest(boards: list, name: str, frm: int, dest: int, target: int, tname:
     return False
 
 
-def _check_attacks(s: str, boards: list) -> list:
+# "the best move is pawn to b4, attacking Black's d5 pawn" (qwen, Amr's test
+# 2026-11-24): a piece moved to a square, with no square it came from, and
+# the target named either way round ("the pawn on d5", "the d5 pawn").
+_MOVED_TO_ATTACK = re.compile(
+    r"\b(pawn|knight|bishop|rook|queen|king)\s+(?:to|into|onto)\s+\**([a-h][1-8])\b"
+    r"(?P<mid>[^.;:]{0,25}?)\b" + _ATTACK_VERB + r"\b[^.;:]{0,25}?"
+    r"(?:(?:the |white's |black's |white |black )?(pawn|knight|bishop|rook|queen|king)"
+    r" (?:on|at) \**([a-h][1-8])\b|\b([a-h][1-8])[- ](pawn|knight|bishop|rook|queen|king)\b)",
+    re.I)
+
+
+def _check_moved_attacks(s: str, boards: list) -> list:
+    """A piece that moves to `dest` and is said to attack something: true if,
+    in a position looked at, a legal move of that piece to `dest` attacks it.
+    Judged only when such a move exists (else it may be about another line)."""
     out = []
+    for m in _MOVED_TO_ATTACK.finditer(s):
+        if _NEG.search(m.group("mid")):
+            continue
+        name, dest = m.group(1).lower(), chess.parse_square(m.group(2))
+        tname = (m.group(4) or m.group(7)).lower()      # group 3 is "mid"
+        target = chess.parse_square(m.group(5) or m.group(6))
+        possible = hit = False
+        for b in boards:
+            for mv in b.legal_moves:
+                p = b.piece_at(mv.from_square)
+                if mv.to_square != dest or PIECE_NAMES[p.piece_type] != name:
+                    continue
+                possible = True
+                after = b.copy(stack=False)
+                after.push(mv)
+                t = _piece(after, target, tname)
+                if t and t.color != p.color and _reaches(after, dest, target, xray=False):
+                    hit = True
+                    break
+            if hit:
+                break
+        if possible and not hit:
+            out.append(Failure("attack", m.group(0),
+                               f"a {name} on {m.group(2)} does not attack the {tname} on "
+                               f"{chess.square_name(target)}"))
+    return out
+
+
+def _check_attacks(s: str, boards: list) -> list:
+    out = _check_moved_attacks(s, boards)
     for m, sn, ssq, on, osq, mid in _subject_object(s, _ATTACK_VERB):
         if _NEG.search(mid) or REF_RE.search(mid):
             continue                      # negated, or the verb has another subject

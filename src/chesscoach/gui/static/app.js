@@ -1189,7 +1189,7 @@ function renderAsk() {
     if (a.removed && a.removed.length)
       meta.push(`${a.removed.length === 1 ? "One sentence was" : a.removed.length + " sentences were"} left out because ${a.removed.length === 1 ? "it was" : "they were"} not true on the board.`);
     if (!(a.removed && a.removed.length))
-      meta.push(a.question ? "Piece facts checked against the board; judgements are the model's."
+      meta.push(a.question && a.route !== "sheet" ? "Piece facts checked against the board; judgements are the model's."
                            : "Written from the board and Stockfish; the plans are the model's, checked against the board.");
     if (a.secs) meta.push(`${a.secs}s`);
     if (meta.length) html += `<p class="meta">${esc(meta.join(" · "))}</p>`;

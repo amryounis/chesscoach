@@ -513,11 +513,35 @@ You cannot see the board, and you must not work anything out yourself. Every fac
 The answer: 3 to 6 plain sentences. Describe moves in words; you may repeat a move the player named. Never state something a tool did not return. If the tools cannot answer the question, say so plainly."""
 
 
+# "Analyze this position", "explain the position", "evaluate it", "what's
+# going on here?": a request for the whole position, not a question about a
+# move or a piece. It gets the coach's sheet (Explain this position), which
+# code writes; free text from the model would get facts wrong (Amr's test,
+# 2026-11-24: "b4, attacking Black's d5 pawn").
+_WHOLE_POSITION = re.compile(
+    r"^\s*(?:please\s+|can you\s+|could you\s+)?"
+    r"(?:(?:explain|analy[sz]e|evaluate|assess|describe|review|summari[sz]e|break down)"
+    r"(?:\s+(?:the|this|my|the current|current))?(?:\s+(?:position|board|game|it))?"
+    r"|(?:what(?:'s| is)\s+(?:going on|happening|the (?:position|situation|evaluation|plan))"
+    r"(?:\s+(?:here|now|in this position))?)"
+    r"|(?:how\s+(?:do|should)\s+(?:i|we)\s+(?:play|continue)(?:\s+(?:here|this position|now))?))"
+    r"\s*(?:please)?\s*[?.!]*\s*$", re.I)
+
+
+def wants_the_sheet(question: str) -> bool:
+    return bool(_WHOLE_POSITION.match(question or ""))
+
+
 def ask(board: chess.Board, question: str, model: str, engine,
         history: str = "", max_calls: int = MAX_TOOL_CALLS,
         mode: Optional[str] = None, me: Optional[bool] = None) -> Answer:
     """Ask the coach. mode "router" (default) or "agent"; see ask_routed.
-    `me`: the asker's colour, when known."""
+    `me`: the asker's colour, when known. A request for the whole position
+    ("analyze this position") gets the coach's sheet, as Explain does."""
+    if wants_the_sheet(question):
+        a = explain(board, model, engine, history)
+        a.route = "sheet"
+        return a
     if (mode or config.settings.ask_mode) != "agent":
         return ask_routed(board, question, model, engine, history, me)
     return ask_agent(board, question, model, engine, history, max_calls)
