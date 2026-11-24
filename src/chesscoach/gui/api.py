@@ -717,21 +717,41 @@ class Api:
         if not text:
             raise ValueError("The clipboard is empty.")
         if "\n" not in text and "[" not in text and text.count("/") == 7:
-            self._not_while_reviewing("opening another position")
             try:
                 board = chess.Board(text)
             except ValueError:
                 raise ValueError("That looks like a FEN, but it isn't a legal position.") from None
             if not board.is_valid():
                 raise ValueError("That FEN isn't a legal position.")
-            game = chess.pgn.Game()
-            game.setup(board)
-            game.headers["Event"] = "Pasted position"
-            self._games, self._game_path = [game], ""
-            out = self.select_game(0)
-            out["games"] = []
-            return out
+            return self._open_position(board, "Pasted position")
         return self.load_pgn_text(text)
+
+    def _open_position(self, board: chess.Board, event: str) -> dict:
+        """A position without moves, open in Review."""
+        self._not_while_reviewing("opening another position")
+        game = chess.pgn.Game()
+        game.setup(board)
+        game.headers["Event"] = event
+        self._games, self._game_path = [game], ""
+        out = self.select_game(0)
+        out["games"] = []
+        return out
+
+    @_safe
+    def check_setup(self, fen: str) -> dict:
+        """The position being set up: what is wrong with it, and what the
+        castling and en passant boxes may offer (setup_position.py)."""
+        from ..setup_position import check
+        return check(fen or "")
+
+    @_safe
+    def open_setup(self, fen: str) -> dict:
+        """Open the position set up by hand in Review."""
+        from ..setup_position import check
+        res = check(fen or "")
+        if not res["ok"]:
+            raise ValueError(res["problems"][0])
+        return self._open_position(chess.Board(res["fen"]), "Set-up position")
 
     def _set_status(self, **status):
         with self._lock:

@@ -47,6 +47,7 @@
         <button class="clip" id="copy-fen" title="Copy this position (FEN)">FEN</button>
         <button class="clip" id="copy-pgn" title="Copy the game (PGN)">PGN</button>
         <button class="clip" id="paste-btn" title="Open a game or position from the clipboard (Ctrl+V)">Paste</button>
+        <button class="clip" id="setup-pos-btn" title="Set up a position by hand: place the pieces, the side to move, castling">Setup</button>
         <button class="clip" id="analyzer-btn" title="Advanced analysis in its own window (uciboard): the engine's UCI output, tactics and pawn-structure overlays, square control, the Evolution graph. Its engine stays off until you press Analyse there.">Analyzer</button>
       </div>
     </div>
@@ -327,6 +328,53 @@
       <button value="cancel" formnovalidate>Cancel</button>
       <button type="button" id="import-back" hidden>Back</button>
       <button value="go" class="primary" id="import-go">Find games</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setup-pos" class="wide">
+  <form method="dialog" id="setup-pos-form">
+    <h2>Set up a position</h2>
+    <div class="sp-wrap">
+      <div class="sp-left">
+        <div class="cg-wrap sp-palette" id="sp-black"></div>
+        <div id="sp-board"></div>
+        <div class="cg-wrap sp-palette" id="sp-white"></div>
+        <p class="sub" id="sp-howto">Pick a piece below or above the board, then click squares to place it.
+          Drag pieces to move them; drag one off the board, or right-click it, to remove it.</p>
+      </div>
+      <div class="sp-right">
+        <fieldset>
+          <legend>Side to move</legend>
+          <label class="check"><input type="radio" name="sp-turn" value="w" checked> White</label>
+          <label class="check"><input type="radio" name="sp-turn" value="b"> Black</label>
+        </fieldset>
+        <fieldset id="sp-castling">
+          <legend>Castling</legend>
+          <label class="check"><input type="checkbox" data-c="K"> White O-O</label>
+          <label class="check"><input type="checkbox" data-c="Q"> White O-O-O</label>
+          <label class="check"><input type="checkbox" data-c="k"> Black O-O</label>
+          <label class="check"><input type="checkbox" data-c="q"> Black O-O-O</label>
+        </fieldset>
+        <div class="sp-row">
+          <label>En passant <select id="sp-ep"><option value="">none</option></select></label>
+          <label>Move number <input type="number" id="sp-move" min="1" max="999" value="1"></label>
+        </div>
+        <div class="sp-buttons">
+          <button type="button" id="sp-start">Start position</button>
+          <button type="button" id="sp-clear">Clear board</button>
+          <button type="button" id="sp-current">Current position</button>
+          <button type="button" id="sp-flip">Flip board</button>
+          <button type="button" id="sp-copy">Copy FEN</button>
+          <button type="button" id="sp-paste">Paste FEN</button>
+        </div>
+        <label class="sp-fen">FEN <input type="text" id="sp-fen" spellcheck="false"></label>
+        <ul class="sp-problems" id="sp-problems" aria-live="polite"></ul>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button value="cancel">Cancel</button>
+      <button type="button" class="primary" id="sp-ok">Open in Review</button>
     </div>
   </form>
 </dialog>

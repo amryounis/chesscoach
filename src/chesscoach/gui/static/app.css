@@ -824,3 +824,27 @@ fieldset.coach-llm .note { color: var(--muted); font-size: 12px; margin: 4px 0 0
 .ask-answer ul.sheet.sec-candidate li::marker { color: var(--j-excellent); }
 .ask-answer ul.sheet.sec-avoid li::marker { color: var(--j-blunder); }
 .ask-answer ul.sheet.sec-threats li::marker { color: var(--j-mistake); }
+
+/* Set up a position */
+#setup-pos { max-width: 860px; }
+.sp-wrap { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+.sp-left { display: flex; flex-direction: column; gap: 6px; }
+#sp-board { width: 400px; height: 400px; }
+.sp-palette.cg-wrap { box-shadow: none; display: flex; gap: 4px; }
+.sp-palette .sp-piece { width: 46px; height: 46px; padding: 3px; position: relative; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; cursor: grab; }
+.sp-palette .sp-piece piece { position: static; display: block; width: 100%; height: 100%; pointer-events: none; }
+.sp-palette .sp-piece.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.sp-palette .sp-erase { font-size: 20px; color: var(--j-blunder); cursor: pointer; }
+#sp-howto { max-width: 400px; }
+.sp-right { display: flex; flex-direction: column; gap: 12px; min-width: 300px; flex: 1; }
+.sp-right fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px 8px; display: grid;
+  grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.sp-right legend { font: 600 13px var(--ui); color: var(--muted); padding: 0 4px; }
+.sp-row { display: flex; gap: 16px; }
+.sp-row input, .sp-row select { width: 80px; }
+.sp-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sp-fen input { width: 100%; font: 12px ui-monospace, Consolas, monospace; }
+.sp-problems { margin: 0; padding-left: 18px; font: 13px var(--ui); }
+.sp-problems .bad { color: var(--j-blunder); }
+.sp-problems .note { color: var(--muted); }

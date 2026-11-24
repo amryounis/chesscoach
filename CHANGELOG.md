@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.31.0 — unreleased
+
+- **Set up a position** (Review → Setup), as in Fritz or ChessBase: a board
+  with a palette of pieces for each side (pick one and click squares, or drag
+  it on), drag pieces to move them, off the board or right-click to remove
+  them; side to move; castling, each box offered only when that king and rook
+  are on their squares; en passant, only the squares a pawn could just have
+  passed; the move number; Start position, Clear board, Current position,
+  Flip board, Copy FEN, Paste FEN, and the FEN to edit by hand. What is wrong
+  with the position is said in plain words (no king, a pawn on the back rank,
+  the side not to move in check, more than eight pawns...) and the position
+  opens only when a game could reach it; a checkmate or stalemate opens with a
+  note (`setup_position.py`)
+
 ## 0.30.0 — unreleased
 
 - **The coach's sheet is drawn on the board.** Every line of it says what to

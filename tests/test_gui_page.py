@@ -1004,3 +1004,53 @@ def test_explain_shows_the_coachs_sheet(page, monkeypatch):
         page.locator("#coach-scroll").evaluate("e => e.scrollTop = e.scrollHeight")
         page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "sheet2.png"))
     assert page.errors == []
+
+
+def test_set_up_a_position(page):
+    """Review → Setup: place pieces, the side to move, castling; what is
+    wrong is said in plain words; Open in Review opens it."""
+    page.click("#setup-pos-btn")
+    page.wait_for_selector("#setup-pos[open]")
+    page.wait_for_function("document.getElementById('sp-fen').value.startsWith('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq')")
+    box = page.locator("#sp-board").bounding_box()
+
+    def click(sq, button="left"):
+        f, r = "abcdefgh".index(sq[0]), int(sq[1])
+        page.mouse.click(box["x"] + (f + 0.5) * box["width"] / 8,
+                         box["y"] + (8 - r + 0.5) * box["height"] / 8, button=button)
+        page.wait_for_timeout(60)
+
+    page.click("#sp-clear")
+    page.wait_for_function("document.getElementById('sp-problems').textContent.includes('The board is empty')")
+    assert page.is_disabled("#sp-ok")
+    page.click("#sp-white [data-role=king]")
+    click("e1")
+    page.click("#sp-white [data-role=rook]")
+    click("h1")
+    page.click("#sp-white [data-role=pawn]")
+    click("a1")                                       # a pawn on the first rank
+    page.wait_for_function("document.getElementById('sp-problems').textContent.includes('Black has no king')")
+    page.click("#sp-black [data-role=king]")
+    click("e8")
+    page.wait_for_function("document.getElementById('sp-problems').textContent.includes('first or the last rank')")
+    click("a1", "right")                              # right-click removes it
+    page.wait_for_function("document.getElementById('sp-problems').textContent.trim() === ''")
+    assert not page.is_disabled("#sp-ok")
+    # castling: only White's kingside can be ticked; Black's are greyed out
+    assert not page.is_disabled("#sp-castling [data-c=K]")
+    assert page.is_disabled("#sp-castling [data-c=Q]") and page.is_disabled("#sp-castling [data-c=k]")
+    page.check("#sp-castling [data-c=K]")
+    page.check("input[name=sp-turn][value=b]")
+    page.wait_for_function("document.getElementById('sp-fen').value === '4k3/8/8/8/8/8/8/4K2R b K - 0 1'")
+    if os.environ.get("CC_SHOTS"):
+        page.screenshot(path=os.path.join(os.environ["CC_SHOTS"], "setup-position.png"))
+    # a check on the side not to move is said plainly
+    page.fill("#sp-fen", "4k3/4R3/8/8/8/8/8/4K3 w - - 0 1")
+    page.press("#sp-fen", "Enter")
+    page.wait_for_function("document.getElementById('sp-problems').textContent.includes(\"Black's king is in check, but it is White's move\")")
+    page.check("input[name=sp-turn][value=b]")
+    page.wait_for_function("!document.getElementById('sp-ok').disabled")
+    page.click("#sp-ok")
+    page.wait_for_function("document.querySelector('#game-title').textContent === 'Set-up position'")
+    assert not page.is_visible("#setup-pos")
+    assert page.errors == []

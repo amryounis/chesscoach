@@ -1588,6 +1588,150 @@ document.addEventListener("paste", (e) => {
   openPasted(text);
 });
 
+// ---------------------------------------------------------------- set up a position
+
+const SP = { cg: null, tool: null, timer: null, checked: null, seq: 0 };
+const SP_ROLES = ["king", "queen", "rook", "bishop", "knight", "pawn"];
+const SP_START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+
+function spPalette(color) {
+  const el = $(color === "white" ? "sp-white" : "sp-black");
+  el.innerHTML = SP_ROLES.map((r) =>
+    `<button type="button" class="sp-piece" data-color="${color}" data-role="${r}" title="${color} ${r}"><piece class="${color} ${r}"></piece></button>`
+  ).join("") + `<button type="button" class="sp-piece sp-erase" data-erase="1" title="Remove pieces: click them">&#x2715;</button>`;
+  el.querySelectorAll(".sp-piece").forEach((b) => {
+    b.addEventListener("click", () => spTool(b.dataset.erase ? "erase" : { color: b.dataset.color, role: b.dataset.role }));
+    if (!b.dataset.erase) b.addEventListener("mousedown", (e) => {
+      // drag it straight onto the board, too
+      SP.cg.dragNewPiece({ color: b.dataset.color, role: b.dataset.role }, e);
+    });
+  });
+}
+
+function spTool(t) {
+  const same = SP.tool && t && (t === SP.tool || (t.role && SP.tool.role === t.role && SP.tool.color === t.color));
+  SP.tool = same ? null : t;
+  document.querySelectorAll("#setup-pos .sp-piece").forEach((b) => {
+    const on = SP.tool && (SP.tool === "erase" ? b.dataset.erase
+      : b.dataset.role === SP.tool.role && b.dataset.color === SP.tool.color);
+    b.classList.toggle("on", !!on);
+  });
+}
+
+function spFen() {
+  const turn = document.querySelector("input[name=sp-turn]:checked").value;
+  const castle = [...document.querySelectorAll("#sp-castling input")]
+    .filter((c) => c.checked && !c.disabled).map((c) => c.dataset.c).join("") || "-";
+  const ep = $("sp-ep").value || "-";
+  const n = Math.max(1, parseInt($("sp-move").value, 10) || 1);
+  return `${SP.cg.getFen()} ${turn} ${castle} ${ep} 0 ${n}`;
+}
+
+function spChanged() {
+  clearTimeout(SP.timer);
+  SP.timer = setTimeout(spCheck, 120);
+}
+
+async function spCheck() {
+  const fen = spFen();
+  const seq = ++SP.seq;
+  const r = await call("check_setup", fen);
+  if (!r || seq !== SP.seq) return;
+  SP.checked = r;
+  document.querySelectorAll("#sp-castling input").forEach((c) => {
+    const can = r.castling_possible[c.dataset.c];
+    c.disabled = !can;
+    if (!can) c.checked = false;
+  });
+  const ep = $("sp-ep"), was = ep.value;
+  ep.innerHTML = `<option value="">none</option>` + r.ep_squares.map((s) => `<option>${s}</option>`).join("");
+  ep.value = r.ep_squares.includes(was) ? was : "";
+  if (document.activeElement !== $("sp-fen")) $("sp-fen").value = r.fen;
+  $("sp-problems").innerHTML = r.problems.map((p) => `<li class="${r.ok ? "note" : "bad"}">${esc(p)}</li>`).join("");
+  $("sp-ok").disabled = !r.ok;
+}
+
+function spLoad(fen) {
+  const parts = (fen || "").trim().split(/\s+/);
+  SP.cg.set({ fen: parts[0] || SP_START, lastMove: undefined });
+  const turn = parts[1] === "b" ? "b" : "w";
+  document.querySelector(`input[name=sp-turn][value=${turn}]`).checked = true;
+  const castle = parts[2] || "-";
+  document.querySelectorAll("#sp-castling input").forEach((c) => { c.checked = castle.includes(c.dataset.c); });
+  $("sp-ep").innerHTML = `<option value="">none</option>` + (parts[3] && parts[3] !== "-" ? `<option selected>${parts[3]}</option>` : "");
+  $("sp-move").value = parseInt(parts[5], 10) || 1;
+  spCheck();
+}
+
+function spOpen() {
+  if (!SP.cg) {
+    SP.cg = Chessground($("sp-board"), {
+      fen: SP_START, coordinates: true, animation: { enabled: false },
+      movable: { free: true, color: "both", showDests: false, events: { afterNewPiece: spChanged } },
+      draggable: { deleteOnDropOff: true },
+      premovable: { enabled: false }, drawable: { enabled: false },
+      highlight: { lastMove: false, check: false },
+      events: {
+        change: spChanged,
+        select: (key) => {
+          if (!SP.tool) return;
+          const pieces = new Map();
+          if (SP.tool === "erase") pieces.set(key, undefined);
+          else {
+            const now = SP.cg.state.pieces.get(key);
+            const same = now && now.role === SP.tool.role && now.color === SP.tool.color;
+            pieces.set(key, same ? undefined : { role: SP.tool.role, color: SP.tool.color });
+          }
+          SP.cg.setPieces(pieces);
+          SP.cg.selectSquare(null);
+          spChanged();
+        },
+      },
+    });
+    $("sp-board").addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const key = SP.cg.getKeyAtDomPos([e.clientX, e.clientY]);
+      if (key) { SP.cg.setPieces(new Map([[key, undefined]])); spChanged(); }
+    });
+    spPalette("white");
+    spPalette("black");
+  }
+  spTool(null);
+  SP.cg.set({ orientation });
+  spLoad(currentFen() || START);
+  $("setup-pos").showModal();
+  SP.cg.redrawAll();
+}
+
+$("setup-pos-btn").addEventListener("click", spOpen);
+document.querySelectorAll("input[name=sp-turn], #sp-castling input").forEach((i) => i.addEventListener("change", spChanged));
+$("sp-ep").addEventListener("change", spChanged);
+$("sp-move").addEventListener("input", spChanged);
+$("sp-start").addEventListener("click", () => spLoad(`${SP_START} w KQkq - 0 1`));
+$("sp-clear").addEventListener("click", () => spLoad("8/8/8/8/8/8/8/8 w - - 0 1"));
+$("sp-current").addEventListener("click", () => spLoad(currentFen() || START));
+$("sp-flip").addEventListener("click", () => SP.cg.toggleOrientation());
+$("sp-copy").addEventListener("click", () => copyText(SP.checked ? SP.checked.fen : spFen(), "The FEN"));
+$("sp-paste").addEventListener("click", async () => {
+  let text = "";
+  try { text = await soon(navigator.clipboard.readText()); } catch (e) { /* not allowed */ }
+  if (text && text.trim()) spLoad(text.trim());
+  else { $("sp-fen").focus(); $("sp-fen").select(); toast("Paste the FEN into the FEN box (Ctrl+V), then press Enter.", 5000); }
+});
+$("sp-fen").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); spLoad($("sp-fen").value); $("sp-fen").blur(); }
+});
+$("sp-fen").addEventListener("change", () => spLoad($("sp-fen").value));
+$("sp-ok").addEventListener("click", async () => {
+  const fen = SP.checked && SP.checked.ok ? SP.checked.fen : spFen();
+  const s = await call("open_setup", fen);
+  if (!s) return;
+  $("setup-pos").close();
+  showTab("review");
+  loadSummary(s);
+  toast("Position set up. Explain this position, or ask the coach about it.", 5000);
+});
+
 // ---------------------------------------------------------------- play
 
 const P = { state: null, busy: false, hint: null, alert: null };

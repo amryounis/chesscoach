@@ -33,6 +33,11 @@ the board exactly as the local model's are.
   candidate moves with what each does and its line, moves to avoid), with
   only the plans for both sides written by the model and checked against the
   board. It still shows when no model is available
+- **Set up a position** by hand (Review → Setup): place and remove pieces,
+  the side to move, castling (offered only with the king and rook at home),
+  en passant, the move number; Copy / Paste FEN. What is wrong with the
+  position is said in plain words ("Black's king is in check, but it is
+  White's move") before it can be opened
 - **Ask the coach** ("Why not Nd2?") and **All moves**: every legal move with
   a short verdict ("Blunder: loses a knight (after 5...exd5)")
 - **Read aloud**: the coach's comment is spoken as you step onto each move,
