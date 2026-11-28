@@ -2,6 +2,11 @@
 
 ## 0.31.0 — unreleased
 
+- **A shorter README** (75 lines, was 500): what the app is, two new
+  screenshots (a review with the better move shown; Explain this position
+  drawn on the board), how to install, why it can be trusted. The details
+  moved to `docs/guide.md` (every feature, the online model, the opening
+  study, the command line, the answer keys) and `docs/development.md`
 - **Set up a position** (Review → Setup), as in Fritz or ChessBase: a board
   with a palette of pieces for each side (pick one and click squares, or drag
   it on), drag pieces to move them, off the board or right-click to remove

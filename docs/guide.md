@@ -1,0 +1,354 @@
+# chesscoach: the full guide
+
+[Back to the README](../README.md)
+
+## Features
+
+**Review a game**
+- Stockfish analyses every move; the coach comments only on the critical
+  moments, and every fact it states about the pieces is checked against the
+  board before you see it (a false sentence is rewritten or removed)
+- Move marks (!!, !, !?, ?!, ?, ??; ?! ? ?? judged as Lichess judges them),
+  accuracy per side (Lichess's method),
+  an evaluation graph, and an analysis table with Stockfish's
+  win/draw/loss for every move
+- *Show the better move*: your move and the engine's on the board, with the
+  idea behind a quiet engine move
+- **How hard was it?** Each error is marked *in plain sight*, *partly
+  hidden* or *hard to see* (Stockfish at two depths), with what players at
+  your rating usually play there (Maia); forced lines are pointed out
+- Tactics each error allowed or missed (fork, pin, skewer, hanging piece…)
+- A game summary written by code from the stored facts, and the patterns
+  that recur across all your reviewed games
+- **Explain this position**: a coach's sheet, written by code from the board
+  and Stockfish (overview, material and pawns, kings, pieces, threats,
+  candidate moves with what each does and its line, moves to avoid), with
+  only the plans for both sides written by the model and checked against the
+  board. It still shows when no model is available
+- **Set up a position** by hand (Review → Setup): place and remove pieces,
+  the side to move, castling (offered only with the king and rook at home),
+  en passant, the move number; Copy / Paste FEN. What is wrong with the
+  position is said in plain words ("Black's king is in check, but it is
+  White's move") before it can be opened
+- **Ask the coach** ("Why not Nd2?") and **All moves**: every legal move with
+  a short verdict ("Blunder: loses a knight (after 5...exd5)")
+- **Read aloud**: the coach's comment is spoken as you step onto each move,
+  moves said in words ("knight takes e5, check"), with the Windows voice you
+  choose; its answers too
+- Annotated PGNs (Lucas Chess, ChessBase) open with their own notes, in
+  English, German or both
+- Save the reviewed game as a PGN with marks, evaluations, the coach's
+  comments and the engine's lines, or as a report
+
+**Play**
+- Against Maia at the rating you choose: it plays like a human of that
+  strength, mistakes included
+- **Hints a step at a time**: what is going on, then the square, then the
+  piece, then the move
+- **Blunder alert**: "Are you sure?" before a move that throws away the game
+  (it never says why)
+- Hints and alerts are kept in the game and counted in its review
+
+**Practice**
+- Your own mistakes come back as exercises, the ones you missed and the
+  ones in plain sight first; hints here too
+- Any move that keeps your chances counts, judged by Stockfish
+
+**Openings**
+- The opening explorer in its own tab: what was played in each position in
+  your games and how it scored, the opening book's moves with the coach's
+  explanation of each idea, and (online, only if you choose) what masters
+  and Lichess players around your rating play
+- `chesscoach book study` walks an opening book once and has the coach
+  explain the idea of every popular move
+- The opening the game is in is named above the board at every move, found
+  by position so transpositions are named right; it can be said aloud
+
+**Your games**
+- Every game you play or review is kept as ordinary PGN files, searchable
+  and sortable; a reviewed game opens with its review
+- **Import** your games from Lichess and Chess.com: a list of the games
+  found, to pick from (new ones ticked) or review one at once; your names
+  there count as you
+- Copy a position (FEN) or a game (PGN); paste or Ctrl+V a PGN or FEN to
+  open it
+
+**Advanced analysis** (optional: the `advanced` extra)
+- **Analyzer**, under the board: the game or position in hand opens in
+  [uciboard](https://github.com/amryounis/advanced-chess-analayzer) in its own
+  window: the engine's UCI output, tactics overlays (loose pieces, pins and
+  skewers, defenders, king safety, safe squares), pawn structure, square
+  control, the Evolution graph (Lu, Wang, Lin 2014), the ChessY positional
+  measures, and any UCI engine you add
+
+**Who writes the coach's words**
+- Ollama on this computer (the default: nothing leaves it), or an online
+  model with your own key: Google Gemini (free key), OpenAI, Groq,
+  OpenRouter or any OpenAI-compatible service. Its words go through the
+  same board checks; a review's comments come in one request, so a free
+  quota lasts; players' names are never sent
+
+**The app**
+- Looks: as Windows is set, Classic, Night, or Parchment (a study book)
+- Opens maximized (or centred, if you prefer)
+- Everything also from the command line, and `chesscoach eval`: answer keys
+  that measure how often the coach states the facts and how often it is
+  wrong
+
+## Use the desktop app
+
+```
+chesscoach gui
+```
+
+(or the `chesscoach-app` shortcut, which opens without a console window)
+
+- **Review**: open a PGN, choose whose moves to comment on, and review.
+  Stockfish analyses every position, then the coach writes about the critical
+  moments. Moves carry the usual marks (?! inaccuracy, ? mistake,
+  ?? blunder, ! a strong find); on a mistake, *Show the better move* puts the
+  position before it on the board with your move in red and the engine's in
+  green. Arrow keys step through the game.
+- **Play**: a training game against Maia at the rating you choose. Maia plays
+  like a human of that strength, mistakes included. When the game ends,
+  *Review this game* sends it straight to the coach. Without Maia the
+  opponent is Stockfish, which can't play below 1320 and plays like an
+  engine; the setup screen says so, with its real strength, before you start.
+  *Hint* helps a step at a time: first what is going on ("Black threatens
+  checkmate with Qxf7#", "something is left unprotected", "nothing urgent:
+  bring a piece into the game"), then the square, then the piece, and last
+  the move with the engine's line; often the first step is enough. The
+  **blunder alert** asks "Are you sure about Qxh7? It looks like a blunder"
+  before a move that throws away a lot of winning chance, without saying
+  why (Settings: before blunders, before mistakes too, before inaccuracies
+  too, or off). Hints and alerts are kept in the game's PGN, and the review
+  says how much help was taken.
+- **Practice**: your inaccuracies, mistakes and blunders from reviewed games
+  come back as positions to solve. Make a move; Stockfish judges it (another
+  move that keeps your chances counts), then you see the engine's move, its
+  line and what the coach said in the review. Exercises you miss come back
+  first. Choose the game you just reviewed or all your reviewed games.
+  *Hint* works here too; an exercise solved after being shown the square or
+  the piece counts as solved with hints and comes back to do alone.
+- **The opening** the game is in is named above the board at every move,
+  in Review and in Play, by position, so transpositions are named right;
+  the speaker button beside it says each new name aloud.
+- **Read aloud**: with the button beside All moves on, the coach's comment
+  is spoken as you step onto a reviewed move: the move and its mark, the
+  comment, and how hard the better move was to see. Moves are said in words
+  ("knight takes e5, check"; "castles kingside"). Explain this position and
+  Ask the coach answers are read when they arrive. Stepping on interrupts;
+  the opening name and the comment are said one after the other. The voice
+  is chosen in Settings (Windows' own voices, offline; more can be added in
+  Windows Settings, Time and language, Speech).
+- **Copy and paste**: under the board, *FEN* and *PGN* copy the position and
+  the game (after a review, with the coach's notes); *Paste* or Ctrl+V
+  opens a PGN or a FEN from the clipboard. A pasted position opens in Review,
+  where Explain this position and Ask the coach work on it.
+- **Look** (Settings): as Windows is set, Classic, Night, or Parchment (a
+  study book: paper texture, cream and teal board with a grain, book type).
+- **Lichess in Openings** (online, only when you choose it): what
+  masters or Lichess players around your rating play in the position, with
+  their results. Needs a Lichess API token with no permissions
+  (lichess.org, Preferences, API access tokens), pasted in Settings. Every
+  answer is kept, so positions you have looked up work offline afterwards.
+- **All moves**: beside Explain this position in Review:
+  every legal move with a short verdict from the engine ("Best
+  move: recaptures", "Blunder: loses a knight (after 5...exd5)", "Allows
+  mate in 1"), so "why not my move?" has an answer. Hover a move to see it.
+- **Explain this position / Ask the coach**: under the comment, for any move
+  of the open game. The coach explains the position, or answers a question
+  such as "Why not Nd2?", "Is my bishop safe?" or "After Re1+ Kd8 Ne5,
+  does the knight fork anything?". It cannot see the board: code works out
+  what the question needs, gathers verified facts and writes the verdict
+  (which move is better, whether a piece is attacked); the model explains,
+  and its answer is checked against the board before you see it.
+- **How hard was it?** Under each commented error: *in plain sight* (a
+  two-move look already shows the better move), *partly hidden* or *hard to
+  see* (it only proves itself several moves deep), measured with Stockfish
+  at two depths, plus what Maia says players at your rating play there.
+  Forced lines (only legal replies, or check after check) are pointed out.
+- **Game summary**: at the top of a finished review, written by code from
+  the stored facts of each move: your errors, the biggest swing, the themes
+  that recur ("three of your errors weakened your king's pawn shelter"),
+  and below it the patterns across your reviewed games
+  (`chesscoach patterns` on the command line). Every line can show the
+  facts it rests on.
+- **Games**: every game you play or review is kept as ordinary PGN files
+  (Played.pgn, Reviewed.pgn, and any file you add), searchable by player,
+  event or opening and sortable by column; a reviewed game opens with its
+  review.
+- **Openings**: the opening explorer, in its own tab. What was played in
+  each position of your games and how it scored, for you as White or as
+  Black, with the opening study's book moves and ideas beside them; play a
+  move on the board to go on from there.
+- **Save PGN…** after a review: the game with ?!/?/?? marks, [%eval] on
+  every move, the coach's comments and the engine's better line as a
+  variation on every error, for ChessBase, Lichess, Lucas Chess or SCID.
+  Each side's accuracy (Lichess's method) and the tactical motifs each error
+  allowed or missed (fork, pin, skewer…) are in the review and the PGN.
+- **Settings**: engine paths, model, your name and rating, the games
+  folder, saved to the user config file.
+- **Analyzer** (under the board, with the `advanced` extra installed):
+  opens the advanced analyzer,
+  [uciboard](https://github.com/amryounis/advanced-chess-analayzer), in a
+  window of its own: on the game in Review at the move on the board, on the
+  game in Play, or on the position in Practice, Openings or a side line.
+  Pressing it again loads the new game into the same window; closing
+  chesscoach closes it too. It uses chesscoach's Stockfish, and its engine
+  is off until you press Analyse there, so an open window costs no CPU.
+  uciboard is a separate program and package: what it shows and the papers
+  behind it (the Evolution graph of Lu, Wang and Lin, IEEE TVCG 2014; the
+  ChessY measures of Rudolph-Lilith, SoftwareX 2019) are described in its
+  README. chesscoach copies none of it, so a newer uciboard is picked up by
+  reinstalling it.
+
+The board is [chessground](https://github.com/lichess-org/chessground)
+(Lichess's board), bundled so the app works offline.
+
+## An online model instead of Ollama
+
+For a computer without a GPU that runs a 14B model. The engine work, the
+facts and the checks stay on your machine; only the writing is done online.
+
+1. Get a key. Google Gemini has a free one: [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+2. Settings → *Who writes the coach's words* → **An online model** →
+   Service *Google Gemini* → paste the key → **List models** → pick a Flash
+   or Flash-Lite model → Save.
+
+(Or in the config file: `coach_llm = "online"`, `online_service = "gemini"`,
+`online_model = "…"`, and the key in `online_key` or the environment variable
+`CHESSCOACH_ONLINE_KEY`, which is never copied into the file.)
+
+What to know:
+
+- **The checks are the same.** The online model gets the facts code worked
+  out, and every sentence it writes is checked on the board, rewritten once
+  or removed, exactly as with Ollama. A bigger model writes better; it is
+  not trusted more.
+- **Quota.** Free keys allow few requests (Gemini's free Flash models: about
+  20 a day, Flash-Lite a few hundred, as of late 2026). So a review asks for
+  all its comments in **one request**, plus at most one more for the
+  rewrites the checks ask for; Explain this position and Ask the coach use
+  one or two each. When the quota is used up the review still finishes (marks,
+  accuracy, facts) and says so where the comments would be; switch to Ollama
+  or try the next day (Gemini's quota restarts at midnight, US Pacific time).
+- **Privacy.** chesscoach sends positions, moves and the engine's facts,
+  never the players' names, events or dates. On Google's **free** tier,
+  Google may use what is sent to improve its products and people may read it;
+  a paid key is not used that way. Google's API is for people aged 18 and
+  over, and in the EU, the UK and Switzerland only a paid key may be used.
+- Other services: OpenAI, Groq, OpenRouter, or *Other* with the address of
+  any OpenAI-compatible service (LM Studio on your own machine works too).
+  A ChatGPT subscription is not an OpenAI key: the key comes from
+  platform.openai.com and is billed by use, separately from ChatGPT.
+- From the command line, an online model is named `online:<model>`:
+  `chesscoach review game.pgn -m online:<model>`, and it can be measured
+  against the answer keys next to a local one:
+  `chesscoach eval -m qwen3:14b -m online:<model> --mode pipeline --runs 1`
+  (one or two requests per key and run: on a free Flash key use `--runs 1`,
+  or a Flash-Lite model).
+
+## Study an opening book (once, overnight)
+
+Coaches tell young players not to memorise opening lines but to understand
+the ideas behind them. `chesscoach book study` walks a Polyglot opening
+book (the one in Settings, or a file you give) and has the coach explain the
+idea of every popular move: what it develops, which central squares it
+takes, what it prepares, how it fits the opening's typical plan and the
+book's main answers. Every comment is built from facts code works out and
+goes through the board check. The opening explorer (Games tab) then shows,
+in each position, the book's moves with how often they are played,
+Stockfish's verdict, the idea of each move (hover it), and your own record
+with it.
+
+```
+chesscoach book study --dry-run         # how many moves, and roughly how long
+chesscoach book study                   # run it; Ctrl+C to stop, run again to go on
+chesscoach book show "e4 e5 Nf3"        # what the study says about a position
+```
+
+A full book has far more positions than a local model can comment on, so
+the study follows only the lines that are played: a move the book gives at
+least 5% of a position (`--min-share`), a line while it stays above 0.2% of
+games (`--min-line`), up to 20 half-moves (`--plies`), each position once.
+With a typical book that is about 500 positions and 750 moves, a few hours
+with qwen3:14b on a 12 GB GPU. Raise or lower the limits to taste; what is
+written is kept.
+
+## Use from the command line
+
+```
+chesscoach review mygame.pgn --side black
+```
+
+This writes `mygame_annotated.md`: every move with its label, then comments
+on the critical moments only:
+
+- the first move out of the opening book
+- inaccuracies, mistakes and blunders, with what the better move kept
+- the only good move, when you found it and it wasn't obvious
+- punishing your opponent's mistake
+- checkmate
+
+Any position, without a game file:
+
+```
+chesscoach explain --moves "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4"
+chesscoach ask "Can White take the pawn on e5?" --moves "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4" --show-tools
+```
+
+Other options: `--every-move` to comment on every non-book move,
+`--model A --model B` to compare models on the same prompts,
+`--verbose` to print every prompt. `chesscoach demo` runs two fixed test
+positions, which is a quick way to try a new model.
+
+## Measure it: answer keys
+
+```
+chesscoach eval                                  # facts layer only, no model
+chesscoach eval -m qwen3:14b --mode pipeline --mode raw --report eval.md
+chesscoach eval --key rook-check --text reply.txt  # score any pasted reply
+```
+
+Each answer key is a position whose correct explanation is known: the
+facts it must mention, and the false claims models have actually made
+("material is equal", "the knight forks the rook on b7"). `eval` reports
+how many required facts the facts layer supplies, how many the model's
+text states, and every false claim or invented piece. `pipeline` scores
+our annotation; `raw` scores the model given only the FEN and Stockfish's
+lines, which is the comparison that shows what the facts layer is worth.
+Keys live in `src/chesscoach/answer_keys/`; add your own with `--keys`.
+
+## The idea: the language model only narrates
+
+Small local language models cannot calculate chess, and they cannot read
+FEN. Asked to analyse a position, they invent pieces, pins and variations.
+So chesscoach never asks them to. Each part does only what it is good at:
+
+| Part | Job |
+|---|---|
+| **Stockfish** | Evaluates positions and finds the best moves |
+| **Maia 3** | Predicts what a human would play, to tell hard moves from natural ones |
+| **python-chess** | Turns positions into verified facts: what a move captured, which pieces it stopped defending, how the position two moves later differs from the engine's line |
+| **Stockfish, again** | Verifies the concepts behind a moment: what each side really threatens, what a piece was holding together, which facts matter most |
+| **Local LLM** (Ollama) | Rewrites those facts as a coach's comment, and nothing else |
+
+The move labels (Excellent … Blunder), who played the move, the size of the
+advantage and the first sentence of each comment are all computed in code.
+
+What the model writes is then checked against the board, as far as code
+can read it: a piece it places on a square, an attack or defence between
+named pieces, a pin, a fork and which pieces it hits, a king's pawn
+shelter, a file opened, material, and legal-move counts. A claim passes
+if it holds before or after the move or along the engine's line, so a
+consequence two moves later counts ("8...Bg4 ... opens the f-file" passes
+because of 9.hxg6 fxg6). A false claim goes back to the model with the
+correction for one rewrite; if it is still false, the sentence is removed.
+
+**What is not checked:** judgements code cannot parse, such as "a strong
+attack", "the initiative", "a weak square" or "passive", and any sentence
+whose wording the checker does not recognise. Those are the model's
+words. The coach says less rather than something false about the pieces;
+its strategic opinions still need a reader's eye. The app says this under
+every comment.
